@@ -1,4 +1,5 @@
 import { Vec2 } from './vec';
+export { Vec2 } from './vec';
 
 export type SpellId = 'fireball' | 'frost' | 'thunder' | 'shield' | 'heal';
 

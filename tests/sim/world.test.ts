@@ -19,3 +19,23 @@ describe('createWorld', () => {
     for (const cd of Object.values(w.player.cooldowns)) expect(cd).toBe(0);
   });
 });
+import { step } from '../../src/sim/world';
+
+describe('step — movement', () => {
+  it('moves the player by speed * dt along the move dir', () => {
+    const w = createWorld();
+    const startX = w.player.pos.x;
+    step(w, [{ kind: 'move', dir: { x: 1, y: 0 } }], 0.5);
+    expect(w.player.pos.x).toBeCloseTo(startX + CONFIG.player.speed * 0.5);
+  });
+  it('sets facing from a face command', () => {
+    const w = createWorld();
+    step(w, [{ kind: 'face', angle: 1.23 }], 0.016);
+    expect(w.player.facing).toBeCloseTo(1.23);
+  });
+  it('clamps the player inside the arena', () => {
+    const w = createWorld();
+    for (let i = 0; i < 200; i++) step(w, [{ kind: 'move', dir: { x: -1, y: 0 } }], 0.1);
+    expect(w.player.pos.x).toBeGreaterThanOrEqual(CONFIG.player.radius);
+  });
+});
