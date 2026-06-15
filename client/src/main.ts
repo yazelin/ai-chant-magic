@@ -19,8 +19,18 @@ import { WebSpeechVoiceInput } from './voice/recognizer';
 // work identically (they all route through session.sendCast).
 function startGame(session: GameSession, classId: ClassId): void {
   // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
+  // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
+  // leaving the canvas at 0x0 — must set an explicit display.
   const chrome = document.getElementById('game-chrome');
-  if (chrome) chrome.style.display = '';
+  if (chrome) {
+    chrome.style.display = 'flex';
+    chrome.style.flexDirection = 'column';
+    chrome.style.alignItems = 'center';
+    chrome.style.gap = '8px';
+  }
+  // Hide the lobby panel so it doesn't sit above the game.
+  const lobbyEl = document.getElementById('lobby');
+  if (lobbyEl) lobbyEl.style.display = 'none';
 
   const scene = new GameScene(session);
 
