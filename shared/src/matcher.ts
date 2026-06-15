@@ -35,6 +35,10 @@ export type CastMode = 'mueisho' | 'eisho';
 export interface MatchOptions {
   mode: CastMode;
   jumon: string;
+  // When provided, only spells in this set may be returned (the caster's class
+  // loadout). A matched-but-disallowed spell is skipped and scanning continues,
+  // so the result is the first *allowed* match or null. Omit for legacy behavior.
+  allowed?: Set<SpellId>;
 }
 
 // True if `needle` occurs in `hay` as a substring, or a same-length window of
@@ -73,6 +77,7 @@ export function matchSpell(transcript: string, opts: MatchOptions): SpellId | nu
   }
 
   for (const def of Object.values(SPELLS)) {
+    if (opts.allowed && !opts.allowed.has(def.id)) continue; // skip disallowed spells, keep scanning
     for (const alias of def.aliases) {
       if (containsFuzzy(hay, normalize(alias))) return def.id;
     }

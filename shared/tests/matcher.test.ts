@@ -25,6 +25,7 @@ describe('levenshtein', () => {
   });
 });
 import { matchSpell } from '../src/matcher';
+import { classSpellSet } from '../src/classes';
 
 describe('matchSpell — mueisho mode', () => {
   const opts = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
@@ -59,5 +60,49 @@ describe('matchSpell — eisho mode', () => {
   it('ignores a spell name that appears before the jumon', () => {
     // "火球術" before jumon must not trigger; only text after jumon counts
     expect(matchSpell('火球術 我命汝顯現 冰霜', opts)).toBe('frost');
+  });
+});
+
+describe('matchSpell — per-class allowed filtering', () => {
+  const mueisho = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
+
+  it('rejects a spell outside the caster class loadout (warden + 火球術 → null)', () => {
+    expect(
+      matchSpell('火球術', { ...mueisho, allowed: classSpellSet('warden') })
+    ).toBeNull();
+  });
+
+  it('matches a spell inside the caster class loadout (warden + 治療術 → heal)', () => {
+    expect(
+      matchSpell('治療術', { ...mueisho, allowed: classSpellSet('warden') })
+    ).toBe('heal');
+  });
+
+  it('matches a spell inside the pyro loadout (pyro + 火球術 → fireball)', () => {
+    expect(
+      matchSpell('火球術', { ...mueisho, allowed: classSpellSet('pyro') })
+    ).toBe('fireball');
+  });
+
+  it('keeps scanning past a disallowed alias to the first allowed match', () => {
+    // text mentions fireball (not allowed) then heal (allowed); should return heal
+    expect(
+      matchSpell('火球術然後治療術', { ...mueisho, allowed: classSpellSet('warden') })
+    ).toBe('heal');
+  });
+
+  it('falls back to legacy behavior when no allowed set is given', () => {
+    expect(matchSpell('火球術', mueisho)).toBe('fireball');
+    expect(matchSpell('治療術', mueisho)).toBe('heal');
+  });
+
+  it('honors allowed filtering in eisho mode', () => {
+    const eisho = { mode: 'eisho' as const, jumon: '我命汝顯現' };
+    expect(
+      matchSpell('我命汝顯現火球術', { ...eisho, allowed: classSpellSet('warden') })
+    ).toBeNull();
+    expect(
+      matchSpell('我命汝顯現火球術', { ...eisho, allowed: classSpellSet('pyro') })
+    ).toBe('fireball');
   });
 });
