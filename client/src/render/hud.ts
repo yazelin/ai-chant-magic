@@ -1,5 +1,4 @@
-import { World } from '../sim/types';
-import { SPELLS } from '../sim/spells';
+import { World, SPELLS } from '@acm/shared';
 import { VoiceStatus } from '../voice/recognizer';
 
 const MIC_LABEL: Record<VoiceStatus, string> = {

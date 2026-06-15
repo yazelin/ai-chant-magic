@@ -1,10 +1,8 @@
 import Phaser from 'phaser';
 import { GameScene } from './render/GameScene';
 import { Hud } from './render/hud';
-import { CONFIG } from './sim/config';
+import { CONFIG, matchSpell, CastMode, JUMON } from '@acm/shared';
 import { WebSpeechVoiceInput } from './voice/recognizer';
-import { matchSpell, CastMode } from './voice/matcher';
-import { JUMON } from './sim/spells';
 
 const scene = new GameScene();
 

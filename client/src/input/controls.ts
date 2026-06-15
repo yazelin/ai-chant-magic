@@ -1,4 +1,4 @@
-import { Vec2 } from '../sim/vec';
+import { Vec2 } from '@acm/shared';
 
 export function moveDirFromKeys(keys: Set<string>): Vec2 {
   let x = 0;

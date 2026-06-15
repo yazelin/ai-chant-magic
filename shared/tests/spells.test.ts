@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SPELLS, JUMON } from '../../src/sim/spells';
+import { SPELLS, JUMON } from '../src/spells';
 
 describe('spells', () => {
   it('defines exactly the five MVP spells', () => {

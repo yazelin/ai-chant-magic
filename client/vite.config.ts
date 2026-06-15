@@ -4,4 +4,6 @@ import { defineConfig } from 'vite';
 // and under the GitHub Pages project subpath (/ai-chant-magic/).
 export default defineConfig({
   base: './',
+  optimizeDeps: { exclude: ['@acm/shared'] },
+  server: { fs: { allow: ['..'] } },
 });

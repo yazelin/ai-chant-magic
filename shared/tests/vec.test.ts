@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sub, scale, len, dist, normalize } from '../../src/sim/vec';
+import { sub, scale, len, dist, normalize } from '../src/vec';
 
 describe('vec', () => {
   it('sub subtracts components', () => {

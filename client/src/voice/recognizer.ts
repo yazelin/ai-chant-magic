@@ -3,9 +3,9 @@ import {
   classifyError,
   classifyEnd,
   GIVE_UP_MESSAGE,
-} from './recognizer-policy';
+} from '@acm/shared';
 
-export type { VoiceStatus } from './recognizer-policy';
+export type { VoiceStatus } from '@acm/shared';
 
 // Minimal Web Speech API typings (not in lib.dom for all TS versions).
 interface SpeechRecognitionResultLike {

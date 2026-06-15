@@ -1,7 +1,5 @@
 import Phaser from 'phaser';
-import { World, Command, SpellId } from '../sim/types';
-import { createWorld, step } from '../sim/world';
-import { CONFIG } from '../sim/config';
+import { World, Command, SpellId, createWorld, step, CONFIG } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 
 export class GameScene extends Phaser.Scene {

@@ -27,8 +27,8 @@ export function levenshtein(a: string, b: string): number {
   return prev[n];
 }
 
-import { SpellId } from '../sim/types';
-import { SPELLS } from '../sim/spells';
+import { SpellId } from './types';
+import { SPELLS } from './spells';
 
 export type CastMode = 'mueisho' | 'eisho';
 

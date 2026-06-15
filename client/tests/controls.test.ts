@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moveDirFromKeys, facingFromMouse } from '../../src/input/controls';
+import { moveDirFromKeys, facingFromMouse } from '../src/input/controls';
 
 describe('moveDirFromKeys', () => {
   it('returns zero when no keys are held', () => {

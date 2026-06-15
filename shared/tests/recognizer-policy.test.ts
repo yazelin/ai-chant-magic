@@ -4,7 +4,7 @@ import {
   classifyEnd,
   MAX_BAD_ENDS,
   IMMEDIATE_END_MS,
-} from '../../src/voice/recognizer-policy';
+} from '../src/recognizer-policy';
 
 describe('classifyError', () => {
   it('treats permission errors as fatal + denied', () => {

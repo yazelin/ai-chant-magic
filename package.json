@@ -1,21 +1,17 @@
 {
   "name": "ai-chant-magic",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
+  "workspaces": ["shared", "client", "server"],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "concurrently -k -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:client": "npm run dev -w @acm/client",
+    "dev:server": "npm run dev -w @acm/server",
+    "build": "npm run build -w @acm/client && npm run build -w @acm/server",
+    "build:client": "npm run build -w @acm/client",
+    "test": "npm run test -w @acm/shared && npm run test -w @acm/server",
+    "test:client": "npm run test -w @acm/client"
   },
-  "dependencies": {
-    "phaser": "^3.80.1"
-  },
-  "devDependencies": {
-    "typescript": "^5.4.0",
-    "vite": "^5.2.0",
-    "vitest": "^1.6.0"
-  }
+  "devDependencies": { "concurrently": "^9.0.0" }
 }

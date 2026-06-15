@@ -1,7 +1,7 @@
 // tests/sim/world.test.ts
 import { describe, it, expect } from 'vitest';
-import { createWorld } from '../../src/sim/world';
-import { CONFIG } from '../../src/sim/config';
+import { createWorld } from '../src/world';
+import { CONFIG } from '../src/config';
 
 describe('createWorld', () => {
   it('starts the player centered at full hp, playing', () => {
@@ -19,7 +19,7 @@ describe('createWorld', () => {
     for (const cd of Object.values(w.player.cooldowns)) expect(cd).toBe(0);
   });
 });
-import { step } from '../../src/sim/world';
+import { step } from '../src/world';
 
 describe('step — movement', () => {
   it('moves the player by speed * dt along the move dir', () => {
@@ -39,7 +39,7 @@ describe('step — movement', () => {
     expect(w.player.pos.x).toBeGreaterThanOrEqual(CONFIG.player.radius);
   });
 });
-import { SPELLS } from '../../src/sim/spells';
+import { SPELLS } from '../src/spells';
 
 describe('step — casting self-target spells', () => {
   it('heal restores hp but not above max', () => {
@@ -71,7 +71,7 @@ describe('step — casting self-target spells', () => {
     expect(w.player.cooldowns.shield).toBeCloseTo(w.time + SPELLS.shield.cooldown);
   });
 });
-import { Enemy } from '../../src/sim/types';
+import { Enemy } from '../src/types';
 
 function makeEnemy(over: Partial<Enemy> = {}): Enemy {
   return { id: 999, pos: { x: 0, y: 0 }, hp: 30, speed: 0, slowUntil: 0, radius: CONFIG.enemy.radius, ...over };

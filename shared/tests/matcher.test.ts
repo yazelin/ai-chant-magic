@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalize, levenshtein } from '../../src/voice/matcher';
+import { normalize, levenshtein } from '../src/matcher';
 
 describe('normalize', () => {
   it('lowercases and strips spaces and punctuation', () => {
@@ -24,7 +24,7 @@ describe('levenshtein', () => {
     expect(levenshtein('fire', 'fires')).toBe(1);
   });
 });
-import { matchSpell } from '../../src/voice/matcher';
+import { matchSpell } from '../src/matcher';
 
 describe('matchSpell — mueisho mode', () => {
   const opts = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
