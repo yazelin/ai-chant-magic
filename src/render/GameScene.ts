@@ -8,7 +8,7 @@ export class GameScene extends Phaser.Scene {
   private world!: World;
   private gfx!: Phaser.GameObjects.Graphics;
   private keys = new Set<string>();
-  private mouse = { x: CONFIG.arenaWidth / 2, y: 0 };
+  private mouse: { x: number; y: number } = { x: CONFIG.arenaWidth, y: CONFIG.arenaHeight / 2 }; // default face right until first pointer move
   private pendingCasts: SpellId[] = [];
   private beam: { from: { x: number; y: number }; to: { x: number; y: number }; ttl: number } | null = null;
 
@@ -38,6 +38,7 @@ export class GameScene extends Phaser.Scene {
 
   restart(): void {
     this.world = createWorld();
+    this.beam = null;
   }
 
   update(_time: number, deltaMs: number): void {
