@@ -166,10 +166,132 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       }
       break;
     }
-    // firestorm / frostnova / thunder / chain / shield / aegis / heal: Task A5.
+    case 'firestorm': {
+      // Slow fused mortar: explodes on enemy contact OR when ttl expires.
+      const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
+      spawnProjectile(world, caster, 'firestorm', dir,
+        CONFIG.firestorm.speed, 0, CONFIG.firestorm.radius, CONFIG.firestorm.ttl,
+        CONFIG.firestorm.ttl);
+      break;
+    }
+    case 'frostnova':
+      castFrostnova(world, caster);
+      break;
+    case 'thunder':
+      castThunder(world, caster);
+      break;
+    case 'chain':
+      castChain(world, caster);
+      break;
+    case 'shield':
+      caster.shieldUntil = world.time + CONFIG.shield.duration;
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.player.radius * 1.6,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+      });
+      break;
+    case 'aegis': {
+      for (const ally of world.players) {
+        if (!ally.alive || ally.downed) continue;
+        if (dist(caster.pos, ally.pos) <= CONFIG.aegis.radius) {
+          ally.shieldUntil = world.time + CONFIG.aegis.duration;
+        }
+      }
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.aegis.radius,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+      });
+      break;
+    }
+    case 'heal': {
+      for (const ally of world.players) {
+        if (!ally.alive || ally.downed) continue;
+        if (dist(caster.pos, ally.pos) <= CONFIG.heal.radius) {
+          ally.hp = Math.min(ally.maxHp, ally.hp + CONFIG.heal.amount);
+        }
+      }
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.heal.radius,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+      });
+      break;
+    }
     default:
       break;
   }
+}
+
+// frostnova — instant self-centred AoE: damage + slow enemies in radius, nova fx.
+function castFrostnova(world: World, caster: Player): void {
+  for (const e of world.enemies) {
+    if (e.hp <= 0) continue;
+    if (dist(caster.pos, e.pos) <= CONFIG.frostnova.radius + e.radius) {
+      e.hp -= CONFIG.frostnova.damage;
+      e.slowUntil = world.time + CONFIG.frostnova.slowDuration;
+    }
+  }
+  pushEffect(world, {
+    kind: 'nova', ownerId: caster.id,
+    a: { x: caster.pos.x, y: caster.pos.y },
+    radius: CONFIG.frostnova.radius,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.cryo.color,
+  });
+  removeDeadEnemies(world);
+}
+
+// thunder — hitscan ray along facing; damage enemies within `width`, beam fx.
+function castThunder(world: World, caster: Player): void {
+  const o = caster.pos;
+  const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
+  for (const e of world.enemies) {
+    if (e.hp <= 0) continue;
+    const rel = sub(e.pos, o);
+    const along = rel.x * dir.x + rel.y * dir.y;          // distance along the ray
+    if (along < 0 || along > CONFIG.thunder.range) continue;
+    const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x); // perpendicular offset
+    if (perp <= CONFIG.thunder.width + e.radius) e.hp -= CONFIG.thunder.damage;
+  }
+  pushEffect(world, {
+    kind: 'beam', ownerId: caster.id,
+    a: { x: o.x, y: o.y },
+    b: { x: o.x + dir.x * CONFIG.thunder.range, y: o.y + dir.y * CONFIG.thunder.range },
+    ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
+  });
+  removeDeadEnemies(world);
+}
+
+// chain — greedy nearest-unhit traversal from caster; falloff per jump; chain fx.
+function castChain(world: World, caster: Player): void {
+  const visited = new Set<number>();
+  let from: Vec2 = caster.pos;
+  let range: number = CONFIG.chain.range; // first hop allowed up to `range`
+  for (let k = 0; k < CONFIG.chain.maxJumps; k++) {
+    let target: Enemy | null = null;
+    let bestD = Infinity;
+    for (const e of world.enemies) {
+      if (e.hp <= 0 || visited.has(e.id)) continue;
+      const d = dist(from, e.pos);
+      if (d <= range && d < bestD) { bestD = d; target = e; }
+    }
+    if (!target) break;
+    target.hp -= CONFIG.chain.damage * Math.pow(CONFIG.chain.falloff, k);
+    visited.add(target.id);
+    pushEffect(world, {
+      kind: 'chain', ownerId: caster.id,
+      a: { x: from.x, y: from.y },
+      b: { x: target.pos.x, y: target.pos.y },
+      ttl: CONFIG.effectTtl.chain, colorHint: CLASSES.storm.color,
+    });
+    from = target.pos;
+    range = CONFIG.chain.jumpRange; // subsequent hops use jumpRange
+  }
+  removeDeadEnemies(world);
 }
 
 function spawnFacingProjectile(
@@ -182,7 +304,7 @@ function spawnFacingProjectile(
 
 function spawnProjectile(
   world: World, caster: Player, spell: SpellId, dir: Vec2,
-  speed: number, damage: number, radius: number, ttl: number
+  speed: number, damage: number, radius: number, ttl: number, fuse?: number
 ): void {
   world.projectiles.push({
     id: world.nextEntityId++,
@@ -190,7 +312,7 @@ function spawnProjectile(
     ownerId: caster.id,
     pos: { x: caster.pos.x, y: caster.pos.y },
     vel: { x: dir.x * speed, y: dir.y * speed },
-    damage, radius, ttl,
+    damage, radius, ttl, fuse,
   });
 }
 
@@ -206,31 +328,43 @@ function pushEffect(world: World, e: Omit<TransientEffect, 'id'>): void {
   world.effects.push({ id: world.nextEntityId++, ...e });
 }
 
-function onProjectileHit(world: World, proj: Projectile, hit: Enemy): void {
-  switch (proj.spell) {
-    case 'fireball': {
-      // AoE explosion — damages enemies only, no friendly fire.
-      for (const e of world.enemies) {
-        if (dist(proj.pos, e.pos) <= CONFIG.fireball.explosionRadius + e.radius) {
-          e.hp -= CONFIG.fireball.explosionDamage;
-        }
-      }
-      pushEffect(world, {
-        kind: 'blast', ownerId: proj.ownerId,
-        a: { x: proj.pos.x, y: proj.pos.y },
-        radius: CONFIG.fireball.explosionRadius,
-        ttl: CONFIG.effectTtl.blast, colorHint: CLASSES.pyro.color,
-      });
-      break;
+// AoE explosion at a point — damages enemies only (never allies), spawns blast fx.
+function explodeAoE(
+  world: World, at: Vec2, ownerId: string,
+  explosionRadius: number, explosionDamage: number, colorHint: string
+): void {
+  for (const e of world.enemies) {
+    if (dist(at, e.pos) <= explosionRadius + e.radius) {
+      e.hp -= explosionDamage;
     }
+  }
+  pushEffect(world, {
+    kind: 'blast', ownerId,
+    a: { x: at.x, y: at.y },
+    radius: explosionRadius,
+    ttl: CONFIG.effectTtl.blast, colorHint,
+  });
+}
+
+// Returns true if the projectile detonated (so the fuse path must not re-detonate).
+function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
+  switch (proj.spell) {
+    case 'fireball':
+      explodeAoE(world, proj.pos, proj.ownerId,
+        CONFIG.fireball.explosionRadius, CONFIG.fireball.explosionDamage, CLASSES.pyro.color);
+      return false;
+    case 'firestorm':
+      explodeAoE(world, proj.pos, proj.ownerId,
+        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+      return true; // detonated on contact; fuse loop must skip it
     case 'frost':
       hit.hp -= proj.damage;
       hit.slowUntil = world.time + CONFIG.frost.slowDuration;
-      break;
+      return false;
     default:
       // holybolt and other direct-hit projectiles
       hit.hp -= proj.damage;
-      break;
+      return false;
   }
 }
 
@@ -246,15 +380,24 @@ function updateProjectiles(world: World, dt: number): void {
     proj.pos.y += proj.vel.y * dt;
     proj.ttl -= dt;
   }
+  const detonated = new Set<number>();
   for (const proj of world.projectiles) {
     if (proj.ttl <= 0) continue;
     for (const e of world.enemies) {
       if (e.hp <= 0) continue;
       if (dist(proj.pos, e.pos) <= proj.radius + e.radius) {
-        onProjectileHit(world, proj, e);
+        if (onProjectileHit(world, proj, e)) detonated.add(proj.id);
         proj.ttl = 0; // consumed
         break;
       }
+    }
+  }
+  // Fused projectiles (firestorm) detonate where they expire if not consumed on contact.
+  for (const proj of world.projectiles) {
+    if (proj.spell === 'firestorm' && proj.fuse !== undefined &&
+        proj.ttl <= 0 && !detonated.has(proj.id)) {
+      explodeAoE(world, proj.pos, proj.ownerId,
+        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
     }
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
