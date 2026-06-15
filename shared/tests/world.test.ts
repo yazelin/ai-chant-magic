@@ -116,6 +116,20 @@ describe('step — movement & facing', () => {
     expect(p.pos.x).toBeCloseTo(startX);
   });
 
+  it('clamps a non-unit move dir to at most speed*dt of travel', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; // centre, far from arena walls
+    const startX = p.pos.x;
+    // Client supplies an over-long dir {x:5,y:0}. Without clamping this would move
+    // 5x the intended distance; with clamping it must move by at most speed*dt.
+    step(w, [{ kind: 'move', playerId: 'local', dir: { x: 5, y: 0 } }], 0.1);
+    const speed = CONFIG.player.speed * CLASSES.pyro.speedMod;
+    expect(p.pos.x - startX).toBeCloseTo(speed * 0.1); // exactly one unit-length step
+    expect(p.pos.x - startX).toBeLessThanOrEqual(speed * 0.1 + 1e-6);
+  });
+
   it('clamps the player inside the arena', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
@@ -291,11 +305,18 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: p.pos.x + 30, y: p.pos.y } }));
     w.enemies.push(makeEnemy({ id: 2, hp: 200, pos: { x: p.pos.x + 60, y: p.pos.y } }));
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
-    for (let i = 0; i < 30; i++) step(w, [], 0.016);
+    // Step until the firestorm detonates on contact, capturing the blast effect on
+    // the very frame it spawns (before it decays away).
+    let sawBlastImmediately = false;
+    for (let i = 0; i < 30; i++) {
+      step(w, [], 0.016);
+      if (w.effects.some((e) => e.kind === 'blast')) { sawBlastImmediately = true; break; }
+    }
+    // A 'blast' effect EXISTS immediately after the detonation frame.
+    expect(sawBlastImmediately).toBe(true);
     // Both enemies took explosion damage from the contact detonation.
     expect(w.enemies.find((e) => e.id === 1)!.hp).toBeLessThanOrEqual(200 - CONFIG.firestorm.explosionDamage);
     expect(w.enemies.find((e) => e.id === 2)!.hp).toBeLessThanOrEqual(200 - CONFIG.firestorm.explosionDamage);
-    expect(w.effects.some((e) => e.kind === 'blast')).toBe(false); // already decayed after 30 frames
   });
 
   it('never damages allies with a firestorm explosion (no friendly fire)', () => {
@@ -623,6 +644,73 @@ describe('step — revive (auto-proximity)', () => {
   });
 });
 
+describe('step — connected flag (disconnected = no chase / no revive / no command)', () => {
+  it('a downed player with only a disconnected ally near gains NO revive progress', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' }, // downed
+      { id: 'b', name: 'Bo', classId: 'pyro' },  // alive but disconnected
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 480, y: 320 };
+    b.pos = { x: a.pos.x + 10, y: a.pos.y }; // well within revive radius
+    b.connected = false;                      // disconnected -> not a valid reviver
+    a.downed = true; a.hp = 0; a.bleedoutAt = w.time + CONFIG.bleedout.time; a.reviveProgress = 0;
+    // Channel: a disconnected ally must NOT accrue any revive progress.
+    for (let i = 0; i < 5; i++) step(w, [], 0.05);
+    expect(a.reviveProgress).toBe(0);
+    expect(a.downed).toBe(true); // never revived by the disconnected ally
+  });
+
+  it('enemies ignore a disconnected alive player and target the connected one', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' }, // connected
+      { id: 'b', name: 'Bo', classId: 'pyro' },  // disconnected
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    // Put the disconnected player MUCH closer to the enemy than the connected one.
+    a.pos = { x: 600, y: 320 };
+    b.pos = { x: 120, y: 320 };
+    b.connected = false;
+    const bHp = b.hp;
+    const bStart = { x: b.pos.x, y: b.pos.y };
+    // Enemy sits right next to the disconnected player — would chase/damage it if
+    // the connected flag were ignored.
+    const enemy = makeEnemy({ id: 7, hp: 100000, speed: 100, pos: { x: b.pos.x + 5, y: b.pos.y } });
+    w.enemies.push(enemy);
+    for (let i = 0; i < 5; i++) step(w, [], 0.05);
+    // Enemy must target the connected player, not the disconnected one.
+    expect(enemy.targetId).toBe('a');
+    // The disconnected player is neither approached nor damaged.
+    expect(b.hp).toBe(bHp);
+    expect(b.pos).toEqual(bStart);
+    // Enemy moved toward the connected player (to the right of its start).
+    expect(enemy.pos.x).toBeGreaterThan(b.pos.x + 5);
+  });
+
+  it('a disconnected player does not consume move/face/cast commands', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    a.connected = false;
+    const startX = a.pos.x;
+    const startFacing = a.facing;
+    step(w, [
+      { kind: 'move', playerId: 'a', dir: { x: 1, y: 0 } },
+      { kind: 'face', playerId: 'a', angle: 1.23 },
+      { kind: 'cast', playerId: 'a', spell: 'fireball' },
+    ], 0.1);
+    expect(a.pos.x).toBeCloseTo(startX);   // did not move
+    expect(a.facing).toBe(startFacing);     // did not turn
+    expect(w.projectiles.length).toBe(0);   // did not cast
+  });
+});
+
 describe('step — bleedout -> dead -> respawn next wave', () => {
   it('a downed player with no rescuer past bleedout becomes !alive and is scheduled for the next wave', () => {
     const w = createWorld([
@@ -640,6 +728,27 @@ describe('step — bleedout -> dead -> respawn next wave', () => {
     expect(a.alive).toBe(false);
     expect(a.downed).toBe(false);
     expect(a.respawnAtWave).toBe(w.wave + 1);
+  });
+
+  it('does not respawn a dead player before their respawnAtWave', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    const a = findPlayer(w, 'a');
+    // Dead and scheduled to respawn two waves out, but the next beginWave is sooner.
+    a.alive = false; a.downed = false; a.hp = 0;
+    a.respawnAtWave = w.wave + 2;
+    // Drive a single wave boundary (only +1 wave).
+    w.spawnQueue = 0;
+    w.enemies = [];
+    w.breakTimer = 0;
+    const startWave = w.wave;
+    for (let i = 0; i < 200 && w.wave === startWave; i++) step(w, [], 0.1);
+    expect(w.wave).toBe(startWave + 1);
+    // wave (startWave+1) < respawnAtWave (startWave+2) -> still dead.
+    expect(a.alive).toBe(false);
+    expect(a.hp).toBe(0);
   });
 
   it('beginWave respawns a dead player at full hp', () => {

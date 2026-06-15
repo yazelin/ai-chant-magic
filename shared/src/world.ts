@@ -87,8 +87,13 @@ function findPlayer(world: World, id: string): Player | undefined {
   return world.players.find((p) => p.id === id);
 }
 
-function canAct(p: Player): boolean {
-  return p.alive && !p.downed;
+// In-fight = an active participant: connected AND alive AND not downed. Used for
+// command application, enemy targeting and reviver eligibility. A disconnected
+// player stays in the world but is treated as having left (no command, no chase,
+// cannot revive). The shared sim has no local-input gating (that lives client-side),
+// so all gameplay sites use inFight rather than a connected-agnostic predicate.
+function inFight(p: Player): boolean {
+  return p.connected && p.alive && !p.downed;
 }
 
 export function step(
@@ -104,7 +109,7 @@ export function step(
   const moveDirs = new Map<string, Vec2>();
   for (const cmd of commands) {
     const p = findPlayer(world, cmd.playerId);
-    if (!p || !canAct(p)) continue;
+    if (!p || !inFight(p)) continue;
     if (cmd.kind === 'move') moveDirs.set(p.id, cmd.dir);
     else if (cmd.kind === 'face') p.facing = cmd.angle;
     else if (cmd.kind === 'cast') castSpell(world, p, cmd.spell);
@@ -126,12 +131,16 @@ export function step(
 function movePlayers(world: World, moveDirs: Map<string, Vec2>, dt: number): void {
   const r = CONFIG.player.radius;
   for (const p of world.players) {
-    if (!canAct(p)) continue;
+    if (!inFight(p)) continue;
     const dir = moveDirs.get(p.id);
     if (!dir) continue;
+    // Clamp client-supplied dir to at most unit length so it cannot grant extra
+    // speed (a {x:5,y:0} dir must not move 5x further than a unit vector).
+    const l = len(dir);
+    const unit = l > 1 ? scale(dir, 1 / l) : dir;
     const speed = CONFIG.player.speed * CLASSES[p.classId].speedMod;
-    p.pos.x += dir.x * speed * dt;
-    p.pos.y += dir.y * speed * dt;
+    p.pos.x += unit.x * speed * dt;
+    p.pos.y += unit.y * speed * dt;
     p.pos.x = clamp(p.pos.x, r, CONFIG.arenaWidth - r);
     p.pos.y = clamp(p.pos.y, r, CONFIG.arenaHeight - r);
   }
@@ -417,7 +426,7 @@ function nearestAlivePlayer(world: World, from: Vec2): Player | null {
   let best: Player | null = null;
   let bestD = Infinity;
   for (const p of world.players) {
-    if (!canAct(p)) continue;
+    if (!inFight(p)) continue; // disconnected players are not chased
     const d = dist(from, p.pos);
     if (d < bestD) { bestD = d; best = p; }
   }
@@ -461,7 +470,7 @@ function revivers(world: World, downed: Player): { any: boolean; warden: boolean
   let any = false;
   let warden = false;
   for (const ally of world.players) {
-    if (ally.id === downed.id || !canAct(ally)) continue;
+    if (ally.id === downed.id || !inFight(ally)) continue; // disconnected ally cannot revive
     if (dist(ally.pos, downed.pos) <= CONFIG.revive.radius) {
       any = true;
       if (ally.classId === 'warden') warden = true;
@@ -505,16 +514,17 @@ function effectivePlayerCount(world: World): number {
   return world.players.filter((p) => p.connected && (p.alive || p.downed)).length;
 }
 
-// Respawn every fully-dead player at the start of a wave: full hp, repositioned.
+// Respawn fully-dead players whose scheduled respawn wave has arrived: full hp,
+// repositioned. A player only returns once `world.wave >= p.respawnAtWave`.
 function respawnDeadPlayers(world: World): void {
-  const dead = world.players.filter((p) => !p.alive);
-  dead.forEach((p, i) => {
+  const due = world.players.filter((p) => !p.alive && world.wave >= p.respawnAtWave);
+  due.forEach((p, i) => {
     p.alive = true;
     p.downed = false;
     p.hp = p.maxHp;
     p.reviveProgress = 0;
     p.bleedoutAt = 0;
-    p.pos = spawnPos(i, Math.max(1, dead.length));
+    p.pos = spawnPos(i, Math.max(1, due.length));
   });
 }
 
