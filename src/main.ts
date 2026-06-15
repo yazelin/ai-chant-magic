@@ -39,7 +39,7 @@ window.addEventListener('keydown', (e) => {
 
 // Voice → spell casting
 const voice = new WebSpeechVoiceInput('zh-TW');
-voice.onStatusChange((s) => hud.setMicStatus(s));
+voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
 voice.onTranscript((text) => {
   const spell = matchSpell(text, { mode, jumon: JUMON });
   if (spell) scene.queueCast(spell);

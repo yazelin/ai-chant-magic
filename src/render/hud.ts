@@ -7,6 +7,7 @@ const MIC_LABEL: Record<VoiceStatus, string> = {
   listening: '麥克風:聆聽中',
   unsupported: '麥克風:此瀏覽器不支援語音(請用 Chrome/Edge)',
   denied: '麥克風:權限被拒,請允許麥克風',
+  error: '麥克風:語音發生問題',
 };
 
 export class Hud {
@@ -18,8 +19,8 @@ export class Hud {
     this.mic = document.getElementById('mic-status')!;
   }
 
-  setMicStatus(s: VoiceStatus): void {
-    this.mic.textContent = MIC_LABEL[s];
+  setMicStatus(s: VoiceStatus, message?: string): void {
+    this.mic.textContent = message && message.length > 0 ? `麥克風:${message}` : MIC_LABEL[s];
   }
 
   render(world: World): void {
