@@ -2,6 +2,7 @@ export * from './vec';
 export * from './types';
 export * from './config';
 export * from './spells';
+export * from './classes';
 export * from './world';
 export * from './matcher';
 export * from './recognizer-policy';

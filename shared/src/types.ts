@@ -1,54 +1,48 @@
 import { Vec2 } from './vec';
 export { Vec2 } from './vec';
 
-export type SpellId = 'fireball' | 'frost' | 'thunder' | 'shield' | 'heal';
-
-export type GameStatus = 'playing' | 'gameover';
+export type SpellId =
+  | 'fireball' | 'firestorm' | 'frost' | 'frostnova'
+  | 'thunder' | 'chain' | 'shield' | 'aegis' | 'heal' | 'holybolt';
+export type ClassId = 'pyro' | 'cryo' | 'storm' | 'warden';
+export type GameStatus = 'lobby' | 'playing' | 'gameover';
 
 export interface Player {
-  pos: Vec2;
-  facing: number;               // radians
-  hp: number;
-  maxHp: number;
-  shieldUntil: number;          // world time (s) shield is active until; 0 = none
-  cooldowns: Record<SpellId, number>; // world time (s) each spell becomes ready again
+  id: string; name: string; classId: ClassId;
+  pos: Vec2; facing: number;
+  hp: number; maxHp: number;
+  alive: boolean; downed: boolean;
+  bleedoutAt: number; reviveProgress: number; respawnAtWave: number;
+  shieldUntil: number;
+  cooldowns: Record<SpellId, number>;
+  connected: boolean;
 }
 
 export interface Enemy {
-  id: number;
-  pos: Vec2;
-  hp: number;
-  speed: number;                // px/s
-  slowUntil: number;            // world time (s) the enemy is slowed until
-  radius: number;
+  id: number; pos: Vec2; hp: number; speed: number;
+  slowUntil: number; radius: number; targetId: string | null;
 }
 
 export interface Projectile {
-  id: number;
-  spell: SpellId;               // 'fireball' | 'frost'
-  pos: Vec2;
-  vel: Vec2;                    // px/s
-  damage: number;
-  radius: number;
-  ttl: number;                  // seconds remaining
+  id: number; spell: SpellId; ownerId: string;
+  pos: Vec2; vel: Vec2; damage: number; radius: number; ttl: number; fuse?: number;
+}
+
+export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura';
+
+export interface TransientEffect {
+  id: number; kind: EffectKind; ownerId?: string;
+  a: Vec2; b?: Vec2; radius?: number; ttl: number; colorHint: string;
 }
 
 export interface World {
-  time: number;                 // seconds elapsed
-  status: GameStatus;
-  player: Player;
-  enemies: Enemy[];
-  projectiles: Projectile[];
-  nextEntityId: number;
-  wave: number;                 // 0 before first wave starts
-  score: number;                // total kills
-  spawnQueue: number;           // enemies remaining to spawn this wave
-  spawnTimer: number;           // seconds until next spawn
-  spawnCadence: number;         // seconds between spawns this wave
-  breakTimer: number;           // seconds remaining in between-wave break
+  time: number; status: GameStatus;
+  players: Player[]; enemies: Enemy[]; projectiles: Projectile[]; effects: TransientEffect[];
+  nextEntityId: number; wave: number; score: number;
+  spawnQueue: number; spawnTimer: number; spawnCadence: number; breakTimer: number;
 }
 
-export interface MoveCommand { kind: 'move'; dir: Vec2; }   // dir is unit length or {0,0}
-export interface FaceCommand { kind: 'face'; angle: number; }
-export interface CastCommand { kind: 'cast'; spell: SpellId; }
+export interface MoveCommand { kind: 'move'; playerId: string; dir: Vec2; }
+export interface FaceCommand { kind: 'face'; playerId: string; angle: number; }
+export interface CastCommand { kind: 'cast'; playerId: string; spell: SpellId; }
 export type Command = MoveCommand | FaceCommand | CastCommand;
