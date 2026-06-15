@@ -122,7 +122,12 @@ export function step(
   updateProjectiles(world, dt);
   decayEffects(world, dt);
 
-  if (world.players.length > 0 && world.players.every((p) => !p.alive)) {
+  // Gameover only considers CONNECTED players: a disconnected-but-alive player
+  // (connected=false, alive=true) must not keep the game alive forever after
+  // everyone else dies. The length guard stops a fully-empty/disconnected world
+  // from false-triggering (the server room reaper handles abandonment instead).
+  const live = world.players.filter((p) => p.connected);
+  if (live.length > 0 && live.every((p) => !p.alive)) {
     world.status = 'gameover';
   }
   return world;

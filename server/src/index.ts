@@ -116,15 +116,20 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
 
     switch (msg.type) {
       case 'create': {
-        const member = newMember(ws, msg.name, msg.classId);
-        const room = registry.create(member);
-        bindSession(ws, room, member.id);
-        send(ws, {
-          type: 'joined',
-          roomCode: room.code,
-          selfId: member.id,
-          players: lobbyViews(room),
-        });
+        try {
+          const member = newMember(ws, msg.name, msg.classId);
+          const room = registry.create(member);
+          bindSession(ws, room, member.id);
+          send(ws, {
+            type: 'joined',
+            roomCode: room.code,
+            selfId: member.id,
+            players: lobbyViews(room),
+          });
+        } catch (e) {
+          if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
+          else throw e;
+        }
         break;
       }
       case 'join': {
@@ -146,16 +151,21 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         break;
       }
       case 'quickJoin': {
-        const member = newMember(ws, msg.name, msg.classId);
-        const room = registry.quickJoin(member);
-        bindSession(ws, room, member.id);
-        send(ws, {
-          type: 'joined',
-          roomCode: room.code,
-          selfId: member.id,
-          players: lobbyViews(room),
-        });
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        try {
+          const member = newMember(ws, msg.name, msg.classId);
+          const room = registry.quickJoin(member);
+          bindSession(ws, room, member.id);
+          send(ws, {
+            type: 'joined',
+            roomCode: room.code,
+            selfId: member.id,
+            players: lobbyViews(room),
+          });
+          broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        } catch (e) {
+          if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
+          else throw e;
+        }
         break;
       }
       case 'ready': {
@@ -254,13 +264,21 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
 
   const loop = setInterval(() => {
     for (const room of registry.rooms()) {
-      if (room.status === 'playing') {
+      // Only step a playing room that still has at least one connected member.
+      // An abandoned (everyone disconnected) playing room is left alone here and
+      // reaped below — without this guard the 20Hz loop would run its sim forever.
+      if (room.status === 'playing' && !room.isEmpty) {
         const snap = room.tick(TICK_DT);
         if (snap) {
           broadcast(room, { type: 'snapshot', tick: room.tickCount, world: snap });
         }
       }
-      if (room.isEmpty) registry.remove(room.code);
+      // Reap finished or abandoned rooms so the loop does not churn on them
+      // forever. A gameover room has already broadcast its final snapshot on the
+      // tick that ended it; an empty room has no one left to notify.
+      if (room.status === 'gameover' || room.isEmpty) {
+        registry.remove(room.code);
+      }
     }
   }, TICK_MS);
 

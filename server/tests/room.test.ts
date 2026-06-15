@@ -115,6 +115,46 @@ describe('Room.applyInput buffering (spec §15.1)', () => {
     expect(snap.effects.some((fx) => fx.kind === 'aura')).toBe(true);
   });
 
+  it('drops a non-finite move so the player position is not poisoned (NaN guard)', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.start();
+    const before = room.world!.players.find((p) => p.id === 'host')!;
+    const startX = before.pos.x;
+    const startY = before.pos.y;
+    // Hostile/buggy client sends a NaN move component.
+    room.applyInput('host', { move: { x: NaN, y: 0 } });
+    const snap = room.tick(0.05)!;
+    const host = snap.players.find((p) => p.id === 'host')!;
+    // Position must remain finite and unchanged — the NaN move was dropped.
+    expect(Number.isFinite(host.pos.x)).toBe(true);
+    expect(Number.isFinite(host.pos.y)).toBe(true);
+    expect(host.pos.x).toBeCloseTo(startX);
+    expect(host.pos.y).toBeCloseTo(startY);
+  });
+
+  it('drops a non-finite face but still applies a later valid move in the same tick', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.start();
+    const startY = room.world!.players.find((p) => p.id === 'host')!.pos.y;
+    room.applyInput('host', { face: Infinity, move: { x: 0, y: 1 } });
+    const snap = room.tick(0.05)!;
+    const host = snap.players.find((p) => p.id === 'host')!;
+    expect(Number.isFinite(host.facing)).toBe(true); // Infinity face dropped (stays default 0)
+    expect(host.facing).toBe(0);
+    expect(host.pos.y).toBeGreaterThan(startY); // the valid move still applied
+  });
+
+  it('filters an unknown/bogus cast so it never reaches the sim', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.start();
+    // 'notaspell' is not a real spell id; only the real 'fireball' should fire.
+    room.applyInput('host', { casts: ['notaspell', 'fireball'] as never });
+    const snap = room.tick(0.05)!;
+    expect(snap.projectiles.some((pr) => pr.spell === 'fireball')).toBe(true);
+    // No projectile carries the bogus spell id.
+    expect(snap.projectiles.some((pr) => (pr.spell as string) === 'notaspell')).toBe(false);
+  });
+
   it('buffered inputs are drained each tick (not replayed next tick)', () => {
     const room = new Room('AAAA', member('host', 'pyro'));
     room.start();

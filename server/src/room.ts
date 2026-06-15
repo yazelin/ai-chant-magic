@@ -12,6 +12,7 @@
 import {
   createWorld,
   step,
+  SPELLS,
   type World,
   type Command,
   type ClassId,
@@ -20,6 +21,14 @@ import {
   type PlayerSeed,
 } from '@acm/shared';
 import { toSnapshot, type Snapshot } from './snapshot';
+
+// Known spell ids — a bogus cast (typo / hostile client) must never reach the
+// input buffer where it would flow into the sim as an unknown command.
+const VALID_SPELLS = new Set<string>(Object.keys(SPELLS));
+
+function isValidSpell(s: unknown): s is SpellId {
+  return typeof s === 'string' && VALID_SPELLS.has(s);
+}
 
 export type RoomStatus = 'lobby' | 'playing' | 'gameover';
 
@@ -83,14 +92,9 @@ export class Room {
     return this.members.every((m) => !m.connected);
   }
 
-  // Canonical name per Task B2. `addMember` is kept as an alias because the
-  // RoomRegistry composes rooms through it.
+  // Canonical name per Task B2. The RoomRegistry composes rooms through it.
   addPlayer(m: LobbyMember): void {
     this.members.push(m);
-  }
-
-  addMember(m: LobbyMember): void {
-    this.addPlayer(m);
   }
 
   getMember(id: string): LobbyMember | undefined {
@@ -122,6 +126,9 @@ export class Room {
   }
 
   // Buffer an input. Latest move/face win; casts accumulate (never dropped).
+  // Non-finite move/face (NaN/Infinity) is dropped so a hostile/buggy client
+  // cannot poison the player's position, and unknown casts are filtered out so
+  // only real spell ids ever reach the sim.
   applyInput(
     playerId: string,
     msg: { move?: Vec2; face?: number; casts?: SpellId[] }
@@ -131,9 +138,21 @@ export class Room {
       buf = { casts: [] };
       this.inputs.set(playerId, buf);
     }
-    if (msg.move !== undefined) buf.move = msg.move;
-    if (msg.face !== undefined) buf.face = msg.face;
-    if (msg.casts) buf.casts.push(...msg.casts);
+    if (
+      msg.move !== undefined &&
+      Number.isFinite(msg.move.x) &&
+      Number.isFinite(msg.move.y)
+    ) {
+      buf.move = msg.move;
+    }
+    if (msg.face !== undefined && Number.isFinite(msg.face)) {
+      buf.face = msg.face;
+    }
+    if (msg.casts) {
+      for (const c of msg.casts) {
+        if (isValidSpell(c)) buf.casts.push(c);
+      }
+    }
   }
 
   // Drain buffered inputs into a flat Command[] and advance the sim one step.
@@ -158,11 +177,6 @@ export class Room {
     if (this.world.status === 'gameover') this.status = 'gameover';
     this.tickCount += 1;
     return toSnapshot(this.world);
-  }
-
-  // Alias retained for callers that used the B1 name.
-  stepTick(dt: number, rng: () => number = Math.random): Snapshot | null {
-    return this.tick(dt, rng);
   }
 
   // Disconnect: mark connected=false on the lobby member AND (if a world exists)

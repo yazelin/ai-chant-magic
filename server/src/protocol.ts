@@ -104,6 +104,7 @@ export type ErrorCode =
   | 'not-found'
   | 'full'
   | 'already-started'
+  | 'server-full'
   | 'bad-message'
   | 'not-in-room'
   | 'not-host';

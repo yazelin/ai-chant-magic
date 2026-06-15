@@ -813,4 +813,35 @@ describe('step — gameover', () => {
     expect(p.alive).toBe(false);
     expect(w.status).toBe('gameover');
   });
+
+  it('ignores a disconnected-but-alive player: gameover when every CONNECTED player is !alive', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' }, // disconnected, still alive
+      { id: 'b', name: 'Bo', classId: 'pyro' },  // connected, will die
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.connected = false; // disconnected but alive — must NOT keep the game alive
+    a.alive = true;
+    // Drive the connected player into death via the bleedout sim path.
+    b.downed = true; b.hp = 0; b.bleedoutAt = w.time + CONFIG.bleedout.time; b.reviveProgress = 0;
+    for (let i = 0; i < 400 && w.status === 'playing'; i++) step(w, [], 0.05);
+    expect(b.alive).toBe(false);
+    expect(a.alive).toBe(true); // the disconnected player is still nominally alive
+    expect(w.status).toBe('gameover'); // but the only CONNECTED player is dead -> gameover
+  });
+
+  it('a fully-disconnected world does not false-trigger gameover', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    // Everyone disconnected (still alive). No CONNECTED players exist, so the
+    // gameover guard must not fire (the room reaper handles abandonment instead).
+    for (const p of w.players) p.connected = false;
+    step(w, [], 0.05);
+    expect(w.status).toBe('playing');
+  });
 });

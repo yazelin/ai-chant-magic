@@ -80,7 +80,7 @@ export class RoomRegistry {
     if (!room) throw new RoomError('not-found', `no room ${code}`);
     if (room.isStarted) throw new RoomError('already-started', `room ${code} already started`);
     if (room.isFull) throw new RoomError('full', `room ${code} is full`);
-    room.addMember(member);
+    room.addPlayer(member);
     return room;
   }
 
@@ -88,7 +88,7 @@ export class RoomRegistry {
   quickJoin(member: LobbyMember): Room {
     for (const room of this.roomsByCode.values()) {
       if (room.status === 'lobby' && !room.isFull) {
-        room.addMember(member);
+        room.addPlayer(member);
         return room;
       }
     }

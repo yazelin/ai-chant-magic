@@ -57,6 +57,23 @@ function sendMsg(ws: WebSocket, msg: unknown): void {
   ws.send(JSON.stringify(msg));
 }
 
+// Poll `cond` until it returns true (or time out). Used to observe registry
+// state changes driven by the server's own 50ms tick loop.
+function waitUntil(cond: () => boolean, timeoutMs = 4000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const iv = setInterval(() => {
+      if (cond()) {
+        clearInterval(iv);
+        resolve();
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(iv);
+        reject(new Error('waitUntil timed out'));
+      }
+    }, 20);
+  });
+}
+
 // Resolve with the first server message whose `type` matches `type`.
 function waitFor<T extends ServerMsg['type']>(
   ws: WebSocket,
@@ -190,5 +207,85 @@ describe('two-client ws integration smoke (B3)', () => {
       expect(hasFireballProjectile || hasBlastEffect).toBe(true);
     },
     15000
+  );
+
+  it(
+    'returns a server-full error (not a generic bad-message) when create overflows MAX_ROOMS',
+    async () => {
+      const { MAX_ROOMS } = await import('../src/rooms');
+      const a = await connect();
+      // Fill the registry to MAX_ROOMS by repeatedly creating rooms on one socket.
+      for (let i = 0; i < MAX_ROOMS; i++) {
+        const joined = waitFor(a, 'joined');
+        sendMsg(a, { type: 'create', name: `H${i}`, classId: 'pyro' });
+        await joined;
+      }
+      expect(handle.registry.size).toBe(MAX_ROOMS);
+
+      // The next create must surface the registry's RoomError as a typed
+      // `server-full` error, not the generic handler 'bad-message'.
+      const err = waitFor(a, 'error');
+      sendMsg(a, { type: 'create', name: 'overflow', classId: 'pyro' });
+      const got = await err;
+      expect(got.code).toBe('server-full');
+    },
+    15000
+  );
+
+  it(
+    'reaps a finished (gameover) room from the registry on the tick loop',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const joined = await joinedPromise;
+      const code = joined.roomCode;
+
+      const started = waitFor(a, 'started');
+      sendMsg(a, { type: 'start' });
+      await started;
+      await waitFor(a, 'snapshot'); // tick loop is running
+
+      // Force the room's world into gameover (the player is gone for the sim).
+      const room = handle.registry.get(code)!;
+      expect(room).toBeTruthy();
+      room.status = 'gameover';
+
+      // The next tick(s) of the 50ms loop must reap the finished room.
+      await waitUntil(() => handle.registry.get(code) === undefined);
+      expect(handle.registry.get(code)).toBeUndefined();
+    },
+    10000
+  );
+
+  it(
+    'reaps an abandoned playing room (all members disconnected) and stops ticking it',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const joined = await joinedPromise;
+      const code = joined.roomCode;
+
+      const started = waitFor(a, 'started');
+      sendMsg(a, { type: 'start' });
+      await started;
+      await waitFor(a, 'snapshot');
+
+      const room = handle.registry.get(code)!;
+      const ticksAtAbandon = room.tickCount;
+
+      // The only member leaves -> room is empty (everyone disconnected).
+      a.removeAllListeners();
+      a.close();
+
+      // Loop must (a) stop stepping the empty room and (b) reap it.
+      await waitUntil(() => handle.registry.get(code) === undefined);
+      expect(handle.registry.get(code)).toBeUndefined();
+      // It did not keep accumulating ticks after abandonment beyond a small margin
+      // (the close + reap race may allow a tick or two, but not an unbounded run).
+      expect(room.tickCount - ticksAtAbandon).toBeLessThanOrEqual(3);
+    },
+    10000
   );
 });
