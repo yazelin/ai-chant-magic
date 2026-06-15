@@ -71,3 +71,41 @@ describe('step — casting self-target spells', () => {
     expect(w.player.cooldowns.shield).toBeCloseTo(w.time + SPELLS.shield.cooldown);
   });
 });
+import { Enemy } from '../../src/sim/types';
+
+function makeEnemy(over: Partial<Enemy> = {}): Enemy {
+  return { id: 999, pos: { x: 0, y: 0 }, hp: 30, speed: 0, slowUntil: 0, radius: CONFIG.enemy.radius, ...over };
+}
+
+describe('step — fireball', () => {
+  it('spawns a projectile travelling along facing', () => {
+    const w = createWorld();
+    w.player.facing = 0; // +x
+    step(w, [{ kind: 'cast', spell: 'fireball' }], 0.016);
+    expect(w.projectiles.length).toBe(1);
+    expect(w.projectiles[0].vel.x).toBeGreaterThan(0);
+  });
+  it('damages an enemy in its path and scores the kill', () => {
+    const w = createWorld();
+    w.player.facing = 0;
+    // place a weak enemy just to the right of the player
+    w.enemies.push(makeEnemy({ hp: 10, pos: { x: w.player.pos.x + 30, y: w.player.pos.y } }));
+    step(w, [{ kind: 'cast', spell: 'fireball' }], 0.016);
+    for (let i = 0; i < 30; i++) step(w, [], 0.016); // let it travel/explode
+    expect(w.enemies.length).toBe(0);
+    expect(w.score).toBe(1);
+  });
+});
+
+describe('step — frost', () => {
+  it('spawns a fan of projectiles and slows what it hits', () => {
+    const w = createWorld();
+    w.player.facing = 0;
+    w.enemies.push(makeEnemy({ hp: 100, pos: { x: w.player.pos.x + 30, y: w.player.pos.y } }));
+    step(w, [{ kind: 'cast', spell: 'frost' }], 0.016);
+    expect(w.projectiles.length).toBe(CONFIG.frost.count);
+    for (let i = 0; i < 20; i++) step(w, [], 0.016);
+    expect(w.enemies[0].slowUntil).toBeGreaterThan(w.time);
+    expect(w.enemies[0].hp).toBeLessThan(100);
+  });
+});
