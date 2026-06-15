@@ -1,7 +1,7 @@
 import { World, Command, Vec2, SpellId, Projectile, Enemy } from './types';
 import { CONFIG } from './config';
 import { SPELLS } from './spells';
-import { dist } from './vec';
+import { dist, sub, len, scale } from './vec';
 
 export function createWorld(): World {
   return {
@@ -57,7 +57,8 @@ export function step(
   }
 
   movePlayer(world, moveDir, dt);
-  // waves (Task 12), enemies (Task 11) added later.
+  // waves (Task 12) added later.
+  updateEnemies(world, dt);
   updateProjectiles(world, dt);
 
   if (world.player.hp <= 0) {
@@ -93,9 +94,11 @@ function castSpell(world: World, spell: SpellId): void {
       }
       break;
     }
-    case 'thunder':
-      // hitscan added in Task 11
+    case 'thunder': {
+      const dir = { x: Math.cos(p.facing), y: Math.sin(p.facing) };
+      castThunder(world, dir);
       break;
+    }
   }
 }
 
@@ -152,4 +155,33 @@ function updateProjectiles(world: World, dt: number): void {
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
   removeDeadEnemies(world);
+}
+
+function castThunder(world: World, dir: Vec2): void {
+  const o = world.player.pos;
+  for (const e of world.enemies) {
+    const rel = sub(e.pos, o);
+    const along = rel.x * dir.x + rel.y * dir.y;       // distance along the ray
+    if (along < 0 || along > CONFIG.thunder.range) continue;
+    const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x); // perpendicular offset
+    if (perp <= CONFIG.thunder.width + e.radius) e.hp -= CONFIG.thunder.damage;
+  }
+  removeDeadEnemies(world);
+}
+
+function updateEnemies(world: World, dt: number): void {
+  const p = world.player;
+  for (const e of world.enemies) {
+    const toP = sub(p.pos, e.pos);
+    const d = len(toP);
+    const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
+    if (d > 1) {
+      const move = scale(toP, (speed * dt) / d);
+      e.pos.x += move.x;
+      e.pos.y += move.y;
+    }
+    if (d <= e.radius + CONFIG.player.radius && world.time >= p.shieldUntil) {
+      p.hp -= CONFIG.contactDps * dt;
+    }
+  }
 }

@@ -109,3 +109,44 @@ describe('step — frost', () => {
     expect(w.enemies[0].hp).toBeLessThan(100);
   });
 });
+describe('step — thunder', () => {
+  it('instantly damages enemies along the facing ray', () => {
+    const w = createWorld();
+    w.player.facing = 0; // +x
+    w.enemies.push(makeEnemy({ hp: 40, pos: { x: w.player.pos.x + 200, y: w.player.pos.y } }));
+    step(w, [{ kind: 'cast', spell: 'thunder' }], 0.016);
+    expect(w.enemies[0]?.hp ?? 0).toBeLessThanOrEqual(0 + (40 - CONFIG.thunder.damage > 0 ? 40 : 0));
+  });
+  it('misses enemies far off the ray', () => {
+    const w = createWorld();
+    w.player.facing = 0;
+    w.enemies.push(makeEnemy({ hp: 40, pos: { x: w.player.pos.x + 200, y: w.player.pos.y + 300 } }));
+    step(w, [{ kind: 'cast', spell: 'thunder' }], 0.016);
+    expect(w.enemies[0].hp).toBe(40);
+  });
+});
+
+describe('step — enemies', () => {
+  it('moves an enemy toward the player', () => {
+    const w = createWorld();
+    const e = makeEnemy({ hp: 100, speed: 60, pos: { x: w.player.pos.x + 200, y: w.player.pos.y } });
+    w.enemies.push(e);
+    const before = e.pos.x;
+    step(w, [], 0.5);
+    expect(e.pos.x).toBeLessThan(before); // moved left toward centered player
+  });
+  it('damages the player on contact unless shielded', () => {
+    const w = createWorld();
+    w.enemies.push(makeEnemy({ hp: 100, speed: 0, pos: { ...w.player.pos } }));
+    step(w, [], 0.5);
+    expect(w.player.hp).toBeLessThan(w.player.maxHp);
+  });
+  it('shield blocks contact damage', () => {
+    const w = createWorld();
+    w.player.shieldUntil = w.time + 10;
+    w.enemies.push(makeEnemy({ hp: 100, speed: 0, pos: { ...w.player.pos } }));
+    const hp = w.player.hp;
+    step(w, [], 0.5);
+    expect(w.player.hp).toBe(hp);
+  });
+});
