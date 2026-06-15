@@ -1,4 +1,4 @@
-import { World, SPELLS } from '@acm/shared';
+import { World, ClassId, SPELLS, CLASSES } from '@acm/shared';
 import { VoiceStatus } from '../voice/recognizer';
 
 const MIC_LABEL: Record<VoiceStatus, string> = {
@@ -12,10 +12,12 @@ const MIC_LABEL: Record<VoiceStatus, string> = {
 export class Hud {
   private hud: HTMLElement;
   private mic: HTMLElement;
+  private selfClass: ClassId;
 
-  constructor() {
+  constructor(selfClass: ClassId) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
+    this.selfClass = selfClass;
   }
 
   setMicStatus(s: VoiceStatus, message?: string): void {
@@ -23,12 +25,29 @@ export class Hud {
   }
 
   render(world: World): void {
-    const spellList = Object.values(SPELLS)
-      .map((s) => s.displayName)
+    // Party panel: one line per connected player (name / class / hp / state).
+    const party = world.players
+      .filter((p) => p.connected)
+      .map((p) => {
+        const cls = CLASSES[p.classId].displayName;
+        if (!p.alive) return `${p.name}(${cls}):陣亡`;
+        if (p.downed) {
+          const pct = Math.round(Math.max(0, Math.min(1, p.reviveProgress)) * 100);
+          return `${p.name}(${cls}):倒地 ${pct}%`;
+        }
+        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}`;
+      })
+      .join(' ｜ ');
+
+    const spellHints = CLASSES[this.selfClass].spells
+      .map((id, i) => `${i + 1} ${SPELLS[id].displayName}`)
       .join('、');
-    const status = world.status === 'gameover'
-      ? `遊戲結束 — 撐到第 ${world.wave} 波,擊殺 ${world.score}(按 R 重來)`
-      : `HP ${Math.ceil(world.player.hp)}/${world.player.maxHp} | 第 ${world.wave} 波 | 擊殺 ${world.score}`;
-    this.hud.textContent = `${status} ｜ 可喊法術:${spellList}`;
+
+    const head =
+      world.status === 'gameover'
+        ? `遊戲結束 — 撐到第 ${world.wave} 波,擊殺 ${world.score}(按 R 重來)`
+        : `第 ${world.wave} 波 ｜ 隊伍擊殺 ${world.score}`;
+
+    this.hud.textContent = `${head} ｜ ${party} ｜ 你的法術:${spellHints}`;
   }
 }

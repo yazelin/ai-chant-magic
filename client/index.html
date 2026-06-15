@@ -9,6 +9,12 @@
       #app { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px; }
       #game { line-height: 0; }
       .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+      #class-picker { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+      #class-picker button {
+        background: #16162a; border: 1px solid #444; border-radius: 8px;
+        padding: 8px 16px; font-size: 15px; cursor: pointer; font-family: inherit;
+      }
+      #class-picker button:hover { background: #20203a; }
     </style>
   </head>
   <body>
@@ -23,6 +29,7 @@
         </label>
         <span id="mic-status">麥克風:未啟動</span>
       </div>
+      <div id="class-picker" class="row"></div>
       <div id="hud" class="row"></div>
       <div id="game"></div>
     </div>
