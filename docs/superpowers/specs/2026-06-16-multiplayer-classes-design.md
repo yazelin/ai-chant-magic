@@ -228,3 +228,42 @@ Command 增加施法者:`{kind:'cast', playerId, spell}`、`{kind:'move', player
 - 救援:採「鄰近自動救援(站旁邊就讀條)」而非額外按鍵,降低操作負擔。
 - 復活時點:**下一波開始**復活(非固定秒數)。
 - scaleExp(人數超線性指數)預設 1.6。
+
+## 15. 設計覆核修正(2026-06-16,依 adversarial design review)— 本節為最終權威,與前文衝突處以本節為準
+
+經四面向(netcode / 職業平衡 / repo 重構 / 部署)對照現有程式碼的逆向審查,修正如下:
+
+### 15.1 Netcode 簡化(blocker)
+- **取消客戶端預測與校正**。現有 `step` 就地 mutate 且用 RNG 生怪,無法重播,預測不可行。**所有實體(含自己)一律走快照內插緩衝**渲染(render 落後約 100ms / 約 2 個快照)。localhost 下延遲體感可忽略。
+- **單一頻率**:伺服器每 50ms `step` 一次並廣播一次快照(20Hz),不分離 tick 與 broadcast。
+- **每 tick 指令彙整**:每位玩家只保留「最新 move」「最新 face」;**所有 cast 入佇列全部處理**(不可因取最新而漏掉語音施法)。
+- **斷線**:玩家標 `connected=false`,**絕不從 players 陣列 splice**(splice 會打亂索引/快照對應)。其角色留在世界但不再吃指令、不再被怪追(視為已離開)。
+- **加入時機**:只在 lobby 可加入;**遊戲中拒絕新加入**(回 error)。
+
+### 15.2 Transient 效果頻道(blocker,結構性)
+- `World` 與 `Snapshot` 新增 `effects: TransientEffect[]`。瞬發/視覺性法術(thunder 光束、chain 連線、frostnova 環、firestorm 爆炸、aegis/heal 光環)由 `step` 產生一筆短 ttl 效果,`step` 每幀衰減 ttl 並移除過期者;客戶端據此畫特效。
+- `TransientEffect = { id, kind, ownerId?, a:Vec2, b?:Vec2, radius?, ttl, colorHint }`(`kind`: 'beam'|'chain'|'nova'|'blast'|'aura')。
+
+### 15.3 Repo 重構順序與工具鏈(blocker)
+- **分兩步,各自保持綠**:(1) 先 `git mv` 把 `src/sim`、`src/voice/matcher`、`recognizer-policy` 平移到 `shared/`,測試全綠、單機不變;(2) **另一個獨立步驟**才做 World「單人→players 陣列」改寫。
+- **shared 消費模型(擇一,定案)**:`shared` 為 workspace 套件,**以 TS 源碼**被消費。client 用 Vite 直接 bundle TS;**server 用 `tsx` 跑開發、用 `esbuild` 打包成單一 JS 上 Render**(避開 root `tsconfig` 是 `bundler`+`noEmit` 無法 emit Node 產物的問題)。
+- 根目錄一份 lockfile 供 `npm ci`;Phaser 只在 client、`ws` 只在 server。
+
+### 15.4 部署現實(blocker)
+- **兩分頁驗收一律在 Vite dev server**(http://localhost:5173 client → ws://localhost:8787 server;http 頁面連 ws 無混合內容問題)。**不要**用 HTTPS 的 Pages 頁面連 `ws://localhost`(會被擋/不穩)。
+- `deploy.yml` 必須 build **client workspace** 並上傳 `client/dist`(否則上線空站)。
+- server 綁 `process.env.PORT` 於 `0.0.0.0`,健康路由 `/healthz` 走同一 http server(供 Render 探活)。Render 免費層會在閒置(約 15 分)後休眠、冷啟動數秒——前端 lobby 顯示「喚醒伺服器中…」UX;**不加 keep-alive cron**。
+- Pages client 的 server 網址:`?server=wss://…` query > build 時 `VITE_SERVER_URL`;HTTPS 下若未指定則顯示「需設定伺服器」並提供單機入口。
+
+### 15.5 職業/平衡修正(important)
+- **聖光 holybolt 是真正的攻擊**(中等傷害投射),且 Warden **能自我續航**(heal 對含自己生效 + holybolt 有輸出),確保單人/雙人試玩時 Warden 不是陷阱選擇。
+- **heal / aegis 只對 alive 隊友(含自己)生效**,跳過 downed/dead。
+- **救援採鄰近自動讀條**(alive 隊友站在 downed 隊友 `reviveRadius` 內即累進),**刪除 revive Command**(原 §5 的 revive command 取消,避免雙重規格)。
+- **連鎖閃電 chain**:從命中點起「貪婪找最近未命中怪」遍歷,`visited` 集合,`maxJumps=4`,每跳傷害遞減。
+- **火海 firestorm**:投射帶引信,**ttl 到期或撞擊時引爆**大範圍 AoE。
+- **scaleExp 下修為 1.4**(超線性別把雙人場懲罰過重)。
+
+### 15.6 建置分期(plan 依此切)
+- **Phase A(地板,獨立可交付可玩)**:workspaces 重構 + 多人 World(players 陣列、天生無友傷、downed/revive/respawn/scaling、全 10 法術、effects 頻道)+ 全單元測試 + **單機沿用 LocalSession 仍可玩(可選一個職業、用該職業法術)**。Phase A 完成即有可玩 demo。
+- **Phase B(天花板)**:`ws` 權威伺服器 + client NetSession + 房間代碼(quick-join 為非阻塞加分項)+ 兩分頁本機 e2e。B 若卡住,A 仍是可交付的可玩版。
+- 驗收門:A = sim/職業/法術/救援/scaling 測試綠 + 單機可玩 + 單機死亡→downed→bleedout→gameover 測到;B = node ws smoke(create/join/start/snapshot/cast)+ 手動兩分頁(Vite dev)。
