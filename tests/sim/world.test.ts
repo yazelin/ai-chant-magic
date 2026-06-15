@@ -87,6 +87,7 @@ describe('step — fireball', () => {
   });
   it('damages an enemy in its path and scores the kill', () => {
     const w = createWorld();
+    w.breakTimer = 999; // suppress wave auto-spawn so only the planted enemy exists
     w.player.facing = 0;
     // place a weak enemy just to the right of the player
     w.enemies.push(makeEnemy({ hp: 10, pos: { x: w.player.pos.x + 30, y: w.player.pos.y } }));
@@ -112,6 +113,7 @@ describe('step — frost', () => {
 describe('step — thunder', () => {
   it('instantly damages enemies along the facing ray', () => {
     const w = createWorld();
+    w.breakTimer = 999; // suppress wave auto-spawn so only the planted enemy exists
     w.player.facing = 0; // +x
     w.enemies.push(makeEnemy({ hp: 40, pos: { x: w.player.pos.x + 200, y: w.player.pos.y } }));
     step(w, [{ kind: 'cast', spell: 'thunder' }], 0.016);
