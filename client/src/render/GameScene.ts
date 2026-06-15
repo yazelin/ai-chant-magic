@@ -9,7 +9,7 @@ import {
   CLASSES,
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
-import { LocalSession } from '../session/LocalSession';
+import { GameSession } from '../session/GameSession';
 
 // Parse the '#rrggbb' color strings on CLASSES / effect.colorHint into the
 // 0xRRGGBB integers Phaser's Graphics API wants.
@@ -18,14 +18,17 @@ function hexColor(s: string): number {
 }
 
 export class GameScene extends Phaser.Scene {
-  private session: LocalSession;
+  private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
   private keys = new Set<string>();
   // default face right until first pointer move
   private mouse: { x: number; y: number } = { x: CONFIG.arenaWidth, y: CONFIG.arenaHeight / 2 };
 
-  constructor(session: LocalSession) {
+  // GameScene is session-agnostic: it renders whatever World the injected
+  // GameSession exposes (LocalSession runs the sim locally; NetSession returns
+  // an interpolated snapshot world). It never touches `step` itself.
+  constructor(session: GameSession) {
     super('game');
     this.session = session;
   }

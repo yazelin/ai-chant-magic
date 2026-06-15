@@ -5,33 +5,92 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>真。AI。咏唱魔法</title>
     <style>
-      body { margin: 0; background: #0b0b14; color: #e8e8f0; font-family: system-ui, sans-serif; }
+      :root {
+        --bg: #0b0b14;
+        --panel: #16162a;
+        --panel-2: #1d1d36;
+        --edge: #33335a;
+        --ink: #e8e8f0;
+        --muted: #9aa0b5;
+        --accent: #b06cff;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif; }
       #app { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px; }
       #game { line-height: 0; }
       .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
-      #class-picker { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
-      #class-picker button {
-        background: #16162a; border: 1px solid #444; border-radius: 8px;
-        padding: 8px 16px; font-size: 15px; cursor: pointer; font-family: inherit;
+
+      /* --- Lobby (dark arcane) ------------------------------------------- */
+      #lobby {
+        width: 100%; max-width: 720px; margin: 24px auto;
+        background: radial-gradient(120% 120% at 50% 0%, #15152c 0%, #0b0b14 80%);
+        border: 1px solid var(--edge); border-radius: 14px; padding: 24px;
+        box-shadow: 0 0 40px rgba(120, 80, 220, 0.15);
       }
-      #class-picker button:hover { background: #20203a; }
+      #lobby h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: 1px; }
+      #lobby .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+      #lobby label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+      #lobby input[type='text'] {
+        width: 100%; background: #0d0d1c; color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; font-size: 15px;
+      }
+      .class-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 8px 0 4px; }
+      .class-card {
+        background: var(--panel); border: 2px solid var(--edge); border-radius: 10px;
+        padding: 12px 8px; cursor: pointer; text-align: center; transition: all 0.12s;
+      }
+      .class-card:hover { background: var(--panel-2); }
+      .class-card.selected { box-shadow: 0 0 0 1px currentColor, 0 0 18px -4px currentColor; }
+      .class-card .glyph { font-size: 26px; line-height: 1; margin-bottom: 6px; }
+      .class-card .cname { font-size: 15px; font-weight: 600; }
+      .class-card .spells { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+      .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+      .btns button {
+        flex: 1 1 auto; min-width: 130px; background: var(--panel); color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 8px; padding: 11px 14px; font-size: 14px;
+        cursor: pointer; font-family: inherit;
+      }
+      .btns button:hover { background: var(--panel-2); }
+      .btns button.primary { background: #2a1f4d; border-color: var(--accent); }
+      .btns button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .code-banner {
+        margin: 8px 0 16px; padding: 16px; text-align: center;
+        background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px;
+      }
+      .code-banner .code { font-size: 34px; letter-spacing: 8px; font-weight: 700; color: var(--accent); }
+      .members { list-style: none; padding: 0; margin: 0; }
+      .members li {
+        display: flex; justify-content: space-between; padding: 8px 10px; margin-bottom: 6px;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; font-size: 14px;
+      }
+      .members .ready { color: #6fe39a; }
+      .members .waiting { color: var(--muted); }
+      #lobby .error { color: #ff8d8d; font-size: 13px; margin-top: 12px; min-height: 18px; }
+      #lobby .hint { color: #ffd24d; font-size: 13px; margin-top: 12px; }
+
+      /* --- In-game chrome (hidden until a session starts) ----------------- */
+      #game-chrome { display: none; }
+      #class-picker { display: none; }
     </style>
   </head>
   <body>
     <div id="app">
-      <div class="row">
-        <strong>真。AI。咏唱魔法</strong>
-        <label>詠唱模式:
-          <select id="mode">
-            <option value="mueisho">無詠唱(直接喊法術名)</option>
-            <option value="eisho">詠唱(先念呪文)</option>
-          </select>
-        </label>
-        <span id="mic-status">麥克風:未啟動</span>
+      <div id="game-chrome">
+        <div class="row">
+          <strong>真。AI。咏唱魔法</strong>
+          <label>詠唱模式:
+            <select id="mode">
+              <option value="mueisho">無詠唱(直接喊法術名)</option>
+              <option value="eisho">詠唱(先念呪文)</option>
+            </select>
+          </label>
+          <span id="mic-status">麥克風:未啟動</span>
+        </div>
+        <div id="class-picker" class="row"></div>
+        <div id="hud" class="row"></div>
+        <div id="game"></div>
       </div>
-      <div id="class-picker" class="row"></div>
-      <div id="hud" class="row"></div>
-      <div id="game"></div>
+      <div id="lobby"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

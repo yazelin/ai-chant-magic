@@ -7,36 +7,21 @@ import {
   CastMode,
   JUMON,
   ClassId,
-  CLASSES,
   classSpellSet,
-  SPELLS,
 } from '@acm/shared';
-import { LocalSession } from './session/LocalSession';
+import { GameSession } from './session/GameSession';
+import { Lobby } from './ui/Lobby';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 
-const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
+// Boot into the lobby. The lobby decides Local (single-player) vs Net
+// (connected, already `started`) and hands us a GameSession + the self class id.
+// Both modes drive the same GameScene; voice casting and the 1/2/3 test keys
+// work identically (they all route through session.sendCast).
+function startGame(session: GameSession, classId: ClassId): void {
+  // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
+  const chrome = document.getElementById('game-chrome');
+  if (chrome) chrome.style.display = '';
 
-// Minimal Phase A class picker. Full lobby (room codes / multiplayer) is Phase B.
-function showClassPicker(onPick: (c: ClassId) => void): void {
-  const host = document.getElementById('class-picker')!;
-  host.innerHTML = '<span>選擇職業:</span>';
-  for (const id of CLASS_ORDER) {
-    const def = CLASSES[id];
-    const btn = document.createElement('button');
-    btn.textContent = def.displayName;
-    btn.title = def.spells.map((s) => SPELLS[s].displayName).join(' / ');
-    btn.style.borderColor = def.color;
-    btn.style.color = def.color;
-    btn.addEventListener('click', () => {
-      host.style.display = 'none';
-      onPick(id);
-    });
-    host.appendChild(btn);
-  }
-}
-
-function startGame(classId: ClassId): void {
-  const session = new LocalSession(classId);
   const scene = new GameScene(session);
 
   new Phaser.Game({
@@ -50,7 +35,9 @@ function startGame(classId: ClassId): void {
 
   const hud = new Hud(classId);
 
-  // HUD refresh loop (decoupled from Phaser so game-over text updates even when idle).
+  // HUD refresh loop (decoupled from Phaser so game-over text updates even when
+  // idle). Reads whatever World the session exposes (local sim or interpolated
+  // snapshot), so the party panel renders all players in both modes.
   setInterval(() => {
     const w = session.getWorld();
     if (w) hud.render(w);
@@ -63,7 +50,7 @@ function startGame(classId: ClassId): void {
     mode = modeSelect.value as CastMode;
   });
 
-  // Restart
+  // Restart (solo only; NetSession.restart is a no-op).
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'r') scene.restart();
   });
@@ -81,4 +68,4 @@ function startGame(classId: ClassId): void {
   window.addEventListener('click', () => voice.start(), { once: true });
 }
 
-showClassPicker(startGame);
+new Lobby(startGame);
