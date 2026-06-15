@@ -528,3 +528,180 @@ describe('step — gameover guard', () => {
     expect(w.time).toBe(t);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task A6 — downed / revive / bleedout / respawn / scaling / gameover
+// ---------------------------------------------------------------------------
+
+// Park an enemy on top of a player to grind it into the downed state.
+function downViaContact(w: World, target: Player): void {
+  // Place an enemy in contact and step until hp drains to downed.
+  w.enemies.push(makeEnemy({ id: 5000, hp: 100000, pos: { x: target.pos.x, y: target.pos.y } }));
+  for (let i = 0; i < 200 && !target.downed && target.alive; i++) {
+    step(w, [], 0.05);
+  }
+  // Remove the grinder so it does not interfere with subsequent assertions.
+  w.enemies = w.enemies.filter((e) => e.id !== 5000);
+}
+
+describe('step — downed transition', () => {
+  it('a lone player reaching hp<=0 enters downed (not dead, not gameover yet)', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999; // isolate from auto-spawn
+    const p = w.players[0];
+    downViaContact(w, p);
+    expect(p.downed).toBe(true);
+    expect(p.alive).toBe(true);          // downed is NOT dead
+    expect(p.hp).toBe(0);
+    expect(p.bleedoutAt).toBeGreaterThan(w.time);
+    expect(p.reviveProgress).toBe(0);
+    expect(w.status).toBe('playing');    // not gameover while still downed (alive)
+  });
+});
+
+describe('step — revive (auto-proximity)', () => {
+  it('an alive ally within revive radius revives a downed player to revive hp', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 480, y: 320 };
+    b.pos = { x: a.pos.x + CONFIG.revive.radius - 10, y: a.pos.y }; // within revive radius
+    // Put 'a' down manually (avoid an enemy chasing 'b' mid-test).
+    a.downed = true; a.hp = 0; a.bleedoutAt = w.time + CONFIG.bleedout.time; a.reviveProgress = 0;
+    // Channel long enough to exceed revive.time.
+    for (let i = 0; i < 100 && a.downed; i++) step(w, [], 0.05);
+    expect(a.downed).toBe(false);
+    expect(a.alive).toBe(true);
+    expect(a.hp).toBe(CONFIG.revive.hp);
+  });
+
+  it('a warden reviver channels faster (1.5x) than a non-warden reviver', () => {
+    function ticksToRevive(reviverClass: 'pyro' | 'warden'): number {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'pyro' },        // downed
+        { id: 'b', name: 'Bo', classId: reviverClass },   // reviver
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      const b = findPlayer(w, 'b');
+      a.pos = { x: 480, y: 320 };
+      b.pos = { x: a.pos.x + 10, y: a.pos.y };
+      a.downed = true; a.hp = 0; a.bleedoutAt = w.time + 999; a.reviveProgress = 0;
+      let ticks = 0;
+      for (let i = 0; i < 500 && a.downed; i++) { step(w, [], 0.05); ticks++; }
+      expect(a.downed).toBe(false);
+      return ticks;
+    }
+    const pyroTicks = ticksToRevive('pyro');
+    const wardenTicks = ticksToRevive('warden');
+    expect(wardenTicks).toBeLessThan(pyroTicks);
+  });
+
+  it('with no ally near, revive progress decays and the player bleeds out', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 100, y: 100 };
+    b.pos = { x: 900, y: 600 }; // far away, well beyond revive radius
+    a.downed = true; a.hp = 0; a.bleedoutAt = w.time + CONFIG.bleedout.time; a.reviveProgress = 0.4;
+    // First tick with no ally near: progress must decay (not climb).
+    step(w, [], 0.05);
+    expect(a.reviveProgress).toBeLessThan(0.4);
+    // Eventually bleeds out (alive=false), never revived.
+    for (let i = 0; i < 400 && a.alive; i++) step(w, [], 0.05);
+    expect(a.alive).toBe(false);
+    expect(a.downed).toBe(false);
+    expect(a.reviveProgress).toBeGreaterThanOrEqual(0); // decayed, never negative
+  });
+});
+
+describe('step — bleedout -> dead -> respawn next wave', () => {
+  it('a downed player with no rescuer past bleedout becomes !alive and is scheduled for the next wave', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' }, // alive so the team is not gameover
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 100, y: 100 };
+    b.pos = { x: 900, y: 600 }; // far, never revives 'a'
+    w.wave = 3;
+    a.downed = true; a.hp = 0; a.bleedoutAt = w.time + CONFIG.bleedout.time; a.reviveProgress = 0;
+    for (let i = 0; i < 400 && a.alive; i++) step(w, [], 0.05);
+    expect(a.alive).toBe(false);
+    expect(a.downed).toBe(false);
+    expect(a.respawnAtWave).toBe(w.wave + 1);
+  });
+
+  it('beginWave respawns a dead player at full hp', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    const a = findPlayer(w, 'a');
+    a.alive = false; a.downed = false; a.hp = 0; a.respawnAtWave = w.wave + 1;
+    // Drive a wave boundary: clear current spawn and let the break->beginWave fire.
+    w.spawnQueue = 0;
+    w.enemies = [];
+    w.breakTimer = 0;
+    const startWave = w.wave;
+    for (let i = 0; i < 200 && w.wave === startWave; i++) step(w, [], 0.1);
+    expect(w.wave).toBeGreaterThan(startWave);
+    expect(a.alive).toBe(true);
+    expect(a.downed).toBe(false);
+    expect(a.hp).toBe(a.maxHp);
+  });
+});
+
+describe('step — player-count scaling (super-linear)', () => {
+  it('spawns more enemies for 3 players than for 1 (super-linear via scaleExp)', () => {
+    function totalSpawnForWave1(playerCount: number): number {
+      const seeds = Array.from({ length: playerCount }, (_, i) => ({
+        id: `p${i}`, name: `P${i}`, classId: 'pyro' as const,
+      }));
+      const w = createWorld(seeds);
+      // rng=()=>0 so spawn edge/positions are deterministic.
+      step(w, [], 0.016, () => 0);
+      // At wave 1, total spawn = enemies already spawned + remaining queue.
+      return w.spawnQueue + w.enemies.length;
+    }
+    const solo = totalSpawnForWave1(1);
+    const trio = totalSpawnForWave1(3);
+    // Solo == baseCount (scale factor 1). Trio is super-linear: > 3x base would be
+    // linear; assert it exceeds the linear projection from solo.
+    expect(trio).toBeGreaterThan(solo * 3);
+    expect(solo).toBe(CONFIG.wave.baseCount);
+  });
+});
+
+describe('step — gameover', () => {
+  it('marks gameover when every player is !alive', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    for (const p of w.players) { p.alive = false; p.downed = false; }
+    step(w, [], 0.016);
+    expect(w.status).toBe('gameover');
+  });
+
+  it('solo path: lone player downed with no rescuer bleeds out into gameover', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999; // isolate from auto-spawn
+    const p = w.players[0];
+    p.downed = true; p.hp = 0; p.bleedoutAt = w.time + CONFIG.bleedout.time; p.reviveProgress = 0;
+    for (let i = 0; i < 400 && w.status === 'playing'; i++) step(w, [], 0.05);
+    expect(p.alive).toBe(false);
+    expect(w.status).toBe('gameover');
+  });
+});

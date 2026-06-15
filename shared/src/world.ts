@@ -452,20 +452,79 @@ function updateEnemies(world: World, dt: number): void {
 }
 
 // ---------------------------------------------------------------------------
-// Revive (auto-proximity) — full algorithm in Task A6; inert scaffold for now.
+// Revive (auto-proximity) + bleedout (Task A6)
 // ---------------------------------------------------------------------------
 
-function updateRevives(_world: World, _dt: number): void {
-  // Task A6 implements downed/revive/bleedout/respawn here.
+// Nearby alive & !downed allies that can channel a revive on `downed`.
+// Returns whether any reviver is present, and whether any reviver is a warden.
+function revivers(world: World, downed: Player): { any: boolean; warden: boolean } {
+  let any = false;
+  let warden = false;
+  for (const ally of world.players) {
+    if (ally.id === downed.id || !canAct(ally)) continue;
+    if (dist(ally.pos, downed.pos) <= CONFIG.revive.radius) {
+      any = true;
+      if (ally.classId === 'warden') warden = true;
+    }
+  }
+  return { any, warden };
+}
+
+function updateRevives(world: World, dt: number): void {
+  for (const p of world.players) {
+    if (!p.alive || !p.downed) continue;
+    const r = revivers(world, p);
+    if (r.any) {
+      const rate = (1 / CONFIG.revive.time) * (r.warden ? 1.5 : 1);
+      p.reviveProgress += rate * dt;
+      if (p.reviveProgress >= 1) {
+        p.downed = false;
+        p.hp = CONFIG.revive.hp;
+        p.reviveProgress = 0;
+      }
+    } else {
+      // No ally near — progress decays toward 0.
+      p.reviveProgress = Math.max(0, p.reviveProgress - (1 / CONFIG.revive.time) * dt);
+    }
+    // Bleedout: still downed and past the deadline -> full death, respawn next wave.
+    if (p.downed && world.time >= p.bleedoutAt) {
+      p.alive = false;
+      p.downed = false;
+      p.respawnAtWave = world.wave + 1;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Waves
 // ---------------------------------------------------------------------------
 
+// Effective player count for scaling: connected players still in the fight
+// (alive or downed; dead-awaiting-respawn do not inflate the wave).
+function effectivePlayerCount(world: World): number {
+  return world.players.filter((p) => p.connected && (p.alive || p.downed)).length;
+}
+
+// Respawn every fully-dead player at the start of a wave: full hp, repositioned.
+function respawnDeadPlayers(world: World): void {
+  const dead = world.players.filter((p) => !p.alive);
+  dead.forEach((p, i) => {
+    p.alive = true;
+    p.downed = false;
+    p.hp = p.maxHp;
+    p.reviveProgress = 0;
+    p.bleedoutAt = 0;
+    p.pos = spawnPos(i, Math.max(1, dead.length));
+  });
+}
+
 function beginWave(world: World): void {
   world.wave += 1;
-  world.spawnQueue = CONFIG.wave.baseCount + (world.wave - 1) * CONFIG.wave.perWave;
+  respawnDeadPlayers(world);
+  const effective = effectivePlayerCount(world);
+  const playerScale = Math.pow(Math.max(1, effective), CONFIG.wave.scaleExp);
+  const base = CONFIG.wave.baseCount + (world.wave - 1) * CONFIG.wave.perWave;
+  world.spawnQueue = Math.round(base * playerScale);
   world.spawnCadence = Math.max(
     CONFIG.wave.minCadence,
     CONFIG.wave.baseCadence - (world.wave - 1) * CONFIG.wave.cadenceDecay
