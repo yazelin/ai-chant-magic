@@ -39,3 +39,35 @@ describe('step — movement', () => {
     expect(w.player.pos.x).toBeGreaterThanOrEqual(CONFIG.player.radius);
   });
 });
+import { SPELLS } from '../../src/sim/spells';
+
+describe('step — casting self-target spells', () => {
+  it('heal restores hp but not above max', () => {
+    const w = createWorld();
+    w.player.hp = 50;
+    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
+    expect(w.player.hp).toBe(50 + CONFIG.heal.amount);
+    w.player.hp = w.player.maxHp - 5;
+    w.player.cooldowns.heal = 0; // force ready
+    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
+    expect(w.player.hp).toBe(w.player.maxHp);
+  });
+  it('shield sets shieldUntil into the future', () => {
+    const w = createWorld();
+    step(w, [{ kind: 'cast', spell: 'shield' }], 0.016);
+    expect(w.player.shieldUntil).toBeGreaterThan(w.time);
+  });
+  it('respects cooldown — a second immediate cast does nothing', () => {
+    const w = createWorld();
+    w.player.hp = 10;
+    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
+    const afterFirst = w.player.hp;
+    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016); // still on cooldown
+    expect(w.player.hp).toBe(afterFirst);
+  });
+  it('sets the cooldown to now + spell cooldown', () => {
+    const w = createWorld();
+    step(w, [{ kind: 'cast', spell: 'shield' }], 0.016);
+    expect(w.player.cooldowns.shield).toBeCloseTo(w.time + SPELLS.shield.cooldown);
+  });
+});

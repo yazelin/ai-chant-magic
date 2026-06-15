@@ -1,5 +1,6 @@
-import { World, Command, Vec2 } from './types';
+import { World, Command, Vec2, SpellId } from './types';
 import { CONFIG } from './config';
+import { SPELLS } from './spells';
 
 export function createWorld(): World {
   return {
@@ -51,7 +52,7 @@ export function step(
   for (const cmd of commands) {
     if (cmd.kind === 'move') moveDir = cmd.dir;
     else if (cmd.kind === 'face') world.player.facing = cmd.angle;
-    // 'cast' handled in Task 9
+    else if (cmd.kind === 'cast') castSpell(world, cmd.spell);
   }
 
   movePlayer(world, moveDir, dt);
@@ -62,4 +63,24 @@ export function step(
     world.status = 'gameover';
   }
   return world;
+}
+
+function castSpell(world: World, spell: SpellId): void {
+  const p = world.player;
+  if (world.time < p.cooldowns[spell]) return; // on cooldown
+  p.cooldowns[spell] = world.time + SPELLS[spell].cooldown;
+
+  switch (spell) {
+    case 'shield':
+      p.shieldUntil = world.time + CONFIG.shield.duration;
+      break;
+    case 'heal':
+      p.hp = Math.min(p.maxHp, p.hp + CONFIG.heal.amount);
+      break;
+    case 'fireball':
+    case 'frost':
+    case 'thunder':
+      // directional effects added in Task 10/11
+      break;
+  }
 }
