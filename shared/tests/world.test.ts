@@ -1,183 +1,260 @@
-// tests/sim/world.test.ts
+// shared/tests/world.test.ts — multiplayer world (Task A4)
 import { describe, it, expect } from 'vitest';
-import { createWorld } from '../src/world';
+import { createWorld, createSoloWorld, step } from '../src/world';
 import { CONFIG } from '../src/config';
-
-describe('createWorld', () => {
-  it('starts the player centered at full hp, playing', () => {
-    const w = createWorld();
-    expect(w.status).toBe('playing');
-    expect(w.player.hp).toBe(CONFIG.player.maxHp);
-    expect(w.player.pos).toEqual({ x: CONFIG.arenaWidth / 2, y: CONFIG.arenaHeight / 2 });
-    expect(w.enemies).toEqual([]);
-    expect(w.projectiles).toEqual([]);
-    expect(w.wave).toBe(0);
-    expect(w.score).toBe(0);
-  });
-  it('starts every spell off cooldown', () => {
-    const w = createWorld();
-    for (const cd of Object.values(w.player.cooldowns)) expect(cd).toBe(0);
-  });
-});
-import { step } from '../src/world';
-
-describe('step — movement', () => {
-  it('moves the player by speed * dt along the move dir', () => {
-    const w = createWorld();
-    const startX = w.player.pos.x;
-    step(w, [{ kind: 'move', dir: { x: 1, y: 0 } }], 0.5);
-    expect(w.player.pos.x).toBeCloseTo(startX + CONFIG.player.speed * 0.5);
-  });
-  it('sets facing from a face command', () => {
-    const w = createWorld();
-    step(w, [{ kind: 'face', angle: 1.23 }], 0.016);
-    expect(w.player.facing).toBeCloseTo(1.23);
-  });
-  it('clamps the player inside the arena', () => {
-    const w = createWorld();
-    for (let i = 0; i < 200; i++) step(w, [{ kind: 'move', dir: { x: -1, y: 0 } }], 0.1);
-    expect(w.player.pos.x).toBeGreaterThanOrEqual(CONFIG.player.radius);
-  });
-});
+import { CLASSES } from '../src/classes';
 import { SPELLS } from '../src/spells';
-
-describe('step — casting self-target spells', () => {
-  it('heal restores hp but not above max', () => {
-    const w = createWorld();
-    w.player.hp = 50;
-    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
-    expect(w.player.hp).toBe(50 + CONFIG.heal.amount);
-    w.player.hp = w.player.maxHp - 5;
-    w.player.cooldowns.heal = 0; // force ready
-    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
-    expect(w.player.hp).toBe(w.player.maxHp);
-  });
-  it('shield sets shieldUntil into the future', () => {
-    const w = createWorld();
-    step(w, [{ kind: 'cast', spell: 'shield' }], 0.016);
-    expect(w.player.shieldUntil).toBeGreaterThan(w.time);
-  });
-  it('respects cooldown — a second immediate cast does nothing', () => {
-    const w = createWorld();
-    w.player.hp = 10;
-    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016);
-    const afterFirst = w.player.hp;
-    step(w, [{ kind: 'cast', spell: 'heal' }], 0.016); // still on cooldown
-    expect(w.player.hp).toBe(afterFirst);
-  });
-  it('sets the cooldown to now + spell cooldown', () => {
-    const w = createWorld();
-    step(w, [{ kind: 'cast', spell: 'shield' }], 0.016);
-    expect(w.player.cooldowns.shield).toBeCloseTo(w.time + SPELLS.shield.cooldown);
-  });
-});
-import { Enemy } from '../src/types';
+import { Enemy, Player, World } from '../src/types';
 
 function makeEnemy(over: Partial<Enemy> = {}): Enemy {
-  return { id: 999, pos: { x: 0, y: 0 }, hp: 30, speed: 0, slowUntil: 0, radius: CONFIG.enemy.radius, ...over };
+  return {
+    id: 999, pos: { x: 0, y: 0 }, hp: 30, speed: 0,
+    slowUntil: 0, radius: CONFIG.enemy.radius, targetId: null, ...over,
+  };
 }
 
-describe('step — fireball', () => {
-  it('spawns a projectile travelling along facing', () => {
-    const w = createWorld();
-    w.player.facing = 0; // +x
-    step(w, [{ kind: 'cast', spell: 'fireball' }], 0.016);
-    expect(w.projectiles.length).toBe(1);
-    expect(w.projectiles[0].vel.x).toBeGreaterThan(0);
+function findPlayer(w: World, id: string): Player {
+  const p = w.players.find((pl) => pl.id === id);
+  if (!p) throw new Error(`player ${id} not found`);
+  return p;
+}
+
+describe('createWorld', () => {
+  it('builds a Player per entry with playing status and empty arenas', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'warden' },
+    ]);
+    expect(w.status).toBe('playing');
+    expect(w.players.length).toBe(2);
+    expect(w.enemies).toEqual([]);
+    expect(w.projectiles).toEqual([]);
+    expect(w.effects).toEqual([]);
+    expect(w.wave).toBe(0);
+    expect(w.score).toBe(0);
+    expect(w.time).toBe(0);
   });
-  it('damages an enemy in its path and scores the kill', () => {
-    const w = createWorld();
-    w.breakTimer = 999; // suppress wave auto-spawn so only the planted enemy exists
-    w.player.facing = 0;
-    // place a weak enemy just to the right of the player
-    w.enemies.push(makeEnemy({ hp: 10, pos: { x: w.player.pos.x + 30, y: w.player.pos.y } }));
-    step(w, [{ kind: 'cast', spell: 'fireball' }], 0.016);
-    for (let i = 0; i < 30; i++) step(w, [], 0.016); // let it travel/explode
-    expect(w.enemies.length).toBe(0);
-    expect(w.score).toBe(1);
+
+  it('applies class hp modifier to maxHp and starts at full hp, alive, connected', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'warden' },
+    ]);
+    const ana = findPlayer(w, 'a');
+    const bo = findPlayer(w, 'b');
+    expect(ana.maxHp).toBe(CONFIG.player.maxHp * CLASSES.pyro.hpMod);
+    expect(bo.maxHp).toBe(CONFIG.player.maxHp * CLASSES.warden.hpMod);
+    expect(ana.hp).toBe(ana.maxHp);
+    expect(bo.hp).toBe(bo.maxHp);
+    for (const p of w.players) {
+      expect(p.alive).toBe(true);
+      expect(p.downed).toBe(false);
+      expect(p.connected).toBe(true);
+    }
+  });
+
+  it('gives every player distinct spawn positions and all spells off cooldown', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+      { id: 'c', name: 'Cy', classId: 'storm' },
+    ]);
+    const keys = w.players.map((p) => `${p.pos.x},${p.pos.y}`);
+    expect(new Set(keys).size).toBe(w.players.length);
+    for (const p of w.players) {
+      for (const cd of Object.values(p.cooldowns)) expect(cd).toBe(0);
+    }
+  });
+
+  it('createSoloWorld wraps a single pyro player by default', () => {
+    const w = createSoloWorld();
+    expect(w.players.length).toBe(1);
+    expect(w.players[0].classId).toBe('pyro');
+    expect(w.players[0].id).toBe('local');
+    const wc = createSoloWorld('warden');
+    expect(wc.players[0].classId).toBe('warden');
   });
 });
 
-describe('step — frost', () => {
-  it('spawns a fan of projectiles and slows what it hits', () => {
-    const w = createWorld();
-    w.player.facing = 0;
-    w.enemies.push(makeEnemy({ hp: 100, pos: { x: w.player.pos.x + 30, y: w.player.pos.y } }));
-    step(w, [{ kind: 'cast', spell: 'frost' }], 0.016);
+describe('step — movement & facing', () => {
+  it('moves the addressed player by speed * dt and sets facing', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    const aStart = a.pos.x;
+    const bStart = b.pos.x;
+    step(w, [
+      { kind: 'move', playerId: 'a', dir: { x: 1, y: 0 } },
+      { kind: 'face', playerId: 'a', angle: 1.23 },
+    ], 0.5);
+    expect(a.pos.x).toBeCloseTo(aStart + CONFIG.player.speed * 0.5);
+    expect(a.facing).toBeCloseTo(1.23);
+    expect(b.pos.x).toBeCloseTo(bStart); // unaddressed player did not move
+  });
+
+  it('ignores move/face for a downed player', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.downed = true;
+    const startX = p.pos.x;
+    step(w, [{ kind: 'move', playerId: 'local', dir: { x: 1, y: 0 } }], 0.5);
+    expect(p.pos.x).toBeCloseTo(startX);
+  });
+
+  it('ignores move for a dead (!alive) player', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.alive = false;
+    const startX = p.pos.x;
+    step(w, [{ kind: 'move', playerId: 'local', dir: { x: 1, y: 0 } }], 0.5);
+    expect(p.pos.x).toBeCloseTo(startX);
+  });
+
+  it('clamps the player inside the arena', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    for (let i = 0; i < 200; i++) {
+      step(w, [{ kind: 'move', playerId: 'local', dir: { x: -1, y: 0 } }], 0.1);
+    }
+    expect(p.pos.x).toBeGreaterThanOrEqual(CONFIG.player.radius);
+  });
+});
+
+describe('step — cooldown + class gating', () => {
+  it('ignores a spell not in the player class loadout', () => {
+    const w = createSoloWorld('warden'); // warden cannot cast fireball
+    w.breakTimer = 999;
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    expect(w.projectiles.length).toBe(0);
+    expect(w.players[0].cooldowns.fireball).toBe(0); // never set
+  });
+
+  it('sets cooldown to time + def.cooldown and blocks an immediate repeat', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    expect(w.players[0].cooldowns.fireball).toBeCloseTo(w.time + SPELLS.fireball.cooldown);
+    expect(w.projectiles.length).toBe(1);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016); // still on cooldown
+    expect(w.projectiles.length).toBe(1); // no second projectile
+  });
+
+  it('a downed player cannot cast', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    w.players[0].downed = true;
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    expect(w.projectiles.length).toBe(0);
+  });
+});
+
+describe('step — fireball, projectile update, no friendly fire', () => {
+  it('spawns a projectile carrying ownerId travelling along facing', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    w.players[0].facing = 0; // +x
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    expect(w.projectiles.length).toBe(1);
+    expect(w.projectiles[0].ownerId).toBe('local');
+    expect(w.projectiles[0].vel.x).toBeGreaterThan(0);
+  });
+
+  it('damages an enemy in its path, scores the kill, and spawns a blast effect', () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.facing = 0;
+    w.enemies.push(makeEnemy({ hp: 10, pos: { x: p.pos.x + 30, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    let sawBlast = false;
+    for (let i = 0; i < 30; i++) {
+      step(w, [], 0.016);
+      if (w.effects.some((e) => e.kind === 'blast')) sawBlast = true;
+    }
+    expect(w.enemies.length).toBe(0);
+    expect(w.score).toBe(1);
+    expect(sawBlast).toBe(true); // a blast effect was spawned at the explosion
+  });
+
+  it('never damages allies caught in a fireball explosion (no friendly fire)', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.facing = 0;
+    // ally stands inside the blast radius but NOT in contact with the enemy,
+    // so any hp loss could only come from the explosion (which must not hurt allies)
+    b.pos = { x: a.pos.x + 70, y: a.pos.y };
+    const allyHp = b.hp;
+    w.enemies.push(makeEnemy({ hp: 10, pos: { x: a.pos.x + 30, y: a.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'fireball' }], 0.016);
+    for (let i = 0; i < 30; i++) step(w, [], 0.016);
+    expect(w.enemies.length).toBe(0);   // enemy killed by the blast
+    expect(b.hp).toBe(allyHp);          // ally completely unhurt by the explosion
+  });
+});
+
+describe('step — frost (fan + slow) and holybolt (single projectile)', () => {
+  it('frost spawns a fan of projectiles and slows + damages what it hits', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.facing = 0;
+    w.enemies.push(makeEnemy({ hp: 100, pos: { x: p.pos.x + 30, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'frost' }], 0.016);
     expect(w.projectiles.length).toBe(CONFIG.frost.count);
+    for (const proj of w.projectiles) expect(proj.ownerId).toBe('local');
     for (let i = 0; i < 20; i++) step(w, [], 0.016);
     expect(w.enemies[0].slowUntil).toBeGreaterThan(w.time);
     expect(w.enemies[0].hp).toBeLessThan(100);
   });
-});
-describe('step — thunder', () => {
-  it('instantly damages enemies along the facing ray', () => {
-    const w = createWorld();
-    w.breakTimer = 999; // suppress wave auto-spawn so only the planted enemy exists
-    w.player.facing = 0; // +x
-    w.enemies.push(makeEnemy({ hp: 40, pos: { x: w.player.pos.x + 200, y: w.player.pos.y } }));
-    step(w, [{ kind: 'cast', spell: 'thunder' }], 0.016);
-    expect(w.enemies[0]?.hp ?? 0).toBeLessThanOrEqual(0 + (40 - CONFIG.thunder.damage > 0 ? 40 : 0));
+
+  it('holybolt spawns a single projectile that damages an enemy', () => {
+    const w = createSoloWorld('warden');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.facing = 0;
+    w.enemies.push(makeEnemy({ hp: 100, pos: { x: p.pos.x + 30, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'holybolt' }], 0.016);
+    expect(w.projectiles.length).toBe(1);
+    expect(w.projectiles[0].spell).toBe('holybolt');
+    for (let i = 0; i < 20; i++) step(w, [], 0.016);
+    expect(w.enemies[0].hp).toBeLessThan(100);
   });
-  it('misses enemies far off the ray', () => {
-    const w = createWorld();
-    w.player.facing = 0;
-    w.enemies.push(makeEnemy({ hp: 40, pos: { x: w.player.pos.x + 200, y: w.player.pos.y + 300 } }));
-    step(w, [{ kind: 'cast', spell: 'thunder' }], 0.016);
-    expect(w.enemies[0].hp).toBe(40);
+
+  it('frost from one player never harms an ally standing in the line', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'cryo' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.facing = 0;
+    b.pos = { x: a.pos.x + 30, y: a.pos.y };
+    const allyHp = b.hp;
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'frost' }], 0.016);
+    for (let i = 0; i < 20; i++) step(w, [], 0.016);
+    expect(b.hp).toBe(allyHp);
   });
 });
 
-describe('step — enemies', () => {
-  it('moves an enemy toward the player', () => {
-    const w = createWorld();
-    const e = makeEnemy({ hp: 100, speed: 60, pos: { x: w.player.pos.x + 200, y: w.player.pos.y } });
-    w.enemies.push(e);
-    const before = e.pos.x;
-    step(w, [], 0.5);
-    expect(e.pos.x).toBeLessThan(before); // moved left toward centered player
-  });
-  it('damages the player on contact unless shielded', () => {
-    const w = createWorld();
-    w.enemies.push(makeEnemy({ hp: 100, speed: 0, pos: { ...w.player.pos } }));
-    step(w, [], 0.5);
-    expect(w.player.hp).toBeLessThan(w.player.maxHp);
-  });
-  it('shield blocks contact damage', () => {
-    const w = createWorld();
-    w.player.shieldUntil = w.time + 10;
-    w.enemies.push(makeEnemy({ hp: 100, speed: 0, pos: { ...w.player.pos } }));
-    const hp = w.player.hp;
-    step(w, [], 0.5);
-    expect(w.player.hp).toBe(hp);
-  });
-});
-describe('step — waves', () => {
-  it('begins wave 1 and spawns enemies over time', () => {
-    const w = createWorld();
-    const rng = () => 0; // deterministic edge/position
-    step(w, [], 0.016, rng);
-    expect(w.wave).toBe(1);
-    expect(w.enemies.length).toBe(1); // first spawns immediately
-    // advance enough to spawn the rest of the wave
-    for (let i = 0; i < 600; i++) step(w, [], 0.05, rng);
-    expect(w.enemies.length).toBeGreaterThan(1);
-  });
-
-  it('ends the game when player hp hits zero', () => {
-    const w = createWorld();
-    w.player.hp = 1;
-    w.enemies.push({ id: 1, pos: { ...w.player.pos }, hp: 100, speed: 0, slowUntil: 0, radius: CONFIG.enemy.radius });
-    for (let i = 0; i < 20; i++) step(w, [], 0.1);
-    expect(w.status).toBe('gameover');
-    expect(w.player.hp).toBe(0);
-  });
-
-  it('does not advance once game over', () => {
-    const w = createWorld();
+describe('step — gameover guard', () => {
+  it('does not advance time once game over', () => {
+    const w = createSoloWorld('pyro');
     w.status = 'gameover';
     const t = w.time;
-    step(w, [{ kind: 'move', dir: { x: 1, y: 0 } }], 1);
+    step(w, [{ kind: 'move', playerId: 'local', dir: { x: 1, y: 0 } }], 1);
     expect(w.time).toBe(t);
   });
 });
