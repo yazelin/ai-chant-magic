@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:ws --outfile=dist/index.js",
     "start": "node dist/index.js",
     "test": "vitest run"
   },

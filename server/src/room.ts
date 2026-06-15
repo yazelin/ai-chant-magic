@@ -1,10 +1,13 @@
-// Room: lobby -> playing -> gameover state machine.
+// Room: lobby -> playing -> gameover state machine + authoritative runtime.
 //
-// Task B1 implements the lobby surface (members, code, status, start) that the
-// RoomRegistry composes and the pure-logic tests exercise. The authoritative
-// runtime (addPlayer/applyInput/tick/snapshot, ws send fns, no-splice
-// disconnect) is fleshed out in Task B2; this file is structured so that work
-// extends it rather than rewrites it.
+// Lobby surface (members, code, status, start) is composed by the RoomRegistry
+// and exercised by the pure-logic tests. The runtime (applyInput/tick/snapshot,
+// per-player ws `send` fns, no-splice disconnect) follows spec §15.1:
+//   - aggregate per-tick inputs: latest move / latest face win, ALL casts kept;
+//   - one 50ms step + one snapshot per tick (the ws wiring drives the interval);
+//   - disconnect marks connected=false and NEVER splices the players array;
+//   - joins only happen in lobby (the registry refuses started rooms).
+// A wall clock is injectable so tests can drive timing deterministically.
 
 import {
   createWorld,
@@ -21,13 +24,14 @@ import { toSnapshot, type Snapshot } from './snapshot';
 export type RoomStatus = 'lobby' | 'playing' | 'gameover';
 
 // A lobby member. `send` is the ws push channel, optional so pure tests can
-// construct members without a socket. B2 wires real sockets.
+// construct members without a socket. The ws wiring (index.ts) sets it.
 export interface LobbyMember {
   id: string;
   name: string;
   classId: ClassId;
   ready: boolean;
   connected: boolean;
+  send?: (data: string) => void;
 }
 
 // Per-player buffered input, drained once per tick (spec §15.1):
@@ -45,15 +49,23 @@ export class Room {
   readonly members: LobbyMember[] = [];
   status: RoomStatus = 'lobby';
   world: World | null = null;
-  tick = 0;
+  tickCount = 0;
   hostId: string | null = null;
 
   private inputs = new Map<string, BufferedInput>();
+  private clock: () => number;
 
-  constructor(code: string, host: LobbyMember) {
+  constructor(code: string, host: LobbyMember, clock: () => number = Date.now) {
     this.code = code;
     this.members.push(host);
     this.hostId = host.id;
+    this.clock = clock;
+  }
+
+  // Injected wall clock (ms). Used by the ws wiring for reap/idle decisions;
+  // tests inject a fake to drive it deterministically.
+  clockNow(): number {
+    return this.clock();
   }
 
   get isFull(): boolean {
@@ -64,15 +76,21 @@ export class Room {
     return this.status !== 'lobby';
   }
 
-  // True once the room holds no still-present member (all disconnected) — used
-  // by the registry to reap. A disconnected member is never spliced from a
-  // playing world (spec §15.1), but in lobby we do drop them.
+  // True once no member is still connected — the registry reap signal. A
+  // disconnected member is never spliced from the array (spec §15.1), so the
+  // count is stable and emptiness is "everyone left".
   get isEmpty(): boolean {
     return this.members.every((m) => !m.connected);
   }
 
-  addMember(m: LobbyMember): void {
+  // Canonical name per Task B2. `addMember` is kept as an alias because the
+  // RoomRegistry composes rooms through it.
+  addPlayer(m: LobbyMember): void {
     this.members.push(m);
+  }
+
+  addMember(m: LobbyMember): void {
+    this.addPlayer(m);
   }
 
   getMember(id: string): LobbyMember | undefined {
@@ -89,6 +107,9 @@ export class Room {
     if (m) m.classId = classId;
   }
 
+  // lobby -> playing. Seeds the authoritative World from the current members
+  // (id/name/class, in order). Idempotent: a second start while playing is a
+  // no-op so the world is never rebuilt mid-game.
   start(): void {
     if (this.status !== 'lobby') return;
     const seeds: PlayerSeed[] = this.members.map((m) => ({
@@ -101,7 +122,10 @@ export class Room {
   }
 
   // Buffer an input. Latest move/face win; casts accumulate (never dropped).
-  applyInput(playerId: string, msg: { move?: Vec2; face?: number; casts?: SpellId[] }): void {
+  applyInput(
+    playerId: string,
+    msg: { move?: Vec2; face?: number; casts?: SpellId[] }
+  ): void {
     let buf = this.inputs.get(playerId);
     if (!buf) {
       buf = { casts: [] };
@@ -113,8 +137,9 @@ export class Room {
   }
 
   // Drain buffered inputs into a flat Command[] and advance the sim one step.
-  // Returns the broadcast-ready snapshot (or null if not playing).
-  stepTick(dt: number, rng: () => number = Math.random): Snapshot | null {
+  // Returns the broadcast-ready snapshot (or null if not playing). This is the
+  // single 50ms step+broadcast unit (spec §15.1) — the ws interval calls it.
+  tick(dt: number, rng: () => number = Math.random): Snapshot | null {
     if (this.status !== 'playing' || !this.world) return null;
     const commands: Command[] = [];
     for (const [playerId, buf] of this.inputs) {
@@ -131,22 +156,25 @@ export class Room {
     this.inputs.clear();
     step(this.world, commands, dt, rng);
     if (this.world.status === 'gameover') this.status = 'gameover';
-    this.tick += 1;
+    this.tickCount += 1;
     return toSnapshot(this.world);
   }
 
-  // Disconnect: mark connected=false. NEVER splice the players array while a
-  // world exists (spec §15.1 — splicing breaks snapshot index correspondence).
-  // In lobby (no world yet) we drop the entry so the room can be reaped.
+  // Alias retained for callers that used the B1 name.
+  stepTick(dt: number, rng: () => number = Math.random): Snapshot | null {
+    return this.tick(dt, rng);
+  }
+
+  // Disconnect: mark connected=false on the lobby member AND (if a world exists)
+  // its world player. NEVER splice either array — splicing would break the
+  // snapshot index/id correspondence the client interpolation relies on
+  // (spec §15.1). isEmpty then reaps the room once everyone has left.
   removePlayer(id: string): void {
     const m = this.getMember(id);
     if (m) m.connected = false;
     if (this.world) {
       const p = this.world.players.find((pl) => pl.id === id);
       if (p) p.connected = false;
-    } else {
-      const idx = this.members.findIndex((mm) => mm.id === id);
-      if (idx >= 0) this.members.splice(idx, 1);
     }
   }
 }

@@ -34,7 +34,7 @@ export function makeCode(rng: () => number = Math.random): string {
 }
 
 export class RoomRegistry {
-  private rooms = new Map<string, Room>();
+  private roomsByCode = new Map<string, Room>();
   private rng: () => number;
 
   constructor(rng: () => number = Math.random) {
@@ -42,11 +42,17 @@ export class RoomRegistry {
   }
 
   get(code: string): Room | undefined {
-    return this.rooms.get(code);
+    return this.roomsByCode.get(code);
+  }
+
+  // Live iterator over current rooms — the ws tick loop walks this each frame
+  // to step playing rooms and reap empty ones.
+  rooms(): IterableIterator<Room> {
+    return this.roomsByCode.values();
   }
 
   get size(): number {
-    return this.rooms.size;
+    return this.roomsByCode.size;
   }
 
   // Generate a code not currently in use. Retries on collision; bounded so a
@@ -54,23 +60,23 @@ export class RoomRegistry {
   private freshCode(): string {
     for (let attempt = 0; attempt < 1000; attempt++) {
       const code = makeCode(this.rng);
-      if (!this.rooms.has(code)) return code;
+      if (!this.roomsByCode.has(code)) return code;
     }
     throw new RoomError('server-full', 'could not allocate a unique room code');
   }
 
   create(host: LobbyMember): Room {
-    if (this.rooms.size >= MAX_ROOMS) {
+    if (this.roomsByCode.size >= MAX_ROOMS) {
       throw new RoomError('server-full', 'too many rooms');
     }
     const code = this.freshCode();
     const room = new Room(code, host);
-    this.rooms.set(code, room);
+    this.roomsByCode.set(code, room);
     return room;
   }
 
   joinByCode(code: string, member: LobbyMember): Room {
-    const room = this.rooms.get(code);
+    const room = this.roomsByCode.get(code);
     if (!room) throw new RoomError('not-found', `no room ${code}`);
     if (room.isStarted) throw new RoomError('already-started', `room ${code} already started`);
     if (room.isFull) throw new RoomError('full', `room ${code} is full`);
@@ -80,7 +86,7 @@ export class RoomRegistry {
 
   // Pick the first open lobby room that still has space; else create a new room.
   quickJoin(member: LobbyMember): Room {
-    for (const room of this.rooms.values()) {
+    for (const room of this.roomsByCode.values()) {
       if (room.status === 'lobby' && !room.isFull) {
         room.addMember(member);
         return room;
@@ -90,6 +96,6 @@ export class RoomRegistry {
   }
 
   remove(code: string): void {
-    this.rooms.delete(code);
+    this.roomsByCode.delete(code);
   }
 }
