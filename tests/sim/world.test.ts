@@ -150,3 +150,32 @@ describe('step — enemies', () => {
     expect(w.player.hp).toBe(hp);
   });
 });
+describe('step — waves', () => {
+  it('begins wave 1 and spawns enemies over time', () => {
+    const w = createWorld();
+    const rng = () => 0; // deterministic edge/position
+    step(w, [], 0.016, rng);
+    expect(w.wave).toBe(1);
+    expect(w.enemies.length).toBe(1); // first spawns immediately
+    // advance enough to spawn the rest of the wave
+    for (let i = 0; i < 600; i++) step(w, [], 0.05, rng);
+    expect(w.enemies.length).toBeGreaterThan(1);
+  });
+
+  it('ends the game when player hp hits zero', () => {
+    const w = createWorld();
+    w.player.hp = 1;
+    w.enemies.push({ id: 1, pos: { ...w.player.pos }, hp: 100, speed: 0, slowUntil: 0, radius: CONFIG.enemy.radius });
+    for (let i = 0; i < 20; i++) step(w, [], 0.1);
+    expect(w.status).toBe('gameover');
+    expect(w.player.hp).toBe(0);
+  });
+
+  it('does not advance once game over', () => {
+    const w = createWorld();
+    w.status = 'gameover';
+    const t = w.time;
+    step(w, [{ kind: 'move', dir: { x: 1, y: 0 } }], 1);
+    expect(w.time).toBe(t);
+  });
+});

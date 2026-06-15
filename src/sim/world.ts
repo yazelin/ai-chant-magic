@@ -44,7 +44,7 @@ export function step(
   world: World,
   commands: Command[],
   dt: number,
-  _rng: () => number = Math.random
+  rng: () => number = Math.random
 ): World {
   if (world.status === 'gameover') return world;
   world.time += dt;
@@ -57,7 +57,7 @@ export function step(
   }
 
   movePlayer(world, moveDir, dt);
-  // waves (Task 12) added later.
+  updateWaves(world, dt, rng);
   updateEnemies(world, dt);
   updateProjectiles(world, dt);
 
@@ -183,5 +183,59 @@ function updateEnemies(world: World, dt: number): void {
     if (d <= e.radius + CONFIG.player.radius && world.time >= p.shieldUntil) {
       p.hp -= CONFIG.contactDps * dt;
     }
+  }
+}
+
+function beginWave(world: World): void {
+  world.wave += 1;
+  world.spawnQueue = CONFIG.wave.baseCount + (world.wave - 1) * CONFIG.wave.perWave;
+  world.spawnCadence = Math.max(
+    CONFIG.wave.minCadence,
+    CONFIG.wave.baseCadence - (world.wave - 1) * CONFIG.wave.cadenceDecay
+  );
+  world.spawnTimer = 0; // spawn first enemy immediately
+}
+
+function spawnEnemy(world: World, rng: () => number): void {
+  const W = CONFIG.arenaWidth;
+  const H = CONFIG.arenaHeight;
+  const edge = Math.floor(rng() * 4) % 4;
+  let pos;
+  if (edge === 0) pos = { x: rng() * W, y: 0 };
+  else if (edge === 1) pos = { x: rng() * W, y: H };
+  else if (edge === 2) pos = { x: 0, y: rng() * H };
+  else pos = { x: W, y: rng() * H };
+  world.enemies.push({
+    id: world.nextEntityId++,
+    pos,
+    hp: CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave,
+    speed: CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave,
+    slowUntil: 0,
+    radius: CONFIG.enemy.radius,
+  });
+}
+
+function updateWaves(world: World, dt: number, rng: () => number): void {
+  if (world.breakTimer > 0) {
+    world.breakTimer -= dt;
+    if (world.breakTimer <= 0) {
+      world.breakTimer = 0;
+      beginWave(world);
+    }
+    return;
+  }
+  if (world.wave === 0 && world.spawnQueue === 0) beginWave(world);
+
+  if (world.spawnQueue > 0) {
+    world.spawnTimer -= dt;
+    if (world.spawnTimer <= 0) {
+      spawnEnemy(world, rng);
+      world.spawnQueue -= 1;
+      world.spawnTimer = world.spawnCadence;
+    }
+  }
+
+  if (world.spawnQueue === 0 && world.enemies.length === 0) {
+    world.breakTimer = CONFIG.wave.breakTime;
   }
 }
