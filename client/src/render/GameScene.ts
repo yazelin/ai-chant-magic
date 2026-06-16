@@ -24,12 +24,13 @@ const SPRITES: Array<{ key: string; url: string }> = [
   { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
 ];
 
-// Anime chibi pyro: a real walk-cycle spritesheet plus single idle/cast frames.
-// All three are 249x170 cells, side-view facing RIGHT, bottom-center aligned.
-const CHIBI_PYRO_WALK = new URL('../assets/chibi-pyro-walk.png', import.meta.url).href;
-const CHIBI_PYRO_IDLE = new URL('../assets/chibi-pyro-idle.png', import.meta.url).href;
-const CHIBI_PYRO_CAST = new URL('../assets/chibi-pyro-cast.png', import.meta.url).href;
-const CHIBI_PYRO_FRAME = { width: 249, height: 170 };
+// LPC fire-mage pyro: a 9-frame walk-cycle spritesheet plus single idle/cast
+// frames. All three are 64x64 cells, side-view facing LEFT, character fills most
+// of the cell with feet near the bottom.
+const LPC_PYRO_WALK = new URL('../assets/lpc-pyro-walk.png', import.meta.url).href;
+const LPC_PYRO_IDLE = new URL('../assets/lpc-pyro-idle.png', import.meta.url).href;
+const LPC_PYRO_CAST = new URL('../assets/lpc-pyro-cast.png', import.meta.url).href;
+const LPC_PYRO_FRAME = { width: 64, height: 64 };
 const PYRO_WALK_ANIM = 'pyro-walk';
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
@@ -37,17 +38,17 @@ const PYRO_WALK_ANIM = 'pyro-walk';
 const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
-// Chibi pyro: the 170px cell is mostly filled by the character, so a fixed
-// scale that lands the on-screen height around ~70px reads right.
-const PYRO_TARGET_H = 70;
-const PYRO_SCALE = PYRO_TARGET_H / CHIBI_PYRO_FRAME.height; // ≈ 0.412
+// LPC pyro: the 64px cell is mostly filled by the character, so a fixed scale
+// that lands the on-screen height around ~58px reads right.
+const PYRO_TARGET_H = 58;
+const PYRO_SCALE = PYRO_TARGET_H / LPC_PYRO_FRAME.height; // ≈ 0.906
 // Feet sit near the bottom of the cell; origin-y near the bottom + a tiny world
-// offset so the chibi looks grounded at its world pos (like the old centered
+// offset so the mage looks grounded at its world pos (like the old centered
 // sprites). Higher origin-y = the art's feet land closer to the world pos.
 const PYRO_ORIGIN_Y = 0.82;
 // Small downward nudge so the feet read as planted at the player pos rather than
 // slightly above it (tune by eyeball alongside PYRO_ORIGIN_Y).
-const PYRO_GROUND_OFFSET = 6;
+const PYRO_GROUND_OFFSET = 4;
 
 const DEPTH_ENEMY = 5;
 const DEPTH_PLAYER = 10;
@@ -94,7 +95,7 @@ export class GameScene extends Phaser.Scene {
   // Pooled sprites, keyed by entity id. Created on first sight, repositioned
   // each frame, and destroyed when the entity leaves the world (mirrors the
   // name-label pooling). Never recreated per frame.
-  // Players are Sprites (not Images) so the pyro chibi can play its walk-cycle
+  // Players are Sprites (not Images) so the pyro LPC mage can play its walk-cycle
   // animation; a Sprite renders a static texture fine for the other classes too.
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private enemySprites = new Map<number, Phaser.GameObjects.Image>();
@@ -125,13 +126,13 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     for (const s of SPRITES) this.load.image(s.key, s.url);
-    // Chibi pyro: walk-cycle spritesheet (7 frames of 249x170) + idle/cast.
-    this.load.spritesheet('chibi-pyro-walk', CHIBI_PYRO_WALK, {
-      frameWidth: CHIBI_PYRO_FRAME.width,
-      frameHeight: CHIBI_PYRO_FRAME.height,
+    // LPC fire-mage pyro: walk-cycle spritesheet (9 frames of 64x64) + idle/cast.
+    this.load.spritesheet('lpc-pyro-walk', LPC_PYRO_WALK, {
+      frameWidth: LPC_PYRO_FRAME.width,
+      frameHeight: LPC_PYRO_FRAME.height,
     });
-    this.load.image('chibi-pyro-idle', CHIBI_PYRO_IDLE);
-    this.load.image('chibi-pyro-cast', CHIBI_PYRO_CAST);
+    this.load.image('lpc-pyro-idle', LPC_PYRO_IDLE);
+    this.load.image('lpc-pyro-cast', LPC_PYRO_CAST);
   }
 
   create(): void {
@@ -143,8 +144,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.anims.exists(PYRO_WALK_ANIM)) {
       this.anims.create({
         key: PYRO_WALK_ANIM,
-        frames: this.anims.generateFrameNumbers('chibi-pyro-walk', { start: 0, end: 7 }),
-        frameRate: 14,
+        frames: this.anims.generateFrameNumbers('lpc-pyro-walk', { start: 0, end: 8 }),
+        frameRate: 10,
         repeat: -1,
       });
     }
@@ -453,7 +454,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Lazily create (or fetch) a pooled Sprite for a player. Players are Sprites
-  // (not Images) so the pyro chibi can play animations; static textures render
+  // (not Images) so the pyro LPC mage can play animations; static textures render
   // fine on a Sprite for the other classes. Sizing/origin/position are owned by
   // drawPlayer (they differ per class), so this only guarantees existence.
   private playerSpriteFor(id: string, key: string): Phaser.GameObjects.Sprite {
@@ -592,8 +593,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------
-  // Pyro uses an animated chibi (walk-cycle anim + idle/cast textures); the
-  // other classes keep their single legacy <classId> texture and procedural bob.
+  // Pyro uses an animated LPC fire-mage (walk-cycle anim + idle/cast textures);
+  // the other classes keep their single legacy <classId> texture and procedural bob.
   private drawPlayer(w: World, pl: Player, dt: number): void {
     const g = this.gfx;
     const def = CLASSES[pl.classId];
@@ -621,7 +622,7 @@ export class GameScene extends Phaser.Scene {
     st.lastY = y;
 
     // Initial texture: pyro starts idle, others use their legacy <classId>.
-    const initialKey = isPyro ? 'chibi-pyro-idle' : pl.classId;
+    const initialKey = isPyro ? 'lpc-pyro-idle' : pl.classId;
     const sprite = this.playerSpriteFor(pl.id, initialKey);
     sprite.setDepth(DEPTH_PLAYER);
     sprite.setAlpha(pl.downed ? 0.4 : 1);
@@ -631,7 +632,7 @@ export class GameScene extends Phaser.Scene {
       // texture, keep the legacy dim + cross marker.
       sprite.anims.stop();
       if (isPyro) {
-        if (sprite.texture.key !== 'chibi-pyro-idle') sprite.setTexture('chibi-pyro-idle');
+        if (sprite.texture.key !== 'lpc-pyro-idle') sprite.setTexture('lpc-pyro-idle');
         sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
         sprite.setScale(PYRO_SCALE);
         sprite.setPosition(x, y + PYRO_GROUND_OFFSET);
@@ -647,7 +648,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // The chibi art faces LEFT by default, so flipX=true makes it face RIGHT.
+    // The LPC art faces LEFT by default, so flipX=true makes it face RIGHT.
     // Face the WALK direction while moving horizontally (instant A/D response);
     // fall back to the aim direction when standing still / moving purely vertically.
     const flip =
@@ -658,23 +659,29 @@ export class GameScene extends Phaser.Scene {
     const punch = casting ? 1 + 0.15 * ((st.castUntil - this.t) / CAST_POSE_SECS) : 1;
 
     if (isPyro) {
-      // --- chibi pyro state machine: cast > walk > idle ---
+      // --- LPC pyro state machine: cast > walk > idle ---
       if (casting) {
         sprite.anims.stop();
-        if (sprite.texture.key !== 'chibi-pyro-cast') sprite.setTexture('chibi-pyro-cast');
+        sprite.anims.timeScale = 1;
+        if (sprite.texture.key !== 'lpc-pyro-cast') sprite.setTexture('lpc-pyro-cast');
       } else if (moving) {
         // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
         sprite.play(PYRO_WALK_ANIM, true);
+        // Foot-sliding sync: drive the walk playback rate from the actual
+        // movement speed so faster movement → faster steps and the feet appear
+        // planted instead of skating. Clamp so it never crawls or strobes.
+        sprite.anims.timeScale = Phaser.Math.Clamp(speed / CONFIG.player.speed, 0.6, 2.2);
       } else {
         sprite.anims.stop();
-        if (sprite.texture.key !== 'chibi-pyro-idle') sprite.setTexture('chibi-pyro-idle');
+        sprite.anims.timeScale = 1;
+        if (sprite.texture.key !== 'lpc-pyro-idle') sprite.setTexture('lpc-pyro-idle');
       }
 
-      // The walk frames carry the motion; keep only a tiny idle/cast bob.
+      // The walk frames carry the motion; keep only a tiny idle bob.
       st.bobPhase += dt * (moving ? 10 : 3.5);
       const yOffset = moving ? 0 : Math.sin(st.bobPhase) * 2;
 
-      // Feet near the cell bottom + small ground nudge so the chibi looks
+      // Feet near the cell bottom + small ground nudge so the mage looks
       // planted at its world pos rather than floating/sunk.
       sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
       sprite.setScale(PYRO_SCALE * punch);
