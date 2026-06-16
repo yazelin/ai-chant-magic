@@ -315,7 +315,16 @@ export class Lobby {
         if (id === this.classId) return;
         this.classId = id;
         this.client?.setClass(id);
-        this.renderRoomClassCards();
+        // Optimistically reflect our own pick in the local member list right
+        // away, instead of waiting a round-trip for the server's `lobby`
+        // broadcast (which then confirms/converges). Match the self member by
+        // selfId; if that isn't available yet, leave the list as-is.
+        const selfId = this.client?.selfId;
+        if (selfId) {
+          const self = this.members.find((m) => m.id === selfId);
+          if (self) self.classId = id;
+        }
+        this.renderRoom();
       });
       host.appendChild(card);
     }

@@ -328,6 +328,108 @@ describe('two-client ws integration smoke (B3)', () => {
   );
 
   it(
+    'rejects a setClass with a bogus classId (member keeps old class, no bad-class broadcast)',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const joined = await joinedPromise;
+      const selfId = joined.selfId;
+      const code = joined.roomCode;
+
+      // A bogus classId must be rejected with a bad-message error and must NOT
+      // mutate the member or broadcast a lobby carrying the bad class.
+      const errPromise = waitFor(a, 'error');
+      let sawBadLobby = false;
+      function watchLobby(data: WebSocket.RawData): void {
+        try {
+          const m = JSON.parse(data.toString()) as ServerMsg;
+          if (
+            m.type === 'lobby' &&
+            m.players.some((p) => p.id === selfId && p.classId === ('nope' as never))
+          ) {
+            sawBadLobby = true;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      a.on('message', watchLobby);
+
+      sendMsg(a, { type: 'setClass', classId: 'nope' as never });
+      const err = await errPromise;
+      a.off('message', watchLobby);
+
+      expect(err.code).toBe('bad-message');
+      // The authoritative room still has the original class.
+      const room = handle.registry.get(code)!;
+      expect(room.getMember(selfId)?.classId).toBe('pyro');
+      expect(sawBadLobby).toBe(false);
+    },
+    10000
+  );
+
+  it(
+    'rejects create / join / quickJoin with a bogus classId before making a room or member',
+    async () => {
+      // --- create with a bogus class -> bad-message, no room created ---------
+      const a = await connect();
+      const createErr = waitFor(a, 'error');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'bogus' as never });
+      expect((await createErr).code).toBe('bad-message');
+      expect(handle.registry.size).toBe(0);
+
+      // --- quickJoin with a bogus class -> bad-message, no room created ------
+      const q = await connect();
+      const quickErr = waitFor(q, 'error');
+      sendMsg(q, { type: 'quickJoin', name: 'Q', classId: 'bogus' as never });
+      expect((await quickErr).code).toBe('bad-message');
+      expect(handle.registry.size).toBe(0);
+
+      // --- join an existing room with a bogus class -> bad-message ----------
+      // First make a real room so there is something to (try to) join.
+      const host = await connect();
+      const hostJoined = waitFor(host, 'joined');
+      sendMsg(host, { type: 'create', name: 'Host', classId: 'pyro' });
+      const code = (await hostJoined).roomCode;
+      expect(handle.registry.size).toBe(1);
+
+      const b = await connect();
+      const joinErr = waitFor(b, 'error');
+      sendMsg(b, { type: 'join', name: 'Bad', classId: 'bogus' as never, roomCode: code });
+      expect((await joinErr).code).toBe('bad-message');
+      // The room only has the host (the bad join never added a member).
+      expect(handle.registry.get(code)!.members).toHaveLength(1);
+    },
+    15000
+  );
+
+  it(
+    'a room whose members all have valid classes starts fine (createWorld regression)',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'A', classId: 'storm' });
+      const code = (await joinedA).roomCode;
+
+      const b = await connect();
+      const joinedB = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'B', classId: 'cryo', roomCode: code });
+      await joinedB;
+
+      const startedA = waitFor(a, 'started');
+      sendMsg(a, { type: 'start' });
+      await startedA;
+
+      // A snapshot must arrive without the world build crashing on a bad class.
+      const snap = await waitFor(a, 'snapshot');
+      expect(snap.world.status).toBe('playing');
+      expect(snap.world.players).toHaveLength(2);
+    },
+    10000
+  );
+
+  it(
     'reaps an abandoned playing room (all members disconnected) and stops ticking it',
     async () => {
       const a = await connect();

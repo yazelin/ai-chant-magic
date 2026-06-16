@@ -10,7 +10,7 @@
     "dev:server": "npm run dev -w @acm/server",
     "build": "npm run build -w @acm/client && npm run build -w @acm/server",
     "build:client": "npm run build -w @acm/client",
-    "test": "npm run test -w @acm/shared && npm run test -w @acm/server",
+    "test": "npm run test -w @acm/shared && npm run test -w @acm/server && npm run test -w @acm/client",
     "test:client": "npm run test -w @acm/client"
   },
   "devDependencies": { "concurrently": "^9.0.0" }
