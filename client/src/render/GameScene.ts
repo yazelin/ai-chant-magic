@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   World,
   Player,
+  Enemy,
   TransientEffect,
   SpellId,
   ClassId,
@@ -10,6 +11,24 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
+
+// Pixel-art sprite textures. Keys for the four mages are their ClassId so a
+// player's texture is just `player.classId`; enemies share one 'enemy' key.
+// Vite rewrites these URLs at build time so the PNGs are hashed + bundled.
+const SPRITES: Array<{ key: string; url: string }> = [
+  { key: 'pyro', url: new URL('../assets/pyro.png', import.meta.url).href },
+  { key: 'cryo', url: new URL('../assets/cryo.png', import.meta.url).href },
+  { key: 'storm', url: new URL('../assets/storm.png', import.meta.url).href },
+  { key: 'warden', url: new URL('../assets/warden.png', import.meta.url).href },
+  { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
+];
+
+// Target on-screen heights for the upright sprites (px). The scale is derived
+// from each texture's real pixel height so source art can be any size.
+const PLAYER_SPRITE_H = CONFIG.player.radius * 3; // ≈ 42px
+const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
+const DEPTH_ENEMY = 5;
+const DEPTH_PLAYER = 10;
 
 // Parse the '#rrggbb' color strings on CLASSES / effect.colorHint into the
 // 0xRRGGBB integers Phaser's Graphics API wants.
@@ -21,6 +40,11 @@ export class GameScene extends Phaser.Scene {
   private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
+  // Pooled sprites, keyed by entity id. Created on first sight, repositioned
+  // each frame, and destroyed when the entity leaves the world (mirrors the
+  // name-label pooling). Never recreated per frame.
+  private playerSprites = new Map<string, Phaser.GameObjects.Image>();
+  private enemySprites = new Map<number, Phaser.GameObjects.Image>();
   private keys = new Set<string>();
   // default face right until first pointer move
   private mouse: { x: number; y: number } = { x: CONFIG.arenaWidth, y: CONFIG.arenaHeight / 2 };
@@ -31,6 +55,10 @@ export class GameScene extends Phaser.Scene {
   constructor(session: GameSession) {
     super('game');
     this.session = session;
+  }
+
+  preload(): void {
+    for (const s of SPRITES) this.load.image(s.key, s.url);
   }
 
   create(): void {
@@ -98,9 +126,18 @@ export class GameScene extends Phaser.Scene {
 
     this.drawEffects(w);
 
-    // enemies
-    g.fillStyle(0xd64550, 1);
-    for (const e of w.enemies) g.fillCircle(e.pos.x, e.pos.y, e.radius);
+    // enemies — pooled upright sprites (texture 'enemy'), below players
+    const liveEnemies = new Set<number>();
+    for (const e of w.enemies) {
+      this.drawEnemy(w, e);
+      liveEnemies.add(e.id);
+    }
+    for (const [id, sprite] of this.enemySprites) {
+      if (!liveEnemies.has(id)) {
+        sprite.destroy();
+        this.enemySprites.delete(id);
+      }
+    }
 
     // projectiles (use the spell's class color where obvious, else white)
     for (const p of w.projectiles) {
@@ -122,13 +159,37 @@ export class GameScene extends Phaser.Scene {
       this.drawPlayer(w, pl);
       live.add(pl.id);
     }
-    // drop labels for players no longer present/connected
+    // drop labels + sprites for players no longer present/connected
     for (const [id, label] of this.labels) {
       if (!live.has(id)) {
         label.destroy();
         this.labels.delete(id);
       }
     }
+    for (const [id, sprite] of this.playerSprites) {
+      if (!live.has(id)) {
+        sprite.destroy();
+        this.playerSprites.delete(id);
+      }
+    }
+  }
+
+  // Lazily create (or fetch) a pooled Image for `key` at `id`, sized so the
+  // texture renders `targetH` px tall while keeping its aspect ratio.
+  private spriteFor(
+    pool: Map<string | number, Phaser.GameObjects.Image>,
+    id: string | number,
+    key: string,
+    targetH: number,
+  ): Phaser.GameObjects.Image {
+    let sprite = pool.get(id);
+    if (!sprite) {
+      sprite = this.add.image(0, 0, key);
+      const texH = sprite.height || targetH;
+      sprite.setScale(targetH / texH);
+      pool.set(id, sprite);
+    }
+    return sprite;
   }
 
   // --- effects: neon lines (beam/chain) + glow circles (nova/blast/aura) ------
@@ -166,7 +227,22 @@ export class GameScene extends Phaser.Scene {
     g.strokeCircle(fx.a.x, fx.a.y, r);
   }
 
-  // --- players: class shape + neon glow + facing + label + downed/revive ------
+  // --- enemies: pooled 'enemy' sprite, upright, below players -----------------
+  private drawEnemy(w: World, e: Enemy): void {
+    const sprite = this.spriteFor(
+      this.enemySprites as Map<string | number, Phaser.GameObjects.Image>,
+      e.id,
+      'enemy',
+      ENEMY_SPRITE_H,
+    );
+    sprite.setPosition(e.pos.x, e.pos.y); // upright — never rotated
+    sprite.setDepth(DEPTH_ENEMY);
+    // subtle frost tint while slowed, else normal
+    if (w.time < e.slowUntil) sprite.setTint(0x9fd8ff);
+    else sprite.clearTint();
+  }
+
+  // --- players: pixel sprite + neon facing/shield/label + downed/revive -------
   private drawPlayer(w: World, pl: Player): void {
     const g = this.gfx;
     const def = CLASSES[pl.classId];
@@ -174,6 +250,18 @@ export class GameScene extends Phaser.Scene {
     const r = CONFIG.player.radius;
     const x = pl.pos.x;
     const y = pl.pos.y;
+
+    // pooled upright class sprite (texture key === classId)
+    const sprite = this.spriteFor(
+      this.playerSprites as Map<string | number, Phaser.GameObjects.Image>,
+      pl.id,
+      pl.classId,
+      PLAYER_SPRITE_H,
+    );
+    sprite.setPosition(x, y); // upright — never rotated
+    sprite.setDepth(DEPTH_PLAYER);
+    // dim the sprite when downed so the state reads clearly
+    sprite.setAlpha(pl.downed ? 0.4 : 1);
 
     if (pl.downed) {
       this.drawDowned(pl, color);
@@ -187,45 +275,11 @@ export class GameScene extends Phaser.Scene {
       g.strokeCircle(x, y, r + 7);
     }
 
-    // neon glow halo behind the shape
-    g.fillStyle(color, 0.22);
-    g.fillCircle(x, y, r + 8);
-
-    // class shape
-    g.fillStyle(color, 1);
-    g.lineStyle(2, 0xffffff, 0.85);
-    this.drawShape(def.shape, x, y, r);
-
     // facing line
     g.lineStyle(3, 0xffffff, 1);
     g.lineBetween(x, y, x + Math.cos(pl.facing) * (r + 8), y + Math.sin(pl.facing) * (r + 8));
 
     this.drawLabel(pl, x, y - r - 14, color);
-  }
-
-  private drawShape(shape: string, x: number, y: number, r: number): void {
-    const g = this.gfx;
-    if (shape === 'circle') {
-      g.fillCircle(x, y, r);
-      g.strokeCircle(x, y, r);
-      return;
-    }
-    const sides = shape === 'triangle' ? 3 : shape === 'diamond' ? 4 : 6;
-    // diamond = square rotated 45deg; triangle points up; hexagon flat-ish
-    const rot = shape === 'triangle' ? -Math.PI / 2 : shape === 'diamond' ? -Math.PI / 2 : 0;
-    const pts: number[] = [];
-    for (let i = 0; i < sides; i++) {
-      const a = rot + (i / sides) * Math.PI * 2;
-      pts.push(x + Math.cos(a) * (r + 2), y + Math.sin(a) * (r + 2));
-    }
-    g.fillPoints(this.toPoints(pts), true);
-    g.strokePoints(this.toPoints(pts), true);
-  }
-
-  private toPoints(flat: number[]): Phaser.Geom.Point[] {
-    const out: Phaser.Geom.Point[] = [];
-    for (let i = 0; i < flat.length; i += 2) out.push(new Phaser.Geom.Point(flat[i], flat[i + 1]));
-    return out;
   }
 
   private drawDowned(pl: Player, color: number): void {
