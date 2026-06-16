@@ -22,30 +22,32 @@ const SPRITES: Array<{ key: string; url: string }> = [
   { key: 'storm', url: new URL('../assets/storm.png', import.meta.url).href },
   { key: 'warden', url: new URL('../assets/warden.png', import.meta.url).href },
   { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
-  // Anime pyro pilot: two procedurally-driven frames (face RIGHT by default).
-  { key: 'pyro-idle', url: new URL('../assets/pyro-idle.png', import.meta.url).href },
-  { key: 'pyro-cast', url: new URL('../assets/pyro-cast.png', import.meta.url).href },
 ];
 
-// Per-class frame map. The pyro pilot swaps idle<->cast; everyone else still
-// renders their single legacy texture (keyed by classId).
-type FrameSet = { idle: string; cast?: string };
-const CLASS_FRAMES: Partial<Record<ClassId, FrameSet>> = {
-  pyro: { idle: 'pyro-idle', cast: 'pyro-cast' },
-};
-function framesFor(classId: ClassId): FrameSet {
-  return CLASS_FRAMES[classId] ?? { idle: classId };
-}
+// Anime chibi pyro: a real walk-cycle spritesheet plus single idle/cast frames.
+// All three are 249x170 cells, side-view facing RIGHT, bottom-center aligned.
+const CHIBI_PYRO_WALK = new URL('../assets/chibi-pyro-walk.png', import.meta.url).href;
+const CHIBI_PYRO_IDLE = new URL('../assets/chibi-pyro-idle.png', import.meta.url).href;
+const CHIBI_PYRO_CAST = new URL('../assets/chibi-pyro-cast.png', import.meta.url).href;
+const CHIBI_PYRO_FRAME = { width: 249, height: 170 };
+const PYRO_WALK_ANIM = 'pyro-walk';
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
-// from each texture's real pixel height so source art can be any size. The
-// anime full-body pyro reads better a bit taller than the legacy chibi sprites.
+// from each texture's real pixel height so source art can be any size.
 const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
-const PLAYER_SPRITE_H_PYRO = 64; // anime full-body
-function playerSpriteH(classId: ClassId): number {
-  return classId === 'pyro' ? PLAYER_SPRITE_H_PYRO : PLAYER_SPRITE_H_DEFAULT;
-}
+
+// Chibi pyro: the 170px cell is mostly filled by the character, so a fixed
+// scale that lands the on-screen height around ~70px reads right.
+const PYRO_TARGET_H = 70;
+const PYRO_SCALE = PYRO_TARGET_H / CHIBI_PYRO_FRAME.height; // ≈ 0.412
+// Feet sit near the bottom of the cell; origin-y near the bottom + a tiny world
+// offset so the chibi looks grounded at its world pos (like the old centered
+// sprites). Higher origin-y = the art's feet land closer to the world pos.
+const PYRO_ORIGIN_Y = 0.82;
+// Small downward nudge so the feet read as planted at the player pos rather than
+// slightly above it (tune by eyeball alongside PYRO_ORIGIN_Y).
+const PYRO_GROUND_OFFSET = 6;
 
 const DEPTH_ENEMY = 5;
 const DEPTH_PLAYER = 10;
@@ -92,7 +94,9 @@ export class GameScene extends Phaser.Scene {
   // Pooled sprites, keyed by entity id. Created on first sight, repositioned
   // each frame, and destroyed when the entity leaves the world (mirrors the
   // name-label pooling). Never recreated per frame.
-  private playerSprites = new Map<string, Phaser.GameObjects.Image>();
+  // Players are Sprites (not Images) so the pyro chibi can play its walk-cycle
+  // animation; a Sprite renders a static texture fine for the other classes too.
+  private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private enemySprites = new Map<number, Phaser.GameObjects.Image>();
   // Pyro pilot procedural anim state, keyed by player id.
   private playerAnim = new Map<string, PlayerAnimState>();
@@ -121,11 +125,30 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     for (const s of SPRITES) this.load.image(s.key, s.url);
+    // Chibi pyro: walk-cycle spritesheet (7 frames of 249x170) + idle/cast.
+    this.load.spritesheet('chibi-pyro-walk', CHIBI_PYRO_WALK, {
+      frameWidth: CHIBI_PYRO_FRAME.width,
+      frameHeight: CHIBI_PYRO_FRAME.height,
+    });
+    this.load.image('chibi-pyro-idle', CHIBI_PYRO_IDLE);
+    this.load.image('chibi-pyro-cast', CHIBI_PYRO_CAST);
   }
 
   create(): void {
     this.gfx = this.add.graphics();
     this.makeVfxTextures();
+
+    // Define the pyro walk animation once. Guard against double-create when the
+    // scene restarts (anims live on the global AnimationManager).
+    if (!this.anims.exists(PYRO_WALK_ANIM)) {
+      this.anims.create({
+        key: PYRO_WALK_ANIM,
+        frames: this.anims.generateFrameNumbers('chibi-pyro-walk', { start: 0, end: 6 }),
+        frameRate: 11,
+        repeat: -1,
+      });
+    }
+
     this.session.start();
 
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
@@ -410,9 +433,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Lazily create (or fetch) a pooled Image for `key` at `id`. Sizing is owned
-  // by the caller now (player sizing depends on idle/cast frame + cast punch),
-  // so this only guarantees the Image exists with the right base texture.
+  // Lazily create (or fetch) a pooled Image for `key` at `id` (enemies). Sizing
+  // is owned by the caller, so this only guarantees the Image exists with the
+  // right base texture.
   private spriteFor(
     pool: Map<string | number, Phaser.GameObjects.Image>,
     id: string | number,
@@ -425,6 +448,19 @@ export class GameScene extends Phaser.Scene {
       const texH = sprite.height || targetH;
       sprite.setScale(targetH / texH);
       pool.set(id, sprite);
+    }
+    return sprite;
+  }
+
+  // Lazily create (or fetch) a pooled Sprite for a player. Players are Sprites
+  // (not Images) so the pyro chibi can play animations; static textures render
+  // fine on a Sprite for the other classes. Sizing/origin/position are owned by
+  // drawPlayer (they differ per class), so this only guarantees existence.
+  private playerSpriteFor(id: string, key: string): Phaser.GameObjects.Sprite {
+    let sprite = this.playerSprites.get(id);
+    if (!sprite) {
+      sprite = this.add.sprite(0, 0, key);
+      this.playerSprites.set(id, sprite);
     }
     return sprite;
   }
@@ -555,7 +591,9 @@ export class GameScene extends Phaser.Scene {
     else sprite.clearTint();
   }
 
-  // --- players: flip L/R + procedural bob + cast pose/punch (NO rotation) -----
+  // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------
+  // Pyro uses an animated chibi (walk-cycle anim + idle/cast textures); the
+  // other classes keep their single legacy <classId> texture and procedural bob.
   private drawPlayer(w: World, pl: Player, dt: number): void {
     const g = this.gfx;
     const def = CLASSES[pl.classId];
@@ -563,8 +601,7 @@ export class GameScene extends Phaser.Scene {
     const r = CONFIG.player.radius;
     const x = pl.pos.x;
     const y = pl.pos.y;
-    const baseH = playerSpriteH(pl.classId);
-    const frames = framesFor(pl.classId);
+    const isPyro = pl.classId === 'pyro';
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -574,33 +611,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     const casting = this.t < st.castUntil;
-    // pyro swaps idle<->cast; everyone else only has 'idle' (== legacy texture)
-    const wantKey = casting && frames.cast ? frames.cast : frames.idle;
-
-    // pooled image. The pool's stored base scale is stale once we swap textures
-    // or apply the cast punch, so we recompute display height every frame.
-    const sprite = this.spriteFor(
-      this.playerSprites as Map<string | number, Phaser.GameObjects.Image>,
-      pl.id,
-      wantKey,
-      baseH,
-    );
-    if (sprite.texture.key !== wantKey) sprite.setTexture(wantKey);
-    sprite.setDepth(DEPTH_PLAYER);
-    sprite.setAlpha(pl.downed ? 0.4 : 1);
-
-    if (pl.downed) {
-      // downed: no bob/cast, keep the legacy dim+cross marker. Normalize size.
-      sprite.setScale(baseH / sprite.height);
-      sprite.setFlipX(false);
-      sprite.setPosition(x, y);
-      this.drawDowned(pl, color);
-      this.drawLabel(pl, x, y - r - 14, 0x9aa0b5);
-      return;
-    }
-
-    // face the aim's horizontal side (sprites face right by default).
-    sprite.setFlipX(Math.cos(pl.facing) < 0);
 
     // movement detection from frame-to-frame displacement
     const dx = x - st.lastX;
@@ -610,19 +620,79 @@ export class GameScene extends Phaser.Scene {
     st.lastX = x;
     st.lastY = y;
 
-    // bob: faster + bigger while moving
-    st.bobPhase += dt * (moving ? 10 : 3.5);
-    const yOffset = Math.sin(st.bobPhase) * (moving ? 5 : 2.5);
+    // Initial texture: pyro starts idle, others use their legacy <classId>.
+    const initialKey = isPyro ? 'chibi-pyro-idle' : pl.classId;
+    const sprite = this.playerSpriteFor(pl.id, initialKey);
+    sprite.setDepth(DEPTH_PLAYER);
+    sprite.setAlpha(pl.downed ? 0.4 : 1);
 
-    // base uniform scale to render the current texture at `baseH` px tall
-    const baseScale = baseH / sprite.height;
+    if (pl.downed) {
+      // downed: no anim/bob/cast. Stop any walk anim and show the idle/legacy
+      // texture, keep the legacy dim + cross marker.
+      sprite.anims.stop();
+      if (isPyro) {
+        if (sprite.texture.key !== 'chibi-pyro-idle') sprite.setTexture('chibi-pyro-idle');
+        sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
+        sprite.setScale(PYRO_SCALE);
+        sprite.setPosition(x, y + PYRO_GROUND_OFFSET);
+      } else {
+        if (sprite.texture.key !== pl.classId) sprite.setTexture(pl.classId);
+        sprite.setOrigin(0.5, 0.5);
+        sprite.setScale(PLAYER_SPRITE_H_DEFAULT / sprite.height);
+        sprite.setPosition(x, y);
+      }
+      sprite.setFlipX(false);
+      this.drawDowned(pl, color);
+      this.drawLabel(pl, x, y - r - 14, 0x9aa0b5);
+      return;
+    }
+
+    // face the aim's horizontal side (art faces right by default).
+    sprite.setFlipX(Math.cos(pl.facing) < 0);
+
     // cast punch: a quick scale-up that decays over CAST_POSE_SECS
     const punch = casting ? 1 + 0.15 * ((st.castUntil - this.t) / CAST_POSE_SECS) : 1;
-    // subtle idle "breathing" on scaleY when not moving/casting
-    const breathe = !moving && !casting ? 1 + 0.03 * Math.sin(st.bobPhase) : 1;
 
-    sprite.setScale(baseScale * punch, baseScale * punch * breathe);
-    sprite.setPosition(x, y + yOffset);
+    if (isPyro) {
+      // --- chibi pyro state machine: cast > walk > idle ---
+      if (casting) {
+        sprite.anims.stop();
+        if (sprite.texture.key !== 'chibi-pyro-cast') sprite.setTexture('chibi-pyro-cast');
+      } else if (moving) {
+        // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
+        sprite.play(PYRO_WALK_ANIM, true);
+      } else {
+        sprite.anims.stop();
+        if (sprite.texture.key !== 'chibi-pyro-idle') sprite.setTexture('chibi-pyro-idle');
+      }
+
+      // The walk frames carry the motion; keep only a tiny idle/cast bob.
+      st.bobPhase += dt * (moving ? 10 : 3.5);
+      const yOffset = moving ? 0 : Math.sin(st.bobPhase) * 2;
+
+      // Feet near the cell bottom + small ground nudge so the chibi looks
+      // planted at its world pos rather than floating/sunk.
+      sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
+      sprite.setScale(PYRO_SCALE * punch);
+      sprite.setPosition(x, y + PYRO_GROUND_OFFSET + yOffset);
+    } else {
+      // --- other classes: single legacy texture, unchanged look ---
+      sprite.anims.stop();
+      if (sprite.texture.key !== pl.classId) sprite.setTexture(pl.classId);
+      sprite.setOrigin(0.5, 0.5);
+
+      // bob: faster + bigger while moving (legacy behavior)
+      st.bobPhase += dt * (moving ? 10 : 3.5);
+      const yOffset = Math.sin(st.bobPhase) * (moving ? 5 : 2.5);
+
+      // base uniform scale to render at PLAYER_SPRITE_H_DEFAULT px tall
+      const baseScale = PLAYER_SPRITE_H_DEFAULT / sprite.height;
+      // subtle idle "breathing" on scaleY when not moving/casting
+      const breathe = !moving && !casting ? 1 + 0.03 * Math.sin(st.bobPhase) : 1;
+
+      sprite.setScale(baseScale * punch, baseScale * punch * breathe);
+      sprite.setPosition(x, y + yOffset);
+    }
 
     // active shield ring
     if (w.time < pl.shieldUntil) {
