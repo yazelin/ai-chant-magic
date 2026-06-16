@@ -144,7 +144,7 @@ export class GameScene extends Phaser.Scene {
       this.anims.create({
         key: PYRO_WALK_ANIM,
         frames: this.anims.generateFrameNumbers('chibi-pyro-walk', { start: 0, end: 7 }),
-        frameRate: 11,
+        frameRate: 14,
         repeat: -1,
       });
     }
@@ -647,8 +647,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // face the aim's horizontal side (art faces right by default).
-    sprite.setFlipX(Math.cos(pl.facing) < 0);
+    // Face the WALK direction while moving horizontally (instant A/D response);
+    // fall back to the aim direction when standing still / moving purely vertically.
+    const faceLeft =
+      moving && Math.abs(dx) > 0.5 ? dx < 0 : Math.cos(pl.facing) < 0;
+    sprite.setFlipX(faceLeft);
 
     // cast punch: a quick scale-up that decays over CAST_POSE_SECS
     const punch = casting ? 1 + 0.15 * ((st.castUntil - this.t) / CAST_POSE_SECS) : 1;
