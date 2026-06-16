@@ -12,6 +12,7 @@ import {
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
 import { WebSpeechVoiceInput } from './voice/recognizer';
+import { initAudio } from './audio/sfx';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
 // (connected, already `started`) and hands us a GameSession + the self class id.
@@ -74,8 +75,17 @@ function startGame(session: GameSession, classId: ClassId): void {
     if (spell) session.sendCast(spell);
   });
 
-  // Browsers require a user gesture before mic access; start on first click.
-  window.addEventListener('click', () => voice.start(), { once: true });
+  // Browsers require a user gesture before mic access AND before audio can
+  // play; the first click both starts the recognizer and resumes the SFX
+  // AudioContext. initAudio() is idempotent + guarded, so calling it here is safe.
+  window.addEventListener(
+    'click',
+    () => {
+      initAudio();
+      voice.start();
+    },
+    { once: true },
+  );
 }
 
 new Lobby(startGame);

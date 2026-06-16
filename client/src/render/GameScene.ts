@@ -11,6 +11,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
+import { initAudio, sfxCast, sfxFireball, sfxExplosion } from '../audio/sfx';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
 // player's texture is just `player.classId`; enemies share one 'enemy' key.
@@ -53,6 +54,11 @@ const DEPTH_TRAIL = 7; // ember trails just under the projectile core
 
 const CAST_POSE_SECS = 0.3; // how long the cast frame + punch lasts
 
+// A 'blast' effect at/above this radius is treated as a firestorm explosion
+// (bigger spectacle + sound). Sits between fireball's 60 and firestorm's 120
+// explosionRadius in CONFIG.
+const FIRESTORM_BLAST_RADIUS = 90;
+
 // Parse the '#rrggbb' color strings on CLASSES / effect.colorHint into the
 // 0xRRGGBB integers Phaser's Graphics API wants.
 function hexColor(s: string): number {
@@ -68,11 +74,15 @@ interface PlayerAnimState {
   lastY: number;
 }
 
-// Pooled fireball visual: an additive glow halo + bright core + ember trail.
+// Pooled fire-projectile visual: an additive glow halo + bright core + ember
+// trail. Firestorm also carries a second darker "smoke" ember layer so the
+// roiling mass reads denser than a clean fireball orb.
 interface FireVfx {
   halo: Phaser.GameObjects.Image;
   core: Phaser.GameObjects.Image;
   trail: Phaser.GameObjects.Particles.ParticleEmitter;
+  smoke?: Phaser.GameObjects.Particles.ParticleEmitter; // firestorm only
+  storm: boolean; // which kind this pooled visual was built for
 }
 
 export class GameScene extends Phaser.Scene {
@@ -91,6 +101,9 @@ export class GameScene extends Phaser.Scene {
   // Cast-detection bookkeeping: ids whose appearance we've already reacted to.
   private seenProj = new Set<number>();
   private seenFx = new Set<number>();
+  // Per-frame SFX throttle: at most one explosion sound per frame even if many
+  // blasts land at once. Reset at the top of each detectCasts pass.
+  private explosionPlayedThisFrame = false;
   // Scene clock (seconds), accumulated from dt. Drives bob/pulse/cast timing.
   private t = 0;
 
@@ -128,6 +141,12 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.mouse = { x: p.x, y: p.y };
     });
+
+    // Audio needs a user gesture to start; resume the SFX context on the first
+    // pointer/key interaction with the canvas (idempotent + guarded, and also
+    // covered by main.ts's first-click handler).
+    this.input.once('pointerdown', () => initAudio());
+    this.input.keyboard!.once('keydown', () => initAudio());
   }
 
   // Generate two soft radial textures at runtime so the VFX need no PNG assets:
@@ -290,11 +309,28 @@ export class GameScene extends Phaser.Scene {
     const byId = new Map<string, PlayerAnimState>();
     for (const [id, s] of this.playerAnim) byId.set(id, s);
 
+    // SFX throttles: fire at most one cast/whoosh/explosion sound per frame so
+    // a burst of new ids (e.g. a multi-projectile spell or many simultaneous
+    // blasts) doesn't stack into a wall of noise.
+    let castPlayed = false;
+    let whooshPlayed = false;
+    this.explosionPlayedThisFrame = false;
+
     for (const p of w.projectiles) {
       if (this.seenProj.has(p.id)) continue;
       this.seenProj.add(p.id);
       const st = byId.get(p.ownerId);
+      // A freshly-set castUntil means a new owned projectile appeared this frame.
       if (st) st.castUntil = this.t + CAST_POSE_SECS;
+      if (!castPlayed) {
+        sfxCast();
+        castPlayed = true;
+      }
+      // Fire projectiles also get an airy whoosh.
+      if ((p.spell === 'fireball' || p.spell === 'firestorm') && !whooshPlayed) {
+        sfxFireball();
+        whooshPlayed = true;
+      }
     }
     for (const fx of w.effects) {
       if (this.seenFx.has(fx.id)) {
@@ -304,32 +340,74 @@ export class GameScene extends Phaser.Scene {
         if (fx.ownerId) {
           const st = byId.get(fx.ownerId);
           if (st) st.castUntil = this.t + CAST_POSE_SECS;
+          // Effect-only casts (e.g. self-AoE) still get the cast shimmer.
+          if (!castPlayed) {
+            sfxCast();
+            castPlayed = true;
+          }
         }
         if (fx.kind === 'blast') this.onBlast(fx);
       }
     }
   }
 
-  // One-shot fireball impact: radial ember burst + brief orange flash + tiny
-  // shake. Kept subtle so it reads as punchy, not nauseating.
+  // One-shot blast impact. A normal fireball gets a snappy ember burst + brief
+  // orange flash + tiny shake. A firestorm blast (much larger radius) escalates
+  // into an expanding fire ring, more + longer-lived embers, and a stronger
+  // flash/shake so it reads as a proper inferno. The explosion SFX is throttled
+  // to one per frame regardless of how many blasts land.
   private onBlast(fx: TransientEffect): void {
+    const radius = fx.radius ?? CONFIG.fireball.explosionRadius;
+    const big = radius >= FIRESTORM_BLAST_RADIUS;
+
+    // Punchy boom (bigger/louder/longer when firestorm), capped at one per frame.
+    if (!this.explosionPlayedThisFrame) {
+      sfxExplosion(big);
+      this.explosionPlayedThisFrame = true;
+    }
+
+    // Ember burst — denser, faster-spreading, and longer-lived for firestorm.
     const burst = this.add.particles(fx.a.x, fx.a.y, 'spark', {
-      lifespan: 360,
-      speed: { min: 60, max: 220 },
+      lifespan: big ? 620 : 360,
+      speed: { min: big ? 90 : 60, max: big ? 340 : 220 },
       angle: { min: 0, max: 360 },
-      scale: { start: 1.4, end: 0 },
+      scale: { start: big ? 1.8 : 1.4, end: 0 },
       alpha: { start: 1, end: 0 },
-      tint: [0xfff0a0, 0xff8c1a, 0xd63a1a],
+      tint: big ? [0xfff0a0, 0xff5a1a, 0xc22a0a] : [0xfff0a0, 0xff8c1a, 0xd63a1a],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
     burst.setDepth(DEPTH_VFX);
-    burst.explode(24);
+    burst.explode(big ? 48 : 24);
     // self-destruct once every particle has faded
-    this.time.delayedCall(450, () => burst.destroy());
+    this.time.delayedCall(big ? 720 : 450, () => burst.destroy());
 
-    this.cameras.main.flash(120, 255, 140, 40, false);
-    this.cameras.main.shake(120, 0.004);
+    // Firestorm: an additive expanding+fading fire ring scaled to the blast.
+    if (big) {
+      const ring = this.add.image(fx.a.x, fx.a.y, 'glow');
+      ring.setBlendMode(Phaser.BlendModes.ADD).setTint(0xff5a1a).setDepth(DEPTH_VFX);
+      // 'glow' visible disc is ~32px radius; start near the blast radius and
+      // expand to ~1.7x while fading over ~0.4s.
+      const startScale = radius / 32;
+      ring.setScale(startScale * 0.6).setAlpha(0.9);
+      this.tweens.add({
+        targets: ring,
+        scale: startScale * 1.7,
+        alpha: 0,
+        duration: 400,
+        ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    // Camera: stronger + slightly longer flash/shake for the bigger blast.
+    if (big) {
+      this.cameras.main.flash(180, 255, 120, 30, false);
+      this.cameras.main.shake(220, 0.008);
+    } else {
+      this.cameras.main.flash(120, 255, 140, 40, false);
+      this.cameras.main.shake(120, 0.004);
+    }
   }
 
   // Lazily create (or fetch) a pooled Image for `key` at `id`. Sizing is owned
@@ -386,45 +464,80 @@ export class GameScene extends Phaser.Scene {
     g.strokeCircle(fx.a.x, fx.a.y, r);
   }
 
-  // --- fireball/firestorm: pooled additive glow + bright core + ember trail ---
-  private drawFireProjectile(p: { id: number; pos: { x: number; y: number }; radius: number }): void {
+  // --- fire projectiles: pooled additive glow + bright core + ember trail -----
+  // Fireball = a quick, clean, bright orb. Firestorm = a bigger, deeper-red,
+  // churning fire mass: larger slower-pulsing halo, a denser ember trail plus a
+  // second darker smoke-ish layer, and a slight rotation/wobble.
+  private drawFireProjectile(p: { id: number; spell: SpellId; pos: { x: number; y: number }; radius: number }): void {
+    const storm = p.spell === 'firestorm';
     let vfx = this.fireVfx.get(p.id);
     if (!vfx) {
       const halo = this.add.image(p.pos.x, p.pos.y, 'glow');
-      halo.setBlendMode(Phaser.BlendModes.ADD).setTint(0xff8c1a).setDepth(DEPTH_VFX);
+      // firestorm tints a deeper red-orange; fireball stays brighter/cleaner.
+      halo.setBlendMode(Phaser.BlendModes.ADD).setTint(storm ? 0xff5a1a : 0xff8c1a).setDepth(DEPTH_VFX);
       const core = this.add.image(p.pos.x, p.pos.y, 'glow');
-      core.setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe08a).setDepth(DEPTH_VFX);
+      core.setBlendMode(Phaser.BlendModes.ADD).setTint(storm ? 0xffb24a : 0xffe08a).setDepth(DEPTH_VFX);
       const trail = this.add.particles(p.pos.x, p.pos.y, 'spark', {
-        lifespan: 300,
-        frequency: 35, // ~28/s
-        quantity: 1,
-        speed: { min: 0, max: 30 },
+        lifespan: storm ? 420 : 300,
+        frequency: storm ? 18 : 35, // firestorm emits ~2x as fast
+        quantity: storm ? 2 : 1,
+        speed: { min: 0, max: storm ? 55 : 30 }, // wider ember spread
         angle: { min: 0, max: 360 },
-        scale: { start: 1.1, end: 0 },
+        scale: { start: storm ? 1.5 : 1.1, end: 0 },
         alpha: { start: 0.9, end: 0 },
-        tint: [0xff8c1a, 0xd63a1a],
+        tint: storm ? [0xff8c1a, 0xff5a1a, 0xd63a1a] : [0xff8c1a, 0xd63a1a],
         blendMode: Phaser.BlendModes.ADD,
       });
       trail.setDepth(DEPTH_TRAIL);
-      vfx = { halo, core, trail };
+      vfx = { halo, core, trail, storm };
+      // firestorm only: a darker, slower, larger smoke-ish ember layer underneath
+      // for a roiling-mass read. NOT additive, so it darkens rather than glows.
+      if (storm) {
+        const smoke = this.add.particles(p.pos.x, p.pos.y, 'spark', {
+          lifespan: 560,
+          frequency: 26,
+          quantity: 1,
+          speed: { min: 0, max: 40 },
+          angle: { min: 0, max: 360 },
+          scale: { start: 2.0, end: 0.4 },
+          alpha: { start: 0.5, end: 0 },
+          tint: [0x7a2208, 0xb23a10],
+        });
+        smoke.setDepth(DEPTH_TRAIL - 1); // beneath the bright ember trail
+        vfx.smoke = smoke;
+      }
       this.fireVfx.set(p.id, vfx);
     }
 
-    // gentle pulse so the orb feels alive
-    const pulse = 1 + 0.15 * Math.sin(this.t * 20);
-    // 'glow' is a 64px texture whose visible disc is ~32px radius; size the halo
-    // so it reads ~2.5x the projectile radius.
-    const haloScale = ((p.radius * 2.5) / 32) * pulse;
-    const coreScale = ((p.radius * 1.1) / 32) * pulse;
-    vfx.halo.setPosition(p.pos.x, p.pos.y).setScale(haloScale);
+    // pulse: firestorm pulses slower + deeper than the snappy fireball.
+    const pulse = storm
+      ? 1 + 0.25 * Math.sin(this.t * 11)
+      : 1 + 0.15 * Math.sin(this.t * 20);
+    // 'glow' visible disc is ~32px radius. Firestorm halo ≈3.5x the projectile
+    // radius (vs fireball ≈2.5x) so it reads as a larger fire mass.
+    const haloMul = storm ? 3.5 : 2.5;
+    const coreMul = storm ? 1.4 : 1.1;
+    const haloScale = ((p.radius * haloMul) / 32) * pulse;
+    const coreScale = ((p.radius * coreMul) / 32) * pulse;
+    // firestorm wobble: a small roiling offset + halo rotation so it churns.
+    let ox = 0;
+    let oy = 0;
+    if (storm) {
+      ox = Math.sin(this.t * 13) * p.radius * 0.25;
+      oy = Math.cos(this.t * 17) * p.radius * 0.25;
+      vfx.halo.setRotation(this.t * 1.5);
+    }
+    vfx.halo.setPosition(p.pos.x + ox, p.pos.y + oy).setScale(haloScale);
     vfx.core.setPosition(p.pos.x, p.pos.y).setScale(coreScale);
     vfx.trail.setPosition(p.pos.x, p.pos.y);
+    if (vfx.smoke) vfx.smoke.setPosition(p.pos.x, p.pos.y);
   }
 
   private destroyFireVfx(vfx: FireVfx): void {
     vfx.halo.destroy();
     vfx.core.destroy();
     vfx.trail.destroy();
+    if (vfx.smoke) vfx.smoke.destroy();
   }
 
   // --- enemies: pooled 'enemy' sprite, upright, below players -----------------
