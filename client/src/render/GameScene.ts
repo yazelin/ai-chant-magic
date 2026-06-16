@@ -647,11 +647,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // The chibi art faces LEFT by default, so flipX=true makes it face RIGHT.
     // Face the WALK direction while moving horizontally (instant A/D response);
     // fall back to the aim direction when standing still / moving purely vertically.
-    const faceLeft =
-      moving && Math.abs(dx) > 0.5 ? dx < 0 : Math.cos(pl.facing) < 0;
-    sprite.setFlipX(faceLeft);
+    const flip =
+      moving && Math.abs(dx) > 0.5 ? dx > 0 : Math.cos(pl.facing) > 0;
+    sprite.setFlipX(flip);
 
     // cast punch: a quick scale-up that decays over CAST_POSE_SECS
     const punch = casting ? 1 + 0.15 * ((st.castUntil - this.t) / CAST_POSE_SECS) : 1;
