@@ -47,6 +47,13 @@ export interface ReadyMsg {
   value: boolean;
 }
 
+// Change class while still in the room lobby (before the game starts). Ignored
+// by the server once the room has started (never change class mid-game).
+export interface SetClassMsg {
+  type: 'setClass';
+  classId: ClassId;
+}
+
 // `start` is the host pressing the start button (spec §14: host starts, >=1 player).
 export interface StartMsg {
   type: 'start';
@@ -70,6 +77,7 @@ export type ClientMsg =
   | JoinMsg
   | QuickJoinMsg
   | ReadyMsg
+  | SetClassMsg
   | StartMsg
   | InputMsg
   | LeaveMsg;
@@ -137,6 +145,7 @@ const CLIENT_MSG_TYPES: ReadonlySet<string> = new Set([
   'join',
   'quickJoin',
   'ready',
+  'setClass',
   'start',
   'input',
   'leave',

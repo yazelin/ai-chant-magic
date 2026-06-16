@@ -178,6 +178,22 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         broadcast(room, { type: 'lobby', players: lobbyViews(room) });
         break;
       }
+      case 'setClass': {
+        const { room, playerId } = session;
+        if (!room || !playerId) {
+          sendError(ws, 'not-in-room', 'no room');
+          return;
+        }
+        // Class can only change in the lobby. Mid-game the world is already
+        // seeded from the members, so reject instead of silently no-op'ing.
+        if (room.isStarted) {
+          sendError(ws, 'already-started', 'cannot change class after the game has started');
+          return;
+        }
+        room.setClass(playerId, msg.classId);
+        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        break;
+      }
       case 'start': {
         const { room, playerId } = session;
         if (!room || !playerId) {

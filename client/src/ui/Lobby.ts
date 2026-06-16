@@ -256,6 +256,8 @@ export class Lobby {
       </div>
       <label>成員(${this.members.length}/4)</label>
       <ul class="members">${memberItems}</ul>
+      <label>更換職業</label>
+      <div class="class-cards" id="room-classes"></div>
       <div class="btns">
         ${
           this.isHost
@@ -284,6 +286,39 @@ export class Lobby {
       this.roomCode = '';
       this.renderSetup();
     });
+
+    this.renderRoomClassCards();
+  }
+
+  // In-room class picker. Reuses the setup screen's .class-cards/.class-card
+  // markup, highlights the local player's current class, and on click tells the
+  // server (which broadcasts an updated lobby so EVERYONE — including us — sees
+  // the new class in the member list). `this.classId` is the source of truth the
+  // game start uses for the voice loadout, so updating it here means the game we
+  // start reflects the latest in-room selection.
+  private renderRoomClassCards(): void {
+    const host = this.root.querySelector('#room-classes');
+    if (!host) return;
+    host.innerHTML = '';
+    for (const id of CLASS_ORDER) {
+      const def = CLASSES[id];
+      const card = document.createElement('div');
+      card.className = 'class-card' + (id === this.classId ? ' selected' : '');
+      card.style.color = def.color;
+      const spellNames = def.spells.map((s) => SPELLS[s].displayName).join('、');
+      card.innerHTML = `
+        <div class="glyph">${SHAPE_GLYPH[def.shape] ?? '◆'}</div>
+        <div class="cname" style="color:${def.color}">${def.displayName}</div>
+        <div class="spells">${escapeHtml(spellNames)}</div>
+      `;
+      card.addEventListener('click', () => {
+        if (id === this.classId) return;
+        this.classId = id;
+        this.client?.setClass(id);
+        this.renderRoomClassCards();
+      });
+      host.appendChild(card);
+    }
   }
 
   private hide(): void {

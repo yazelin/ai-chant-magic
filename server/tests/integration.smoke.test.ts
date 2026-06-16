@@ -210,6 +210,75 @@ describe('two-client ws integration smoke (B3)', () => {
   );
 
   it(
+    'a setClass message in the lobby broadcasts an updated lobby with the new classId',
+    async () => {
+      // A creates the room as pyro.
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const joinedA = await joinedPromise;
+      expect(joinedA.players[0].classId).toBe('pyro');
+      const selfId = joinedA.selfId;
+      const code = joinedA.roomCode;
+
+      // B joins so there is more than one room member to broadcast to.
+      const b = await connect();
+      const joinedBPromise = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'warden', roomCode: code });
+      await joinedBPromise;
+
+      // A switches class to warden while still in the lobby.
+      // BOTH clients must receive a `lobby` broadcast in which A is now warden.
+      const aSawWarden = waitForMatch(
+        a,
+        'lobby',
+        (m) => m.players.some((p) => p.id === selfId && p.classId === 'warden')
+      );
+      const bSawWarden = waitForMatch(
+        b,
+        'lobby',
+        (m) => m.players.some((p) => p.id === selfId && p.classId === 'warden')
+      );
+      sendMsg(a, { type: 'setClass', classId: 'warden' });
+      const [seenByA, seenByB] = await Promise.all([aSawWarden, bSawWarden]);
+
+      // The authoritative room reflects the change too.
+      const room = handle.registry.get(code)!;
+      expect(room.getMember(selfId)?.classId).toBe('warden');
+      // And the broadcast each client saw carries the new class.
+      expect(seenByA.players.find((p) => p.id === selfId)?.classId).toBe('warden');
+      expect(seenByB.players.find((p) => p.id === selfId)?.classId).toBe('warden');
+    },
+    15000
+  );
+
+  it(
+    'ignores setClass once the game has started (no mid-game class change)',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const joined = await joinedPromise;
+      const selfId = joined.selfId;
+      const code = joined.roomCode;
+
+      const started = waitFor(a, 'started');
+      sendMsg(a, { type: 'start' });
+      await started;
+      await waitFor(a, 'snapshot'); // game is live
+
+      // Attempt a class change mid-game — must be ignored.
+      sendMsg(a, { type: 'setClass', classId: 'warden' });
+
+      const room = handle.registry.get(code)!;
+      // Give the handler a couple of ticks to (not) apply the change.
+      await waitUntil(() => room.tickCount >= 2);
+      expect(room.getMember(selfId)?.classId).toBe('pyro');
+    },
+    10000
+  );
+
+  it(
     'returns a server-full error (not a generic bad-message) when create overflows MAX_ROOMS',
     async () => {
       const { MAX_ROOMS } = await import('../src/rooms');

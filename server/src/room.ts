@@ -106,7 +106,11 @@ export class Room {
     if (m) m.ready = value;
   }
 
+  // Change a lobby member's class. Only mutates while the room is in the lobby;
+  // once the game has started the class is locked (the world was seeded from the
+  // members at start), so this is a no-op to prevent any mid-game class change.
   setClass(id: string, classId: ClassId): void {
+    if (this.status !== 'lobby') return;
     const m = this.getMember(id);
     if (m) m.classId = classId;
   }
