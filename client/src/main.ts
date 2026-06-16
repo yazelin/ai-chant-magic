@@ -8,6 +8,7 @@ import {
   JUMON,
   ClassId,
   classSpellSet,
+  SPELLS,
 } from '@acm/shared';
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
@@ -72,6 +73,7 @@ function startGame(session: GameSession, classId: ClassId): void {
   voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
   voice.onTranscript((text) => {
     const spell = matchSpell(text, { mode, jumon: JUMON, allowed });
+    hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
     if (spell) session.sendCast(spell);
   });
 

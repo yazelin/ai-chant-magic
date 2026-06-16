@@ -3,3 +3,9 @@ dist/
 *.log
 .DS_Store
 .superpowers/
+# art-generation scratch (intermediate codex outputs + LPC/source reference
+# material). Not part of the shipped game; shipped sprites live in
+# client/src/assets/. refs/ also holds CC-BY-SA LPC source we don't redistribute.
+generated/
+output/
+refs/

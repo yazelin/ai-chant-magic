@@ -91,6 +91,9 @@ interface FireVfx {
 export class GameScene extends Phaser.Scene {
   private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
+  // Dedicated overlay for aim indicators (per-player chevron + local cursor
+  // reticle), kept above the player sprites so it never gets occluded.
+  private aimGfx!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
   // Pooled sprites, keyed by entity id. Created on first sight, repositioned
   // each frame, and destroyed when the entity leaves the world (mirrors the
@@ -137,6 +140,8 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.gfx = this.add.graphics();
+    this.aimGfx = this.add.graphics();
+    this.aimGfx.setDepth(DEPTH_PLAYER + 1);
     this.makeVfxTextures();
 
     // Define the pyro walk animation once. Guard against double-create when the
@@ -247,6 +252,7 @@ export class GameScene extends Phaser.Scene {
     const w = this.session.getWorld();
     const g = this.gfx;
     g.clear();
+    this.aimGfx.clear();
 
     // Cast detection runs before drawing players so the caster snaps to the
     // cast pose on the same frame their spell first appears.
@@ -314,6 +320,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // local player's aim crosshair, pinned to the cursor (drawn last, on top)
+    this.drawAimReticle();
+
     // Prune seen-id sets to the ids currently in the world so they never grow
     // unbounded across a long session.
     this.pruneSeen(this.seenProj, liveProj);
@@ -324,6 +333,71 @@ export class GameScene extends Phaser.Scene {
 
   private pruneSeen(seen: Set<number>, live: Set<number>): void {
     for (const id of seen) if (!live.has(id)) seen.delete(id);
+  }
+
+  // A soft glowing arrowhead floating just ahead of a player in its aim
+  // direction. Two stroke passes (wide dim + thin bright) fake a glow.
+  private drawAimChevron(
+    x: number,
+    y: number,
+    r: number,
+    facing: number,
+    color: number,
+  ): void {
+    const g = this.aimGfx;
+    const tipD = r + 17;
+    const wing = 9;
+    const spread = 0.62; // half-angle of the wings (radians)
+    const tx = x + Math.cos(facing) * tipD;
+    const ty = y + Math.sin(facing) * tipD;
+    const back = facing + Math.PI;
+    const w1x = tx + Math.cos(back - spread) * wing;
+    const w1y = ty + Math.sin(back - spread) * wing;
+    const w2x = tx + Math.cos(back + spread) * wing;
+    const w2y = ty + Math.sin(back + spread) * wing;
+    const stroke = (width: number, alpha: number) => {
+      g.lineStyle(width, color, alpha);
+      g.beginPath();
+      g.moveTo(w1x, w1y);
+      g.lineTo(tx, ty);
+      g.lineTo(w2x, w2y);
+      g.strokePath();
+    };
+    stroke(6, 0.22);
+    stroke(2.5, 0.95);
+    g.lineStyle(0, 0, 0);
+  }
+
+  // Local player's aim crosshair: a small glowing fire reticle pinned to the
+  // mouse cursor. World == screen here (arena fills the canvas, no camera
+  // scroll). Only shown while the local player is present and alive.
+  private drawAimReticle(): void {
+    const self = this.self();
+    if (!self || !self.connected || self.downed) return;
+    const g = this.aimGfx;
+    const mx = this.mouse.x;
+    const my = this.mouse.y;
+    const ringR = 9;
+    // warm outer glow
+    g.fillStyle(0xff8c28, 0.1);
+    g.fillCircle(mx, my, 13);
+    g.fillStyle(0xff8c28, 0.18);
+    g.fillCircle(mx, my, 8);
+    // ring + four ticks
+    g.lineStyle(2, 0xffc878, 0.92);
+    g.strokeCircle(mx, my, ringR);
+    for (const a of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+      g.lineBetween(
+        mx + Math.cos(a) * (ringR + 2),
+        my + Math.sin(a) * (ringR + 2),
+        mx + Math.cos(a) * (ringR + 6),
+        my + Math.sin(a) * (ringR + 6),
+      );
+    }
+    g.lineStyle(0, 0, 0);
+    // bright center
+    g.fillStyle(0xfff0c0, 1);
+    g.fillCircle(mx, my, 2.2);
   }
 
   // CAST DETECTION + impact reactions. For every NEW projectile or effect id
@@ -711,9 +785,10 @@ export class GameScene extends Phaser.Scene {
       g.strokeCircle(x, y, r + 7);
     }
 
-    // facing line
-    g.lineStyle(3, 0xffffff, 1);
-    g.lineBetween(x, y, x + Math.cos(pl.facing) * (r + 8), y + Math.sin(pl.facing) * (r + 8));
+    // aim chevron: a soft glowing arrowhead floating just ahead of the player in
+    // its facing/aim direction (replaces the old white line that sliced the
+    // sprite). Drawn in the class colour on the dedicated above-sprite overlay.
+    this.drawAimChevron(x, y, r, pl.facing, color);
 
     this.drawLabel(pl, x, y - r - 14, color);
   }

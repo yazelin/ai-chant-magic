@@ -106,3 +106,33 @@ describe('matchSpell — per-class allowed filtering', () => {
     ).toBe('fireball');
   });
 });
+
+describe('matchSpell — broadened firestorm / shield aliases', () => {
+  const pyro = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('pyro') };
+
+  it('matches firestorm via easier-to-recognize variants', () => {
+    for (const t of ['火海', '火焰', '烈焰', '大火', '火燄', 'firestorm', 'flame']) {
+      expect(matchSpell(t, pyro)).toBe('firestorm');
+    }
+  });
+
+  it('matches shield via multi-char variants', () => {
+    for (const t of ['護盾', '護盾術', '盾牌', '護罩', '防護罩', '結界', 'shield']) {
+      expect(matchSpell(t, pyro)).toBe('shield');
+    }
+  });
+
+  it('still distinguishes fireball from firestorm in the pyro loadout', () => {
+    expect(matchSpell('火球', pyro)).toBe('fireball');
+    expect(matchSpell('火球術', pyro)).toBe('fireball');
+    expect(matchSpell('火海', pyro)).toBe('firestorm');
+  });
+
+  it('does not let shield aliases swallow aegis (聖盾 → aegis for warden)', () => {
+    const warden = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('warden') };
+    expect(matchSpell('聖盾', warden)).toBe('aegis');
+    // even on the legacy no-allowed path, 聖盾 must not match shield now that
+    // bare '盾' was dropped from shield's aliases
+    expect(matchSpell('聖盾', { mode: 'mueisho', jumon: '我命汝顯現' })).toBe('aegis');
+  });
+});
