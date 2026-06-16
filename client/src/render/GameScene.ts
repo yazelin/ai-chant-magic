@@ -143,7 +143,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.anims.exists(PYRO_WALK_ANIM)) {
       this.anims.create({
         key: PYRO_WALK_ANIM,
-        frames: this.anims.generateFrameNumbers('chibi-pyro-walk', { start: 0, end: 6 }),
+        frames: this.anims.generateFrameNumbers('chibi-pyro-walk', { start: 0, end: 7 }),
         frameRate: 11,
         repeat: -1,
       });
