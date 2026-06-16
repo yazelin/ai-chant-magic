@@ -30,7 +30,7 @@ const SPRITES: Array<{ key: string; url: string }> = [
 const LPC_PYRO_WALK = new URL('../assets/lpc-pyro-walk.png', import.meta.url).href;
 const LPC_PYRO_IDLE = new URL('../assets/lpc-pyro-idle.png', import.meta.url).href;
 const LPC_PYRO_CAST = new URL('../assets/lpc-pyro-cast.png', import.meta.url).href;
-const LPC_PYRO_FRAME = { width: 64, height: 64 };
+const LPC_PYRO_FRAME = { width: 128, height: 128 };
 const PYRO_WALK_ANIM = 'pyro-walk';
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
