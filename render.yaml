@@ -10,7 +10,8 @@ services:
     name: ai-chant-magic-server
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build -w @acm/server
+    # --include=dev so esbuild/tsx (devDeps) install even under NODE_ENV=production
+    buildCommand: npm ci --include=dev && npm run build -w @acm/server
     startCommand: node server/dist/index.js
     healthCheckPath: /healthz
     envVars:
