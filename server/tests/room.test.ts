@@ -47,6 +47,15 @@ describe('Room lobby surface', () => {
     expect(room.getMember('host')?.classId).toBe('warden');
   });
 
+  it('setClass is a no-op once the game has started (status playing)', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.start();
+    expect(room.status).toBe('playing');
+    room.setClass('host', 'warden');
+    // Class must never change mid-game: the member keeps its lobby class.
+    expect(room.getMember('host')?.classId).toBe('pyro');
+  });
+
   it('isFull at MAX_PLAYERS (4)', () => {
     const room = new Room('AAAA', member('host'));
     expect(room.isFull).toBe(false);

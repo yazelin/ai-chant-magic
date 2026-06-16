@@ -28,6 +28,15 @@ import {
   type LobbyPlayerView,
   type ErrorCode,
 } from './protocol';
+import { CLASSES, type ClassId } from '@acm/shared';
+
+// The server is public: a hostile/buggy client can send any string as `classId`.
+// An unknown class is stored unvalidated by setClass/create/join/quickJoin and
+// later crashes room.start() -> createWorld -> CLASSES[bad].hpMod (TypeError),
+// which can prevent a room from ever starting. Guard at every ingestion point.
+function isValidClass(c: unknown): c is ClassId {
+  return typeof c === 'string' && c in CLASSES;
+}
 
 const DEFAULT_PORT = Number(process.env.PORT) || 8787;
 const HOST = '0.0.0.0';
@@ -116,6 +125,10 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
 
     switch (msg.type) {
       case 'create': {
+        if (!isValidClass(msg.classId)) {
+          sendError(ws, 'bad-message', 'unknown class');
+          return;
+        }
         try {
           const member = newMember(ws, msg.name, msg.classId);
           const room = registry.create(member);
@@ -133,6 +146,10 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         break;
       }
       case 'join': {
+        if (!isValidClass(msg.classId)) {
+          sendError(ws, 'bad-message', 'unknown class');
+          return;
+        }
         try {
           const member = newMember(ws, msg.name, msg.classId);
           const room = registry.joinByCode(msg.roomCode, member);
@@ -151,6 +168,10 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         break;
       }
       case 'quickJoin': {
+        if (!isValidClass(msg.classId)) {
+          sendError(ws, 'bad-message', 'unknown class');
+          return;
+        }
         try {
           const member = newMember(ws, msg.name, msg.classId);
           const room = registry.quickJoin(member);
@@ -175,6 +196,26 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           return;
         }
         room.setReady(playerId, msg.value);
+        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        break;
+      }
+      case 'setClass': {
+        const { room, playerId } = session;
+        if (!room || !playerId) {
+          sendError(ws, 'not-in-room', 'no room');
+          return;
+        }
+        // Class can only change in the lobby. Mid-game the world is already
+        // seeded from the members, so reject instead of silently no-op'ing.
+        if (room.isStarted) {
+          sendError(ws, 'already-started', 'cannot change class after the game has started');
+          return;
+        }
+        if (!isValidClass(msg.classId)) {
+          sendError(ws, 'bad-message', 'unknown class');
+          return;
+        }
+        room.setClass(playerId, msg.classId);
         broadcast(room, { type: 'lobby', players: lobbyViews(room) });
         break;
       }

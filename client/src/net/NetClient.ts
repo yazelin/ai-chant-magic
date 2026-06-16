@@ -193,6 +193,12 @@ export class NetClient {
     this.send({ type: 'ready', value });
   }
 
+  // Change class while in the room lobby. The server broadcasts the updated
+  // lobby to everyone (including us), so the member list reflects the change.
+  setClass(classId: ClassId): void {
+    this.send({ type: 'setClass', classId });
+  }
+
   start(): void {
     this.send({ type: 'start' });
   }
