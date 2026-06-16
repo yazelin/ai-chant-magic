@@ -1,0 +1,24 @@
+{
+  "name": "@acm/server",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:ws --outfile=dist/index.js",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.17.0",
+    "@acm/shared": "*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.12.0",
+    "typescript": "^5.4.0",
+    "tsx": "^4.15.0",
+    "esbuild": "^0.21.0",
+    "vitest": "^1.6.0"
+  }
+}

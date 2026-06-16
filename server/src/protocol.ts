@@ -1,0 +1,161 @@
+// Wire protocol between client and the authoritative ws server.
+// All messages are JSON. Per spec §8 (Server section) and plan Task B1.
+//
+// The transient `effects` channel and player gameplay fields ride inside the
+// `Snapshot` (see snapshot.ts), which is embedded in the `snapshot` ServerMsg.
+
+import type { ClassId, SpellId, Vec2 } from '@acm/shared';
+import type { Snapshot } from './snapshot';
+
+// ---------------------------------------------------------------------------
+// Shared lobby view (sent inside `joined` / `lobby`)
+// ---------------------------------------------------------------------------
+
+export interface LobbyPlayerView {
+  id: string;
+  name: string;
+  classId: ClassId;
+  ready: boolean;
+  connected: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Client -> Server
+// ---------------------------------------------------------------------------
+
+export interface CreateMsg {
+  type: 'create';
+  name: string;
+  classId: ClassId;
+}
+
+export interface JoinMsg {
+  type: 'join';
+  name: string;
+  classId: ClassId;
+  roomCode: string;
+}
+
+export interface QuickJoinMsg {
+  type: 'quickJoin';
+  name: string;
+  classId: ClassId;
+}
+
+export interface ReadyMsg {
+  type: 'ready';
+  value: boolean;
+}
+
+// `start` is the host pressing the start button (spec §14: host starts, >=1 player).
+export interface StartMsg {
+  type: 'start';
+}
+
+// Per-tick intent. Server aggregates: latest move / latest face, ALL casts.
+export interface InputMsg {
+  type: 'input';
+  seq: number;
+  move?: Vec2;
+  face?: number;
+  casts?: SpellId[];
+}
+
+export interface LeaveMsg {
+  type: 'leave';
+}
+
+export type ClientMsg =
+  | CreateMsg
+  | JoinMsg
+  | QuickJoinMsg
+  | ReadyMsg
+  | StartMsg
+  | InputMsg
+  | LeaveMsg;
+
+// ---------------------------------------------------------------------------
+// Server -> Client
+// ---------------------------------------------------------------------------
+
+export interface JoinedMsg {
+  type: 'joined';
+  roomCode: string;
+  selfId: string;
+  players: LobbyPlayerView[];
+}
+
+export interface LobbyUpdateMsg {
+  type: 'lobby';
+  players: LobbyPlayerView[];
+}
+
+export interface StartedMsg {
+  type: 'started';
+}
+
+export interface SnapshotMsg {
+  type: 'snapshot';
+  tick: number;
+  world: Snapshot;
+}
+
+export type ErrorCode =
+  | 'not-found'
+  | 'full'
+  | 'already-started'
+  | 'server-full'
+  | 'bad-message'
+  | 'not-in-room'
+  | 'not-host';
+
+export interface ErrorMsg {
+  type: 'error';
+  code: ErrorCode;
+  msg: string;
+}
+
+export interface PeerLeftMsg {
+  type: 'peerLeft';
+  id: string;
+}
+
+export type ServerMsg =
+  | JoinedMsg
+  | LobbyUpdateMsg
+  | StartedMsg
+  | SnapshotMsg
+  | ErrorMsg
+  | PeerLeftMsg;
+
+// ---------------------------------------------------------------------------
+// Parsing helper (used by the thin ws wiring in index.ts / B2)
+// ---------------------------------------------------------------------------
+
+const CLIENT_MSG_TYPES: ReadonlySet<string> = new Set([
+  'create',
+  'join',
+  'quickJoin',
+  'ready',
+  'start',
+  'input',
+  'leave',
+]);
+
+export function parseClientMsg(raw: string): ClientMsg | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof (parsed as { type?: unknown }).type !== 'string' ||
+    !CLIENT_MSG_TYPES.has((parsed as { type: string }).type)
+  ) {
+    return null;
+  }
+  return parsed as ClientMsg;
+}

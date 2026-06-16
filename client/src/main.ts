@@ -1,0 +1,81 @@
+import Phaser from 'phaser';
+import { GameScene } from './render/GameScene';
+import { Hud } from './render/hud';
+import {
+  CONFIG,
+  matchSpell,
+  CastMode,
+  JUMON,
+  ClassId,
+  classSpellSet,
+} from '@acm/shared';
+import { GameSession } from './session/GameSession';
+import { Lobby } from './ui/Lobby';
+import { WebSpeechVoiceInput } from './voice/recognizer';
+
+// Boot into the lobby. The lobby decides Local (single-player) vs Net
+// (connected, already `started`) and hands us a GameSession + the self class id.
+// Both modes drive the same GameScene; voice casting and the 1/2/3 test keys
+// work identically (they all route through session.sendCast).
+function startGame(session: GameSession, classId: ClassId): void {
+  // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
+  // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
+  // leaving the canvas at 0x0 — must set an explicit display.
+  const chrome = document.getElementById('game-chrome');
+  if (chrome) {
+    chrome.style.display = 'flex';
+    chrome.style.flexDirection = 'column';
+    chrome.style.alignItems = 'center';
+    chrome.style.gap = '8px';
+  }
+  // Hide the lobby panel so it doesn't sit above the game.
+  const lobbyEl = document.getElementById('lobby');
+  if (lobbyEl) lobbyEl.style.display = 'none';
+
+  const scene = new GameScene(session);
+
+  new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    width: CONFIG.arenaWidth,
+    height: CONFIG.arenaHeight,
+    backgroundColor: '#0b0b14',
+    scene,
+  });
+
+  const hud = new Hud(classId);
+
+  // HUD refresh loop (decoupled from Phaser so game-over text updates even when
+  // idle). Reads whatever World the session exposes (local sim or interpolated
+  // snapshot), so the party panel renders all players in both modes.
+  setInterval(() => {
+    const w = session.getWorld();
+    if (w) hud.render(w);
+  }, 100);
+
+  // Mode toggle
+  const modeSelect = document.getElementById('mode') as HTMLSelectElement;
+  let mode: CastMode = (modeSelect.value as CastMode) ?? 'mueisho';
+  modeSelect.addEventListener('change', () => {
+    mode = modeSelect.value as CastMode;
+  });
+
+  // Restart (solo only; NetSession.restart is a no-op).
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'r') scene.restart();
+  });
+
+  // Voice → spell casting (restricted to the chosen class's loadout).
+  const allowed = classSpellSet(classId);
+  const voice = new WebSpeechVoiceInput('zh-TW');
+  voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
+  voice.onTranscript((text) => {
+    const spell = matchSpell(text, { mode, jumon: JUMON, allowed });
+    if (spell) session.sendCast(spell);
+  });
+
+  // Browsers require a user gesture before mic access; start on first click.
+  window.addEventListener('click', () => voice.start(), { once: true });
+}
+
+new Lobby(startGame);

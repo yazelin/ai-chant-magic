@@ -1,0 +1,9 @@
+{
+  "name": "@acm/client",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "preview": "vite preview", "test": "vitest run" },
+  "dependencies": { "phaser": "^3.80.1", "@acm/shared": "*" },
+  "devDependencies": { "typescript": "^5.4.0", "vite": "^5.2.0", "vitest": "^1.6.0" }
+}

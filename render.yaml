@@ -1,0 +1,19 @@
+# Render Blueprint for the authoritative WebSocket game server.
+# Deploy: Render dashboard → New → Blueprint → connect this repo.
+# After it goes live, point the client at it with ?server=wss://<your-service>.onrender.com
+# (or set VITE_SERVER_URL at client build time).
+#
+# Note (free tier): the service sleeps after ~15 min idle and cold-starts in a few
+# seconds — the client lobby shows a "waking server" state to cover this.
+services:
+  - type: web
+    name: ai-chant-magic-server
+    runtime: node
+    plan: free
+    # --include=dev so esbuild/tsx (devDeps) install even under NODE_ENV=production
+    buildCommand: npm ci --include=dev && npm run build -w @acm/server
+    startCommand: node server/dist/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
