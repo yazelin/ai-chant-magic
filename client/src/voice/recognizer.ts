@@ -77,8 +77,11 @@ export class WebSpeechVoiceInput implements VoiceInput {
     r.onerror = (err: any) => {
       const code = (err && err.error) || 'unknown';
       console.debug('[voice] onerror', code, err);
-      this.errorSinceStart = true;
       const c = classifyError(code);
+      // Only count NON-benign errors toward the give-up heuristic. 'no-speech' /
+      // 'aborted' fire normally during silence on a WORKING backend; counting
+      // them made the mic falsely "give up" after a quiet stretch mid-game.
+      if (c.fatal || c.message) this.errorSinceStart = true;
       if (c.fatal) {
         this.wantOn = false;
         this.clearRestart();
