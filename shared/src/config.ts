@@ -11,7 +11,7 @@ export const CONFIG = {
   frost:    { speed: 360, radius: 6, ttl: 1.2, damage: 18, slowDuration: 2, spread: 0.25, count: 3 },
   frostnova: { radius: 150, damage: 20, slowDuration: 2.5 },
   thunder:  { range: 1000, width: 28, damage: 55, maxBounces: 2, bounceFalloff: 0.8 },
-  chain:    { range: 260, jumpRange: 170, maxJumps: 4, damage: 34, falloff: 0.75 },
+  chain:    { range: 260, jumpRange: 170, maxJumps: 4, damage: 34, falloff: 0.8 },
   holybolt: { speed: 460, radius: 7, ttl: 1.2, damage: 26 },
   enemy: { baseSpeed: 60, radius: 12, baseHp: 30, hpPerWave: 5, speedPerWave: 4 },
   wave: { baseCount: 6, perWave: 3, baseCadence: 1.2, cadenceDecay: 0.05, minCadence: 0.4, breakTime: 2, scaleExp: 1.4 },
