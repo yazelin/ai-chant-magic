@@ -50,6 +50,15 @@ export function initAudio(): void {
   }
 }
 
+// Expose the shared context + master gain so the procedural music engine can
+// schedule notes on the SAME AudioContext (one clock, one output bus).
+export function getAudioCtx(): AudioContext | null {
+  return ctx;
+}
+export function getMaster(): GainNode | null {
+  return master;
+}
+
 // Build a 1-second mono white-noise buffer once and reuse it for every noise
 // layer (whoosh filter sweep, explosion crackle). Returns null if no context.
 function getNoiseBuffer(): AudioBuffer | null {
