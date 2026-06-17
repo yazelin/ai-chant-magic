@@ -39,6 +39,9 @@ export interface MatchOptions {
   // loadout). A matched-but-disallowed spell is skipped and scanning continues,
   // so the result is the first *allowed* match or null. Omit for legacy behavior.
   allowed?: Set<SpellId>;
+  // Player-customized chant phrases, additive to each spell's built-in aliases
+  // (the original names still work). Same first-match-wins/longest-alias rules.
+  extra?: Partial<Record<SpellId, string[]>>;
 }
 
 // True if `needle` occurs in `hay` as a substring, or a same-length window of
@@ -76,11 +79,24 @@ export function matchSpell(transcript: string, opts: MatchOptions): SpellId | nu
     hay = hay.slice(end); // only match the spell name after the jumon
   }
 
+  // Pick the spell whose matched alias is the LONGEST (most specific). This
+  // prevents a short generic alias of one spell from shadowing a longer, more
+  // specific name of another — e.g. fireball's 'fire' is a substring of
+  // 'firestorm', but 'firestorm' (len 9) must win over 'fire' (len 4). Ties
+  // resolve to the first spell in iteration order.
+  let best: SpellId | null = null;
+  let bestLen = 0;
   for (const def of Object.values(SPELLS)) {
     if (opts.allowed && !opts.allowed.has(def.id)) continue; // skip disallowed spells, keep scanning
-    for (const alias of def.aliases) {
-      if (containsFuzzy(hay, normalize(alias))) return def.id;
+    const extra = opts.extra?.[def.id];
+    const aliases = extra ? [...def.aliases, ...extra] : def.aliases;
+    for (const alias of aliases) {
+      const n = normalize(alias);
+      if (n.length > bestLen && containsFuzzy(hay, n)) {
+        best = def.id;
+        bestLen = n.length;
+      }
     }
   }
-  return null;
+  return best;
 }

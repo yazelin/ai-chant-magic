@@ -180,31 +180,24 @@ describe('two-client ws integration smoke (B3)', () => {
       expect(firstSnapA.world.players).toHaveLength(2);
       expect(firstSnapB.world.players).toHaveLength(2);
 
-      // --- A casts fireball (pyro loadout) ---------------------------------
-      // Face along +x and queue a fireball cast; the server aggregates this
-      // into the next tick's commands -> sim spawns a fireball projectile.
-      sendMsg(a, { type: 'input', seq: 1, face: 0, casts: ['fireball'] });
+      // --- A casts 黑暗詠唱 (pyro loadout) ----------------------------------
+      // pyro's chant has no cooldown and stacks 爆裂 charge while spawning an
+      // aura effect; the server aggregates it into the next tick's commands.
+      sendMsg(a, { type: 'input', seq: 1, face: 0, casts: ['chant1'] });
 
-      // A later snapshot must show the fireball as a live projectile. A pyro
-      // fireball travels for CONFIG.fireball.ttl (1.5s) before it expires into
-      // a 'blast' effect, so across the 50ms tick stream it is observable as a
-      // projectile of spell 'fireball'. (As a fallback, an early-collision case
-      // would surface a 'blast' transient effect — accepted too so the smoke
-      // stays robust to enemy placement, but the projectile is the primary
-      // assertion since the arena starts empty.)
+      // A later snapshot must reflect the cast: an aura transient effect and/or
+      // the caster's 爆裂 charge having ticked up.
       const evidence = await waitForMatch(
         a,
         'snapshot',
         (m) =>
-          m.world.projectiles.some((pr) => pr.spell === 'fireball') ||
-          m.world.effects.some((fx) => fx.kind === 'blast')
+          m.world.effects.some((fx) => fx.kind === 'aura') ||
+          m.world.players.some((p) => (p.pyroCharge ?? 0) > 0)
       );
 
-      const hasFireballProjectile = evidence.world.projectiles.some(
-        (pr) => pr.spell === 'fireball'
-      );
-      const hasBlastEffect = evidence.world.effects.some((fx) => fx.kind === 'blast');
-      expect(hasFireballProjectile || hasBlastEffect).toBe(true);
+      const hasAura = evidence.world.effects.some((fx) => fx.kind === 'aura');
+      const hasCharge = evidence.world.players.some((p) => (p.pyroCharge ?? 0) > 0);
+      expect(hasAura || hasCharge).toBe(true);
     },
     15000
   );

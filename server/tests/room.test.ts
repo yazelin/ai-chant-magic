@@ -112,15 +112,14 @@ describe('Room.applyInput buffering (spec §15.1)', () => {
   });
 
   it('appends ALL casts across multiple input messages in a tick', () => {
-    // pyro can cast fireball; two queued fireballs would both be processed,
-    // but the 2nd is on cooldown. So queue a fireball then a shield: both fire.
+    // pyro's chants have no cooldown and each adds 1 爆裂 charge; queue one in
+    // each input message in the same tick — BOTH must apply (charge → 2).
     const room = new Room('AAAA', member('host', 'pyro'));
     room.start();
-    room.applyInput('host', { casts: ['fireball'] });
-    room.applyInput('host', { casts: ['shield'] });
+    room.applyInput('host', { casts: ['chant1'] });
+    room.applyInput('host', { casts: ['chant2'] });
     const snap = room.tick(0.05)!;
-    // fireball spawns a projectile; shield spawns an aura effect.
-    expect(snap.projectiles.some((pr) => pr.spell === 'fireball')).toBe(true);
+    expect(snap.players.find((p) => p.id === 'host')!.pyroCharge).toBe(2);
     expect(snap.effects.some((fx) => fx.kind === 'aura')).toBe(true);
   });
 
@@ -156,28 +155,21 @@ describe('Room.applyInput buffering (spec §15.1)', () => {
   it('filters an unknown/bogus cast so it never reaches the sim', () => {
     const room = new Room('AAAA', member('host', 'pyro'));
     room.start();
-    // 'notaspell' is not a real spell id; only the real 'fireball' should fire.
-    room.applyInput('host', { casts: ['notaspell', 'fireball'] as never });
+    // 'notaspell' is not a real spell id; only the real 'chant1' should apply.
+    room.applyInput('host', { casts: ['notaspell', 'chant1'] as never });
     const snap = room.tick(0.05)!;
-    expect(snap.projectiles.some((pr) => pr.spell === 'fireball')).toBe(true);
-    // No projectile carries the bogus spell id.
-    expect(snap.projectiles.some((pr) => (pr.spell as string) === 'notaspell')).toBe(false);
+    expect(snap.players.find((p) => p.id === 'host')!.pyroCharge).toBe(1); // only the valid cast applied
   });
 
   it('buffered inputs are drained each tick (not replayed next tick)', () => {
     const room = new Room('AAAA', member('host', 'pyro'));
     room.start();
-    room.applyInput('host', { casts: ['fireball'] });
+    room.applyInput('host', { casts: ['chant1'] });
     const first = room.tick(0.05)!;
-    const projsAfterFirst = first.projectiles.filter((pr) => pr.spell === 'fireball').length;
-    expect(projsAfterFirst).toBe(1);
-    // No new input -> next tick must not spawn another fireball.
+    expect(first.players.find((p) => p.id === 'host')!.pyroCharge).toBe(1);
+    // No new input -> next tick must NOT replay the buffered cast (charge stays 1).
     const second = room.tick(0.05)!;
-    const newFireballs = second.projectiles.filter(
-      (pr) => pr.spell === 'fireball'
-    ).length;
-    // The original projectile may still be flying, but no SECOND one is added.
-    expect(newFireballs).toBeLessThanOrEqual(1);
+    expect(second.players.find((p) => p.id === 'host')!.pyroCharge).toBe(1);
   });
 });
 

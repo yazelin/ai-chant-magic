@@ -18,6 +18,7 @@ function zeroCooldowns(): Record<SpellId, number> {
   return {
     fireball: 0, firestorm: 0, frost: 0, frostnova: 0,
     thunder: 0, chain: 0, shield: 0, aegis: 0, heal: 0, holybolt: 0,
+    chant1: 0, chant2: 0, mend: 0, repulse: 0,
   };
 }
 
@@ -119,6 +120,7 @@ export function step(
   updateWaves(world, dt, rng);
   updateEnemies(world, dt);
   updateRevives(world, dt);
+  updateRegen(world, dt);
   updateProjectiles(world, dt);
   decayEffects(world, dt);
 
@@ -158,7 +160,14 @@ function movePlayers(world: World, moveDirs: Map<string, Vec2>, dt: number): voi
 function castSpell(world: World, caster: Player, spell: SpellId): void {
   if (world.time < caster.cooldowns[spell]) return;          // on cooldown
   if (!classSpellSet(caster.classId).has(spell)) return;     // not in loadout
-  caster.cooldowns[spell] = world.time + SPELLS[spell].cooldown;
+  // 爆裂魔法 needs ≥1 charge; abort (no cooldown spent) if none stacked yet.
+  if (spell === 'firestorm' && (caster.pyroCharge ?? 0) < 1) return;
+  if (spell === 'firestorm') {
+    // cooldown scales with the charge being consumed: bigger blast → longer recovery.
+    caster.cooldowns[spell] = world.time + CONFIG.firestorm.baseCd + (caster.pyroCharge ?? 0) * CONFIG.firestorm.cdPerCharge;
+  } else {
+    caster.cooldowns[spell] = world.time + SPELLS[spell].cooldown;
+  }
 
   switch (spell) {
     case 'fireball':
@@ -166,8 +175,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         CONFIG.fireball.speed, 0, CONFIG.fireball.radius, CONFIG.fireball.ttl);
       break;
     case 'holybolt':
-      spawnFacingProjectile(world, caster, 'holybolt',
-        CONFIG.holybolt.speed, CONFIG.holybolt.damage, CONFIG.holybolt.radius, CONFIG.holybolt.ttl);
+      castHolyburst(world, caster);
       break;
     case 'frost': {
       const count = CONFIG.frost.count;
@@ -181,13 +189,47 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       break;
     }
     case 'firestorm': {
-      // Slow fused mortar: explodes on enemy contact OR when ttl expires.
+      // 爆裂魔法: slow fused mortar whose explosion scales with the stacked charge,
+      // then the charge is consumed.
+      const charge = caster.pyroCharge ?? 0;
+      const exDmg = CONFIG.firestorm.explosionDamage * charge;
+      const exRadius = Math.min(
+        CONFIG.firestorm.maxRadius,
+        CONFIG.firestorm.baseRadius + CONFIG.firestorm.perChargeRadius * charge,
+      );
       const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
       spawnProjectile(world, caster, 'firestorm', dir,
         CONFIG.firestorm.speed, 0, CONFIG.firestorm.radius, CONFIG.firestorm.ttl,
-        CONFIG.firestorm.ttl);
+        CONFIG.firestorm.ttl, exDmg, exRadius);
+      caster.pyroCharge = 0; // consumed
       break;
     }
+    case 'chant1':
+    case 'chant2':
+      // No-cooldown chant: stack 爆裂 charge (no damage). Small aura to show the chant.
+      caster.pyroCharge = (caster.pyroCharge ?? 0) + CONFIG.chant.chargePerCast;
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.player.radius * 1.5,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES.pyro.color,
+      });
+      break;
+    case 'mend': {
+      // 精靈自癒: self-only heal-over-time.
+      caster.healUntil = world.time + CONFIG.mend.duration;
+      caster.healRate = CONFIG.mend.rate;
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.player.radius * 2,
+        ttl: CONFIG.mend.duration, colorHint: CLASSES.cryo.color,
+      });
+      break;
+    }
+    case 'repulse':
+      castRepulse(world, caster);
+      break;
     case 'frostnova':
       castFrostnova(world, caster);
       break;
@@ -222,17 +264,19 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       break;
     }
     case 'heal': {
+      // Heal-over-time: grant regen to allies in radius (applied in updateRegen).
       for (const ally of world.players) {
         if (!ally.alive || ally.downed) continue;
         if (dist(caster.pos, ally.pos) <= CONFIG.heal.radius) {
-          ally.hp = Math.min(ally.maxHp, ally.hp + CONFIG.heal.amount);
+          ally.healUntil = world.time + CONFIG.heal.duration;
+          ally.healRate = CONFIG.heal.rate;
         }
       }
       pushEffect(world, {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.heal.radius,
-        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+        ttl: CONFIG.heal.duration, colorHint: CLASSES[caster.classId].color, // lingers the whole HoT
       });
       break;
     }
@@ -241,12 +285,15 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
   }
 }
 
-// frostnova — instant self-centred AoE: damage + slow enemies in radius, nova fx.
+// frostnova (「冰結」) — instant self-centred AoE: damage + FREEZE enemies in
+// radius (fully stopped, not just slowed). slowUntil is set too so the existing
+// blue tint shows during the freeze.
 function castFrostnova(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
     if (dist(caster.pos, e.pos) <= CONFIG.frostnova.radius + e.radius) {
       e.hp -= CONFIG.frostnova.damage;
+      e.frozenUntil = world.time + CONFIG.frostnova.slowDuration;
       e.slowUntil = world.time + CONFIG.frostnova.slowDuration;
     }
   }
@@ -259,24 +306,90 @@ function castFrostnova(world: World, caster: Player): void {
   removeDeadEnemies(world);
 }
 
-// thunder — hitscan ray along facing; damage enemies within `width`, beam fx.
-function castThunder(world: World, caster: Player): void {
+// repulse (「電磁斥力」) — self-centred burst: damage enemies in radius and shove
+// them outward (knockback, clamped to the arena) to keep them off 美琴.
+function castRepulse(world: World, caster: Player): void {
   const o = caster.pos;
-  const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
     const rel = sub(e.pos, o);
-    const along = rel.x * dir.x + rel.y * dir.y;          // distance along the ray
-    if (along < 0 || along > CONFIG.thunder.range) continue;
-    const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x); // perpendicular offset
-    if (perp <= CONFIG.thunder.width + e.radius) e.hp -= CONFIG.thunder.damage;
+    const d = len(rel);
+    if (d <= CONFIG.repulse.radius + e.radius) {
+      e.hp -= CONFIG.repulse.damage;
+      const ux = d > 0.001 ? rel.x / d : 1;
+      const uy = d > 0.001 ? rel.y / d : 0;
+      e.pos.x = Math.max(0, Math.min(CONFIG.arenaWidth, e.pos.x + ux * CONFIG.repulse.knockback));
+      e.pos.y = Math.max(0, Math.min(CONFIG.arenaHeight, e.pos.y + uy * CONFIG.repulse.knockback));
+    }
   }
   pushEffect(world, {
-    kind: 'beam', ownerId: caster.id,
+    kind: 'nova', ownerId: caster.id,
     a: { x: o.x, y: o.y },
-    b: { x: o.x + dir.x * CONFIG.thunder.range, y: o.y + dir.y * CONFIG.thunder.range },
-    ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
+    radius: CONFIG.repulse.radius,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.storm.color,
   });
+  removeDeadEnemies(world);
+}
+
+// holybolt (「聖光」) — self-centred holy burst: damage enemies within radius
+// (Jeanne's kit is all self-centred — no aiming). Gold nova fx.
+function castHolyburst(world: World, caster: Player): void {
+  for (const e of world.enemies) {
+    if (e.hp <= 0) continue;
+    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= CONFIG.holybolt.damage;
+  }
+  pushEffect(world, {
+    kind: 'nova', ownerId: caster.id,
+    a: { x: caster.pos.x, y: caster.pos.y },
+    radius: CONFIG.holybolt.radius,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.warden.color,
+  });
+  removeDeadEnemies(world);
+}
+
+// thunder (「超電磁砲」) — hitscan ray along facing that REFLECTS off the arena
+// walls up to maxBounces times, drawing a folded beam. Each segment damages
+// enemies within `width`; damage decays by bounceFalloff per bounce.
+function castThunder(world: World, caster: Player): void {
+  const W = CONFIG.arenaWidth, H = CONFIG.arenaHeight;
+  const width = CONFIG.thunder.width;
+  let o = { x: caster.pos.x, y: caster.pos.y };
+  let dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
+  let remaining: number = CONFIG.thunder.range;
+  let dmg: number = CONFIG.thunder.damage;
+  const hit = new Set<number>(); // each enemy takes damage at most once per cast
+
+  for (let b = 0; b <= CONFIG.thunder.maxBounces; b++) {
+    // nearest wall hit within the remaining length
+    let segLen = remaining;
+    let axis: 'x' | 'y' | null = null;
+    if (dir.x > 1e-6) { const t = (W - o.x) / dir.x; if (t < segLen) { segLen = t; axis = 'x'; } }
+    else if (dir.x < -1e-6) { const t = -o.x / dir.x; if (t < segLen) { segLen = t; axis = 'x'; } }
+    if (dir.y > 1e-6) { const t = (H - o.y) / dir.y; if (t < segLen) { segLen = t; axis = 'y'; } }
+    else if (dir.y < -1e-6) { const t = -o.y / dir.y; if (t < segLen) { segLen = t; axis = 'y'; } }
+    const end = { x: o.x + dir.x * segLen, y: o.y + dir.y * segLen };
+
+    for (const e of world.enemies) {
+      if (e.hp <= 0 || hit.has(e.id)) continue;
+      const rel = sub(e.pos, o);
+      const along = rel.x * dir.x + rel.y * dir.y;
+      if (along < 0 || along > segLen) continue;
+      const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x);
+      if (perp <= width + e.radius) { e.hp -= dmg; hit.add(e.id); }
+    }
+    pushEffect(world, {
+      kind: 'beam', ownerId: caster.id,
+      a: { x: o.x, y: o.y }, b: end,
+      ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
+    });
+
+    remaining -= segLen;
+    if (remaining <= 1 || axis === null) break; // out of range, or ended in open space
+    if (axis === 'x') dir = { x: -dir.x, y: dir.y };
+    else dir = { x: dir.x, y: -dir.y };
+    o = { x: end.x + dir.x * 0.5, y: end.y + dir.y * 0.5 }; // nudge off the wall
+    dmg *= CONFIG.thunder.bounceFalloff;
+  }
   removeDeadEnemies(world);
 }
 
@@ -318,7 +431,8 @@ function spawnFacingProjectile(
 
 function spawnProjectile(
   world: World, caster: Player, spell: SpellId, dir: Vec2,
-  speed: number, damage: number, radius: number, ttl: number, fuse?: number
+  speed: number, damage: number, radius: number, ttl: number, fuse?: number,
+  explosionDamage?: number, explosionRadius?: number
 ): void {
   world.projectiles.push({
     id: world.nextEntityId++,
@@ -326,7 +440,7 @@ function spawnProjectile(
     ownerId: caster.id,
     pos: { x: caster.pos.x, y: caster.pos.y },
     vel: { x: dir.x * speed, y: dir.y * speed },
-    damage, radius, ttl, fuse,
+    damage, radius, ttl, fuse, explosionDamage, explosionRadius,
   });
 }
 
@@ -369,7 +483,8 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
       return false;
     case 'firestorm':
       explodeAoE(world, proj.pos, proj.ownerId,
-        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
+        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
       return true; // detonated on contact; fuse loop must skip it
     case 'frost':
       hit.hp -= proj.damage;
@@ -411,7 +526,8 @@ function updateProjectiles(world: World, dt: number): void {
     if (proj.spell === 'firestorm' && proj.fuse !== undefined &&
         proj.ttl <= 0 && !detonated.has(proj.id)) {
       explodeAoE(world, proj.pos, proj.ownerId,
-        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
+        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
     }
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
@@ -445,6 +561,14 @@ function enterDowned(world: World, p: Player): void {
   p.reviveProgress = 0;
 }
 
+// Heal-over-time tick: regen alive, non-downed players whose 治療術 is active.
+function updateRegen(world: World, dt: number): void {
+  for (const p of world.players) {
+    if (!p.alive || p.downed) continue;
+    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + (p.healRate ?? CONFIG.heal.rate) * dt);
+  }
+}
+
 function updateEnemies(world: World, dt: number): void {
   for (const e of world.enemies) {
     const target = nearestAlivePlayer(world, e.pos);
@@ -452,7 +576,8 @@ function updateEnemies(world: World, dt: number): void {
     if (!target) continue;
     const toP = sub(target.pos, e.pos);
     const d = len(toP);
-    const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
+    const frozen = world.time < (e.frozenUntil ?? 0);
+    const speed = frozen ? 0 : world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
     if (d > 1) {
       const move = scale(toP, (speed * dt) / d);
       e.pos.x += move.x;

@@ -27,7 +27,7 @@ interface SpeechRecognitionLike {
   onend: (() => void) | null;
 }
 
-const RESTART_DELAY_MS = 350;
+const RESTART_DELAY_MS = 150;
 
 // Swappable voice input. Web Speech now; a local Whisper / in-browser Whisper
 // implementation could implement this same interface later.

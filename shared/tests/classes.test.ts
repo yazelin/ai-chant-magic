@@ -38,9 +38,9 @@ describe('classes', () => {
   });
 
   it('gives each class its expected loadout', () => {
-    expect(new Set(CLASSES.pyro.spells)).toEqual(new Set<SpellId>(['fireball', 'firestorm', 'shield']));
-    expect(new Set(CLASSES.cryo.spells)).toEqual(new Set<SpellId>(['frost', 'frostnova', 'shield']));
-    expect(new Set(CLASSES.storm.spells)).toEqual(new Set<SpellId>(['thunder', 'chain', 'shield']));
+    expect(new Set(CLASSES.pyro.spells)).toEqual(new Set<SpellId>(['chant1', 'chant2', 'firestorm']));
+    expect(new Set(CLASSES.cryo.spells)).toEqual(new Set<SpellId>(['frost', 'frostnova', 'mend']));
+    expect(new Set(CLASSES.storm.spells)).toEqual(new Set<SpellId>(['thunder', 'chain', 'repulse']));
   });
 
   it('has distinct shapes and colors per class', () => {

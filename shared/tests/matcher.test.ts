@@ -78,10 +78,10 @@ describe('matchSpell — per-class allowed filtering', () => {
     ).toBe('heal');
   });
 
-  it('matches a spell inside the pyro loadout (pyro + 火球術 → fireball)', () => {
+  it('matches a spell inside the pyro loadout (pyro + 爆裂魔法 → firestorm)', () => {
     expect(
-      matchSpell('火球術', { ...mueisho, allowed: classSpellSet('pyro') })
-    ).toBe('fireball');
+      matchSpell('爆裂魔法', { ...mueisho, allowed: classSpellSet('pyro') })
+    ).toBe('firestorm');
   });
 
   it('keeps scanning past a disallowed alias to the first allowed match', () => {
@@ -99,10 +99,44 @@ describe('matchSpell — per-class allowed filtering', () => {
   it('honors allowed filtering in eisho mode', () => {
     const eisho = { mode: 'eisho' as const, jumon: '我命汝顯現' };
     expect(
-      matchSpell('我命汝顯現火球術', { ...eisho, allowed: classSpellSet('warden') })
+      matchSpell('我命汝顯現爆裂魔法', { ...eisho, allowed: classSpellSet('warden') })
     ).toBeNull();
     expect(
-      matchSpell('我命汝顯現火球術', { ...eisho, allowed: classSpellSet('pyro') })
-    ).toBe('fireball');
+      matchSpell('我命汝顯現爆裂魔法', { ...eisho, allowed: classSpellSet('pyro') })
+    ).toBe('firestorm');
+  });
+});
+
+describe('matchSpell — broadened firestorm / shield aliases', () => {
+  const pyro = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('pyro') };
+
+  it('matches firestorm via easier-to-recognize variants', () => {
+    for (const t of ['火海', '火焰', '烈焰', '大火', '火燄', 'firestorm', 'flame']) {
+      expect(matchSpell(t, pyro)).toBe('firestorm');
+    }
+  });
+
+  // shield + fireball are no longer in any class loadout (kept as defined spells);
+  // test their aliases on the legacy no-allowed path.
+  const legacy = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
+
+  it('matches shield via multi-char variants (legacy/no-loadout)', () => {
+    for (const t of ['護盾', '護盾術', '盾牌', '護罩', '防護罩', '結界', 'shield']) {
+      expect(matchSpell(t, legacy)).toBe('shield');
+    }
+  });
+
+  it('still distinguishes fireball from firestorm by longest alias', () => {
+    expect(matchSpell('火球', legacy)).toBe('fireball');
+    expect(matchSpell('火球術', legacy)).toBe('fireball');
+    expect(matchSpell('火海', legacy)).toBe('firestorm');
+  });
+
+  it('does not let shield aliases swallow aegis (聖盾 → aegis for warden)', () => {
+    const warden = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('warden') };
+    expect(matchSpell('聖盾', warden)).toBe('aegis');
+    // even on the legacy no-allowed path, 聖盾 must not match shield now that
+    // bare '盾' was dropped from shield's aliases
+    expect(matchSpell('聖盾', { mode: 'mueisho', jumon: '我命汝顯現' })).toBe('aegis');
   });
 });

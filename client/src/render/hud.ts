@@ -12,16 +12,38 @@ const MIC_LABEL: Record<VoiceStatus, string> = {
 export class Hud {
   private hud: HTMLElement;
   private mic: HTMLElement;
+  private heard: HTMLElement;
   private selfClass: ClassId;
 
   constructor(selfClass: ClassId) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
     this.selfClass = selfClass;
+    // "Last heard" line: shows exactly what speech recognition transcribed and
+    // whether it matched a spell — the fastest way to debug why a spell name
+    // isn't firing (the transcript rarely equals what you think you said).
+    this.heard = document.createElement('div');
+    this.heard.id = 'heard';
+    this.heard.style.cssText =
+      'font-size:13px;color:#8a8ca0;min-height:18px;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    this.mic.parentElement?.appendChild(this.heard);
   }
 
   setMicStatus(s: VoiceStatus, message?: string): void {
     this.mic.textContent = message && message.length > 0 ? `麥克風:${message}` : MIC_LABEL[s];
+  }
+
+  // Show the latest recognized transcript and whether it mapped to a spell.
+  setHeard(text: string, matchedSpellName: string | null): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (matchedSpellName) {
+      this.heard.style.color = '#ffb15a';
+      this.heard.textContent = `聽到:「${trimmed}」 → ${matchedSpellName} ✓`;
+    } else {
+      this.heard.style.color = '#8a8ca0';
+      this.heard.textContent = `聽到:「${trimmed}」 → 未對應法術`;
+    }
   }
 
   render(world: World): void {
@@ -35,7 +57,9 @@ export class Hud {
           const pct = Math.round(Math.max(0, Math.min(1, p.reviveProgress)) * 100);
           return `${p.name}(${cls}):倒地 ${pct}%`;
         }
-        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}`;
+        // 惠惠: show the stacked 爆裂 charge so the player knows their explosion power.
+        const charge = p.classId === 'pyro' ? `(爆裂充能 ${p.pyroCharge ?? 0})` : '';
+        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}${charge}`;
       })
       .join(' ｜ ');
 
