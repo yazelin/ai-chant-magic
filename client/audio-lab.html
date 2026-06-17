@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>音效實驗室 — ai-chant-magic</title>
+<style>
+  body { margin:0; background:#0b0b14; color:#e8e8f0; font:15px/1.6 system-ui,sans-serif; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .hint { color:#9aa0b5; font-size:13px; margin-bottom:20px; }
+  h2 { font-size:14px; color:#9aa0b5; text-transform:uppercase; letter-spacing:.05em; margin:22px 0 10px; }
+  .grid { display:flex; flex-wrap:wrap; gap:10px; }
+  button { background:#1d1d36; color:#e8e8f0; border:1px solid #33335a; border-radius:9px;
+           padding:12px 16px; font-size:15px; cursor:pointer; font-family:inherit; min-width:130px; }
+  button:hover { background:#2a2a4d; }
+  button.on { background:#2a1f4d; border-color:#b06cff; }
+  #music-state { color:#ffd24d; font-size:13px; margin-top:10px; min-height:18px; }
+  a { color:#8fb7ff; }
+</style>
+</head>
+<body>
+  <h1>音效實驗室</h1>
+  <div class="hint">開發用:直接聽程序合成的 SFX 與自適應音樂,不必開遊戲。首次點任一鈕會啟動音訊。← <a href="/dev.html">回工具箱</a></div>
+
+  <h2>音效 SFX(事件表)</h2>
+  <div class="grid" id="sfx"></div>
+
+  <h2>背景音樂(自適應,隨波數)</h2>
+  <div class="grid">
+    <button id="m-start">▶ 開始</button>
+    <button id="m-stop">⏹ 停止</button>
+  </div>
+  <h2>強度(切換落在下一小節,無縫)</h2>
+  <div class="grid" id="intensity"></div>
+  <div id="music-state">未播放</div>
+
+  <script type="module" src="/src/audio-lab.ts"></script>
+</body>
+</html>

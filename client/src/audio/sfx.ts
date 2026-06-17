@@ -225,3 +225,123 @@ export function sfxExplosion(big = false): void {
     // ignore
   }
 }
+
+// --- Event SFX table -------------------------------------------------------
+// Small reusable helpers so each event sound is a few lines. All best-effort.
+
+// A pitched blip: an oscillator sweeping fStart→fEnd with a snappy envelope.
+function blip(type: OscillatorType, fStart: number, fEnd: number, dur: number, peak: number): void {
+  if (!ctx || !master) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(fStart, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(1, fEnd), now + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  osc.connect(g);
+  g.connect(master);
+  osc.start(now);
+  osc.stop(now + dur + 0.02);
+}
+
+// A short ascending arpeggio of square/triangle notes (for level-up / new wave).
+function arp(freqs: number[], step: number, type: OscillatorType, peak: number): void {
+  if (!ctx || !master) return;
+  const now = ctx.currentTime;
+  freqs.forEach((f, i) => {
+    const t = now + i * step;
+    const osc = ctx!.createOscillator();
+    osc.type = type;
+    osc.frequency.value = f;
+    const g = ctx!.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + step * 1.6);
+    osc.connect(g);
+    g.connect(master!);
+    osc.start(t);
+    osc.stop(t + step * 1.6 + 0.02);
+  });
+}
+
+// HIT / KILL — a quick "啵": square 200→70Hz + a tiny lowpass noise tick.
+export function sfxHit(): void {
+  try {
+    blip('square', 200, 70, 0.12, 0.4);
+    const src = noiseSource();
+    if (!ctx || !master || !src) return;
+    const now = ctx.currentTime;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 600;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.3, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(now, Math.random() * 0.5, 0.1); src.stop(now + 0.12);
+  } catch { /* ignore */ }
+}
+
+// HURT — harsh sawtooth 300→90Hz downslide.
+export function sfxHurt(): void {
+  try { blip('sawtooth', 300, 90, 0.18, 0.45); } catch { /* ignore */ }
+}
+
+// HEAL — gentle 784 + 1046Hz sine chime.
+export function sfxHeal(): void {
+  try { arp([784, 1046], 0.09, 'sine', 0.32); } catch { /* ignore */ }
+}
+
+// ZAP — thunder/chain crackle: high square zap + brief noise.
+export function sfxZap(): void {
+  try {
+    blip('square', 1400, 500, 0.1, 0.3);
+    const src = noiseSource();
+    if (!ctx || !master || !src) return;
+    const now = ctx.currentTime;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 2000;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.25, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    src.connect(hp); hp.connect(g); g.connect(master);
+    src.start(now, Math.random() * 0.5, 0.1); src.stop(now + 0.12);
+  } catch { /* ignore */ }
+}
+
+// FROST — icy shimmer: high sine + descending bandpass noise.
+export function sfxFrost(): void {
+  try {
+    blip('triangle', 1800, 900, 0.2, 0.22);
+    const src = noiseSource();
+    if (!ctx || !master || !src) return;
+    const now = ctx.currentTime;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(3000, now);
+    bp.frequency.exponentialRampToValueAtTime(1200, now + 0.2);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.18, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(now, Math.random() * 0.5, 0.22); src.stop(now + 0.24);
+  } catch { /* ignore */ }
+}
+
+// SHIELD — protective rising shimmer.
+export function sfxShield(): void {
+  try { blip('sine', 400, 800, 0.25, 0.3); blip('triangle', 600, 1000, 0.25, 0.18); } catch { /* ignore */ }
+}
+
+// NEW WAVE — bright ascending C-E-G-C arpeggio.
+export function sfxWave(): void {
+  try { arp([523, 659, 784, 1046], 0.08, 'square', 0.26); } catch { /* ignore */ }
+}
+
+// PLAYER DOWN/DEATH — long 420→60Hz sine downslide.
+export function sfxDeath(): void {
+  try { blip('sine', 420, 60, 0.7, 0.4); } catch { /* ignore */ }
+}
