@@ -1,4 +1,6 @@
 import { ClassId, CLASSES, SPELLS } from '@acm/shared';
+import { SKILL_INFO } from './skillInfo';
+import { SHEET_WALKERS } from '../render/walkSheets';
 import { GameSession } from '../session/GameSession';
 import { LocalSession } from '../session/LocalSession';
 import { NetSession } from '../session/NetSession';
@@ -58,23 +60,27 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>真。AI。咏唱魔法</h1>
-      <div class="sub">語音咏唱 · 2–4 人連線 co-op · 暗黑秘術</div>
-      <label for="lobby-name">召喚師名稱</label>
-      <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
-      <label>選擇職業</label>
-      <div class="class-cards" id="lobby-classes"></div>
-      <div class="btns">
-        <button id="btn-create" class="primary">建立房間</button>
-        <button id="btn-join">輸入代碼加入</button>
-        <button id="btn-quick">快速加入</button>
-        <button id="btn-solo">單機</button>
+      <div class="sub">語音咏唱 · 2–4 人連線 co-op · 暗黑秘術 · 點角色卡選擇職業</div>
+      <div class="showcase">
+        <div id="lobby-showcase" style="display:contents"></div>
+        <div class="center-panel">
+          <label for="lobby-name">召喚師名稱</label>
+          <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
+          <div class="practice-placeholder" id="practice-area">詠唱練習區(下一步開放:對著麥克風喊技能名,練習詠唱)</div>
+          <div class="btns">
+            <button id="btn-create" class="primary">建立房間</button>
+            <button id="btn-join">輸入代碼加入</button>
+            <button id="btn-quick">快速加入</button>
+            <button id="btn-solo">單機</button>
+          </div>
+          <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}</div>
+          ${
+            showSetupHint
+              ? `<div class="hint">此頁面為 HTTPS 但未設定伺服器。請以 <code>?server=wss://…</code> 指定伺服器,或直接「單機」遊玩。</div>`
+              : ''
+          }
+        </div>
       </div>
-      <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}</div>
-      ${
-        showSetupHint
-          ? `<div class="hint">此頁面為 HTTPS 但未設定伺服器。請以 <code>?server=wss://…</code> 指定伺服器,或直接「單機」遊玩。</div>`
-          : ''
-      }
     `;
 
     const nameEl = this.root.querySelector<HTMLInputElement>('#lobby-name')!;
@@ -82,7 +88,7 @@ export class Lobby {
       this.name = nameEl.value;
     });
 
-    this.renderClassCards();
+    this.renderShowcase();
 
     this.root.querySelector('#btn-create')!.addEventListener('click', () => this.doNet('create'));
     this.root.querySelector('#btn-join')!.addEventListener('click', () => this.doJoinByCode());
@@ -90,23 +96,41 @@ export class Lobby {
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
   }
 
-  private renderClassCards(): void {
-    const host = this.root.querySelector('#lobby-classes')!;
+  // Home showcase: one animated card per class in the four corners. The card
+  // walks (CSS sprite animation over the walk sheet), shows the class name, and
+  // lists its 3 skills with effect + live numbers (from SKILL_INFO). Clicking a
+  // card selects that class for the game we start.
+  private renderShowcase(): void {
+    const host = this.root.querySelector('#lobby-showcase');
+    if (!host) return;
     host.innerHTML = '';
+    const AREA: Record<ClassId, string> = { pyro: 'a', cryo: 'b', storm: 'c', warden: 'd' };
     for (const id of CLASS_ORDER) {
       const def = CLASSES[id];
+      const sw = SHEET_WALKERS[id];
       const card = document.createElement('div');
-      card.className = 'class-card' + (id === this.classId ? ' selected' : '');
+      card.className = 'char-card' + (id === this.classId ? ' selected' : '');
       card.style.color = def.color;
-      const spellNames = def.spells.map((s) => SPELLS[s].displayName).join('、');
+      card.style.gridArea = AREA[id];
+      const skills = def.spells
+        .map((s) => {
+          const k = SKILL_INFO[s];
+          return `<li class="skill"><div class="sn">${escapeHtml(k.name)}</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
+        })
+        .join('');
+      let sprite = '';
+      if (sw) {
+        const dur = (sw.frames / 9).toFixed(2); // ≈9fps, close to in-game 10
+        sprite = `background-image:url(${sw.url});background-size:${sw.frames * 96}px 96px;animation:walk${sw.frames} ${dur}s steps(${sw.frames}) infinite`;
+      }
       card.innerHTML = `
-        <div class="glyph">${SHAPE_GLYPH[def.shape] ?? '◆'}</div>
-        <div class="cname" style="color:${def.color}">${def.displayName}</div>
-        <div class="spells">${escapeHtml(spellNames)}</div>
+        <div class="walk-sprite" style="${sprite}"></div>
+        <div class="cname" style="color:${def.color}">${escapeHtml(def.displayName)}</div>
+        <ul class="skills">${skills}</ul>
       `;
       card.addEventListener('click', () => {
         this.classId = id;
-        this.renderClassCards();
+        this.renderShowcase();
       });
       host.appendChild(card);
     }

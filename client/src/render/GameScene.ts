@@ -12,6 +12,7 @@ import {
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
 import { initAudio, sfxCast, sfxFireball, sfxExplosion } from '../audio/sfx';
+import { SHEET_WALKERS, sheetWalkerKey } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
 // player's texture is just `player.classId`; enemies share one 'enemy' key.
@@ -23,20 +24,6 @@ const SPRITES: Array<{ key: string; url: string }> = [
   { key: 'warden', url: new URL('../assets/warden.png', import.meta.url).href },
   { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
 ];
-
-// Sheet-walker classes: all four mages are 128x128 walk-cycle spritesheets,
-// side-view facing LEFT, feet near the bottom. Idle = frame 0 (no separate
-// idle/cast art). Made with tools/sprite-forge. Add a class here + drop its
-// <class>-walk.png in assets to give it a walk animation.
-// idleFrame = the most feet-together frame in the sheet, shown when standing
-// still (auto-picked by narrowest leg stance) so idle isn't a mid-stride pose.
-const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number; idleFrame: number }>> = {
-  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8, idleFrame: 0 },
-  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5, idleFrame: 4 },
-  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5, idleFrame: 4 },
-  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5, idleFrame: 3 },
-};
-const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
 // from each texture's real pixel height so source art can be any size.

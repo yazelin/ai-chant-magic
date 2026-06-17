@@ -22,7 +22,7 @@
 
       /* --- Lobby (dark arcane) ------------------------------------------- */
       #lobby {
-        width: 100%; max-width: 720px; margin: 24px auto;
+        width: 100%; max-width: 980px; margin: 24px auto;
         background: radial-gradient(120% 120% at 50% 0%, #15152c 0%, #0b0b14 80%);
         border: 1px solid var(--edge); border-radius: 14px; padding: 24px;
         box-shadow: 0 0 40px rgba(120, 80, 220, 0.15);
@@ -67,6 +67,40 @@
       .members .waiting { color: var(--muted); }
       #lobby .error { color: #ff8d8d; font-size: 13px; margin-top: 12px; min-height: 18px; }
       #lobby .hint { color: #ffd24d; font-size: 13px; margin-top: 12px; }
+
+      /* --- Home showcase: 4 character cards in the corners + center panel - */
+      .showcase {
+        display: grid; gap: 14px; align-items: stretch;
+        grid-template-columns: 1fr 1.15fr 1fr;
+        grid-template-areas: "a center b" "c center d";
+      }
+      .char-card {
+        background: var(--panel); border: 2px solid var(--edge); border-radius: 12px;
+        padding: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+        transition: all 0.12s;
+      }
+      .char-card:hover { background: var(--panel-2); }
+      .char-card.selected { box-shadow: 0 0 0 1px currentColor, 0 0 20px -4px currentColor; }
+      .char-card .walk-sprite { width: 96px; height: 96px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
+      .char-card .cname { font-size: 16px; font-weight: 700; margin-top: 2px; }
+      .char-card .skills { list-style: none; padding: 0; margin: 8px 0 0; width: 100%; }
+      .char-card .skill { background: #0d0d1c; border: 1px solid var(--edge); border-radius: 7px; padding: 5px 8px; margin-bottom: 5px; text-align: left; }
+      .char-card .skill .sn { font-size: 13px; font-weight: 600; color: var(--ink); }
+      .char-card .skill .se { font-size: 11px; color: var(--muted); }
+      .char-card .skill .ss { font-size: 10px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 1px; }
+      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+      .practice-placeholder {
+        background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px;
+        padding: 18px; text-align: center; color: var(--muted); font-size: 13px; min-height: 80px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      @keyframes walk4 { to { background-position-x: -384px; } }
+      @keyframes walk5 { to { background-position-x: -480px; } }
+      @keyframes walk6 { to { background-position-x: -576px; } }
+      @keyframes walk8 { to { background-position-x: -768px; } }
+      @media (max-width: 680px) {
+        .showcase { grid-template-columns: 1fr 1fr; grid-template-areas: "a b" "c d" "center center"; }
+      }
 
       /* --- In-game chrome (hidden until a session starts) ----------------- */
       #game-chrome { display: none; }
