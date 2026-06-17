@@ -1,5 +1,5 @@
 import { ClassId, CLASSES, SPELLS, SpellId, matchSpell, JUMON } from '@acm/shared';
-import { SKILL_INFO } from './skillInfo';
+import { SKILL_INFO, castType } from './skillInfo';
 import { SHEET_WALKERS } from '../render/walkSheets';
 import { WebSpeechVoiceInput } from '../voice/recognizer';
 import { GameSession } from '../session/GameSession';
@@ -230,7 +230,8 @@ export class Lobby {
       const skills = def.spells
         .map((s) => {
           const k = SKILL_INFO[s];
-          return `<li class="skill" data-spell="${s}"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
+          const tip = `<div class="tip"><div class="tip-name">「${escapeHtml(k.name)}」</div><div class="tip-cast">施法:${escapeHtml(castType(s))}</div><div class="tip-detail">${escapeHtml(k.detail)}</div><div class="tip-stats">${escapeHtml(k.stats)}</div></div>`;
+          return `<li class="skill" data-spell="${s}"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
         })
         .join('');
       let sprite = '';
