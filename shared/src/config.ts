@@ -9,7 +9,7 @@ export const CONFIG = {
   fireball: { speed: 420, radius: 8, ttl: 1.5, explosionRadius: 60, explosionDamage: 30 },
   firestorm: { speed: 300, radius: 10, ttl: 1.1, explosionRadius: 200, explosionDamage: 70 },
   frost:    { speed: 360, radius: 6, ttl: 1.2, damage: 18, slowDuration: 2, spread: 0.25, count: 3 },
-  frostnova: { radius: 150, damage: 14, slowDuration: 2.5 },
+  frostnova: { radius: 150, damage: 20, slowDuration: 2.5 },
   thunder:  { range: 500, width: 28, damage: 55 },
   chain:    { range: 260, jumpRange: 170, maxJumps: 4, damage: 34, falloff: 0.75 },
   holybolt: { speed: 460, radius: 7, ttl: 1.2, damage: 26 },
