@@ -28,11 +28,13 @@ const SPRITES: Array<{ key: string; url: string }> = [
 // side-view facing LEFT, feet near the bottom. Idle = frame 0 (no separate
 // idle/cast art). Made with tools/sprite-forge. Add a class here + drop its
 // <class>-walk.png in assets to give it a walk animation.
-const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number }>> = {
-  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8 },
-  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5 },
-  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5 },
-  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5 },
+// idleFrame = the most feet-together frame in the sheet, shown when standing
+// still (auto-picked by narrowest leg stance) so idle isn't a mid-stride pose.
+const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number; idleFrame: number }>> = {
+  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8, idleFrame: 0 },
+  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5, idleFrame: 4 },
+  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5, idleFrame: 4 },
+  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5, idleFrame: 3 },
 };
 const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 
@@ -687,6 +689,7 @@ export class GameScene extends Phaser.Scene {
     const walkAnim = sw?.anim ?? '';
     const idleKey = isSheet ? sheetWalkerKey(pl.classId) : '';
     const castKey = idleKey;
+    const idleFrame = sw?.idleFrame ?? 0; // feet-together frame for standing/cast
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -717,7 +720,7 @@ export class GameScene extends Phaser.Scene {
       sprite.anims.stop();
       if (isAnimated) {
         if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
-        sprite.setFrame(0);
+        sprite.setFrame(idleFrame);
         sprite.setOrigin(0.5, WALKER_ORIGIN_Y);
         sprite.setScale(WALKER_SCALE);
         sprite.setPosition(x, y + WALKER_GROUND_OFFSET);
@@ -749,7 +752,7 @@ export class GameScene extends Phaser.Scene {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
         if (sprite.texture.key !== castKey) sprite.setTexture(castKey);
-        if (isSheet) sprite.setFrame(0); // no cast frame yet → hold neutral
+        if (isSheet) sprite.setFrame(idleFrame); // no cast art yet → hold idle pose
       } else if (moving) {
         // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
         sprite.play(walkAnim, true);
@@ -761,7 +764,7 @@ export class GameScene extends Phaser.Scene {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
         if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
-        if (isSheet) sprite.setFrame(0);
+        if (isSheet) sprite.setFrame(idleFrame);
       }
 
       // The walk frames carry the motion; keep only a tiny idle bob.
