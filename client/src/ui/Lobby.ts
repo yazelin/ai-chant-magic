@@ -1,5 +1,6 @@
 import { ClassId, CLASSES, SPELLS, SpellId, matchSpell, JUMON } from '@acm/shared';
 import { SKILL_INFO, castType } from './skillInfo';
+import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
 import { WebSpeechVoiceInput } from '../voice/recognizer';
 import { GameSession } from '../session/GameSession';
@@ -180,7 +181,7 @@ export class Lobby {
   private onPracticeTranscript(text: string): void {
     const heard = this.root.querySelector('#heard');
     if (heard) heard.textContent = text || '—';
-    const id = matchSpell(text, { mode: 'mueisho', jumon: JUMON });
+    const id = matchSpell(text, { mode: 'mueisho', jumon: JUMON, extra: chantsAsExtra() });
     if (id) this.flashHit(id);
   }
 
@@ -230,8 +231,9 @@ export class Lobby {
       const skills = def.spells
         .map((s) => {
           const k = SKILL_INFO[s];
-          const tip = `<div class="tip"><div class="tip-name">「${escapeHtml(k.name)}」</div><div class="tip-cast">施法:${escapeHtml(castType(s))}</div><div class="tip-detail">${escapeHtml(k.detail)}</div><div class="tip-stats">${escapeHtml(k.stats)}</div></div>`;
-          return `<li class="skill" data-spell="${s}"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
+          const phrase = chantFor(s, k.name); // custom chant or default name
+          const tip = `<div class="tip"><div class="tip-name">「${escapeHtml(phrase)}」</div><div class="tip-cast">施法:${escapeHtml(castType(s))}</div><div class="tip-detail">${escapeHtml(k.detail)}</div><div class="tip-stats">${escapeHtml(k.stats)}</div></div>`;
+          return `<li class="skill" data-spell="${s}"><div class="chant-row"><div class="chant">「${escapeHtml(phrase)}」</div><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
         })
         .join('');
       let sprite = '';
@@ -252,6 +254,19 @@ export class Lobby {
       });
       host.appendChild(card);
     }
+    // per-skill "改" buttons: edit the chant phrase (stopPropagation so the card
+    // doesn't also get selected). Saved to localStorage; applies to practice + game.
+    host.querySelectorAll<HTMLButtonElement>('.edit-chant').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sid = b.dataset.edit as SpellId;
+        const cur = chantFor(sid, SKILL_INFO[sid].name);
+        const next = window.prompt(`設定「${SKILL_INFO[sid].name}」的詠唱詞(留空=還原預設):`, cur);
+        if (next === null) return; // cancelled
+        setChant(sid, next);
+        this.renderShowcase();
+      });
+    });
   }
 
   private effectiveName(): string {

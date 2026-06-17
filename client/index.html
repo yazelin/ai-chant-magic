@@ -115,7 +115,13 @@
       .char-card .skill .tip-cast { font-size: 12px; color: var(--accent); margin: 4px 0; }
       .char-card .skill .tip-detail { font-size: 13px; color: var(--ink); line-height: 1.6; }
       .char-card .skill .tip-stats { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 8px; border-top: 1px solid var(--edge); padding-top: 6px; }
+      .char-card .skill .chant-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
       .char-card .skill .chant { font-size: 19px; font-weight: 700; letter-spacing: 1px; color: var(--ink); line-height: 1.25; }
+      .char-card .skill .edit-chant {
+        flex: 0 0 auto; background: transparent; color: var(--muted); border: 1px solid var(--edge);
+        border-radius: 6px; padding: 1px 7px; font-size: 11px; cursor: pointer; font-family: inherit;
+      }
+      .char-card .skill .edit-chant:hover { color: var(--ink); border-color: var(--accent); }
       .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
       .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
       .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center; gap: 10px; }

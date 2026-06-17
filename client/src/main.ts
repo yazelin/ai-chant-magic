@@ -12,6 +12,7 @@ import {
 } from '@acm/shared';
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
+import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio } from './audio/sfx';
 
@@ -72,7 +73,7 @@ function startGame(session: GameSession, classId: ClassId): void {
   const voice = new WebSpeechVoiceInput('zh-TW');
   voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
   voice.onTranscript((text) => {
-    const spell = matchSpell(text, { mode, jumon: JUMON, allowed });
+    const spell = matchSpell(text, { mode, jumon: JUMON, allowed, extra: chantsAsExtra() });
     hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
     if (spell) session.sendCast(spell);
   });
