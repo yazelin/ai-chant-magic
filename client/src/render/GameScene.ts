@@ -33,12 +33,16 @@ const LPC_PYRO_CAST = new URL('../assets/lpc-pyro-cast.png', import.meta.url).hr
 const LPC_PYRO_FRAME = { width: 128, height: 128 };
 const PYRO_WALK_ANIM = 'pyro-walk';
 
-// Warden (white Jeanne): a walk-cycle spritesheet of 128x128 cells, same
-// left-facing / feet-near-bottom convention as the pyro LPC art so it reuses
-// the pyro scale/origin constants. Idle = frame 0 (no separate idle/cast art yet).
-const WARDEN_WALK = new URL('../assets/warden-walk.png', import.meta.url).href;
-const WARDEN_WALK_ANIM = 'warden-walk';
-const WARDEN_WALK_FRAMES = 5; // ponytail: bump if we re-pick more frames
+// Sheet-walker classes: a walk-cycle spritesheet of 128x128 cells, same
+// left-facing / feet-near-bottom convention as the pyro LPC art so they reuse
+// the pyro scale/origin constants. Idle = frame 0 (no separate idle/cast art
+// yet). Made with tools/sprite-forge. Add a class here + drop its <class>-walk.png
+// in assets to give it a walk animation. (pyro stays special: dedicated idle/cast.)
+const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number }>> = {
+  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5 },
+  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 4 },
+};
+const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
 // from each texture's real pixel height so source art can be any size.
@@ -143,8 +147,10 @@ export class GameScene extends Phaser.Scene {
     });
     this.load.image('lpc-pyro-idle', LPC_PYRO_IDLE);
     this.load.image('lpc-pyro-cast', LPC_PYRO_CAST);
-    // Warden walk-cycle sheet (128x128 cells).
-    this.load.spritesheet('warden-walk', WARDEN_WALK, { frameWidth: 128, frameHeight: 128 });
+    // Sheet-walker classes (128x128 cells).
+    for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
+      this.load.spritesheet(sheetWalkerKey(cls), SHEET_WALKERS[cls]!.url, { frameWidth: 128, frameHeight: 128 });
+    }
   }
 
   create(): void {
@@ -163,13 +169,16 @@ export class GameScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-    if (!this.anims.exists(WARDEN_WALK_ANIM)) {
-      this.anims.create({
-        key: WARDEN_WALK_ANIM,
-        frames: this.anims.generateFrameNumbers('warden-walk', { start: 0, end: WARDEN_WALK_FRAMES - 1 }),
-        frameRate: 10,
-        repeat: -1,
-      });
+    for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
+      const sw = SHEET_WALKERS[cls]!;
+      if (!this.anims.exists(sw.anim)) {
+        this.anims.create({
+          key: sw.anim,
+          frames: this.anims.generateFrameNumbers(sheetWalkerKey(cls), { start: 0, end: sw.frames - 1 }),
+          frameRate: 10,
+          repeat: -1,
+        });
+      }
     }
 
     this.session.start();
@@ -694,12 +703,13 @@ export class GameScene extends Phaser.Scene {
     const x = pl.pos.x;
     const y = pl.pos.y;
     const isPyro = pl.classId === 'pyro';
-    const isWarden = pl.classId === 'warden';
-    const isAnimated = isPyro || isWarden; // classes that use a walk-cycle sheet
-    // texture keys per animated class (warden has no separate idle/cast yet → frame 0)
-    const walkAnim = isWarden ? WARDEN_WALK_ANIM : PYRO_WALK_ANIM;
-    const idleKey = isWarden ? 'warden-walk' : 'lpc-pyro-idle';
-    const castKey = isWarden ? 'warden-walk' : 'lpc-pyro-cast';
+    const sw = SHEET_WALKERS[pl.classId]; // sheet-walker config, if any
+    const isSheet = !!sw; // walk sheet, idle = frame 0, no cast art
+    const isAnimated = isPyro || isSheet; // classes that play a walk-cycle anim
+    // texture keys per animated class (sheet walkers have no separate idle/cast → frame 0)
+    const walkAnim = isSheet ? sw!.anim : PYRO_WALK_ANIM;
+    const idleKey = isSheet ? sheetWalkerKey(pl.classId) : 'lpc-pyro-idle';
+    const castKey = isSheet ? sheetWalkerKey(pl.classId) : 'lpc-pyro-cast';
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -762,7 +772,7 @@ export class GameScene extends Phaser.Scene {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
         if (sprite.texture.key !== castKey) sprite.setTexture(castKey);
-        if (isWarden) sprite.setFrame(0); // no cast frame yet → hold neutral
+        if (isSheet) sprite.setFrame(0); // no cast frame yet → hold neutral
       } else if (moving) {
         // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
         sprite.play(walkAnim, true);
@@ -774,7 +784,7 @@ export class GameScene extends Phaser.Scene {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
         if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
-        if (isWarden) sprite.setFrame(0);
+        if (isSheet) sprite.setFrame(0);
       }
 
       // The walk frames carry the motion; keep only a tiny idle bob.
