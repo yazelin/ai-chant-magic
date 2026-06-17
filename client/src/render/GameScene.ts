@@ -11,7 +11,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
-import { initAudio, sfxCast, sfxFireball, sfxExplosion, sfxFrost, sfxZap, sfxShield, sfxHeal } from '../audio/sfx';
+import { initAudio, sfxExplosion, sfxSpell } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
@@ -422,7 +422,8 @@ export class GameScene extends Phaser.Scene {
       const st = byId.get(p.ownerId);
       // A freshly-set castUntil means a new owned projectile appeared this frame.
       if (st) st.castUntil = this.t + CAST_POSE_SECS;
-      if (!castPlayed) { this.castSfxForProjectile(p.spell); castPlayed = true; }
+      // Each spell carries its own id → its own dedicated cast SFX.
+      if (!castPlayed) { sfxSpell(p.spell); castPlayed = true; }
     }
     for (const fx of w.effects) {
       if (this.seenFx.has(fx.id)) continue;
@@ -430,41 +431,12 @@ export class GameScene extends Phaser.Scene {
       if (fx.ownerId) {
         const st = byId.get(fx.ownerId);
         if (st) st.castUntil = this.t + CAST_POSE_SECS;
-        // Per-element cast sound for effect-based spells (blast carries its own
-        // explosion boom via onBlast, so don't double it with a cast sound).
-        if (fx.kind !== 'blast' && !castPlayed) { this.castSfxForEffect(fx); castPlayed = true; }
+        // Per-skill cast sound (effects now carry their spell id). Blast carries
+        // its own explosion boom via onBlast, so don't double it with a cast sound.
+        if (fx.kind !== 'blast' && fx.spell && !castPlayed) { sfxSpell(fx.spell); castPlayed = true; }
       }
       if (fx.kind === 'blast') this.onBlast(fx);
     }
-  }
-
-  // Per-spell cast SFX for projectile spells (the projectile carries its spell id).
-  private castSfxForProjectile(spell: SpellId): void {
-    if (spell === 'fireball' || spell === 'firestorm') sfxFireball();
-    else if (spell === 'frost') sfxFrost();
-    else sfxCast();
-  }
-
-  // Per-element cast SFX for effect-based spells. Effects don't carry a spell id,
-  // but kind + class colour identify the element well enough: beam/chain = 電,
-  // nova by class colour (cryo 冰 / warden 聖 / storm 斥), aura by class colour
-  // (cryo/warden = 治癒系, pyro = 詠唱 shimmer).
-  private castSfxForEffect(fx: TransientEffect): void {
-    const c = fx.colorHint;
-    if (fx.kind === 'beam' || fx.kind === 'chain') { sfxZap(); return; }
-    if (fx.kind === 'nova') {
-      if (c === CLASSES.cryo.color) sfxFrost();
-      else if (c === CLASSES.warden.color) sfxShield();
-      else if (c === CLASSES.storm.color) sfxZap();
-      else sfxCast();
-      return;
-    }
-    if (fx.kind === 'aura') {
-      if (c === CLASSES.cryo.color || c === CLASSES.warden.color) sfxHeal();
-      else sfxCast(); // pyro 詠唱 shimmer
-      return;
-    }
-    sfxCast();
   }
 
   // One-shot blast impact. A normal fireball gets a snappy ember burst + brief
