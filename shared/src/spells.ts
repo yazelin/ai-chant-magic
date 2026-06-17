@@ -34,7 +34,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   chant1:    { id: 'chant1',    displayName: '黑暗',     aliases: ['黑暗', '黑暗詠唱', '詠唱一', 'darkchant'],         cooldown: 0,   kind: 'buff-self',    directional: false },
   chant2:    { id: 'chant2',    displayName: '深淵',     aliases: ['深淵', '深淵詠唱', '詠唱二', 'abysschant'],        cooldown: 0,   kind: 'buff-self',    directional: false },
   mend:      { id: 'mend',      displayName: '精靈自癒', aliases: ['精靈自癒', '自癒', '精靈護佑', 'mend'],            cooldown: 8,   kind: 'heal-self',    directional: false },
-  repulse:   { id: 'repulse',   displayName: '電磁斥力', aliases: ['電磁斥力', '斥力', '電磁力場', '排斥', 'repulse'],  cooldown: 6,   kind: 'aoe-self',     directional: false },
+  repulse:   { id: 'repulse',   displayName: '鐵砂之劍', aliases: ['鐵砂之劍', '鐵砂劍', '鐵砂', '沙鐵劍', 'ironsand'],  cooldown: 6,   kind: 'aoe-self',     directional: false },
 };
 
 // Default incantation (呪文) required before a spell name in 詠唱(eishō) mode.

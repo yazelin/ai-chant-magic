@@ -47,6 +47,6 @@ export const SKILL_INFO: Record<SpellId, SkillInfo> = {
   chant1:    { name: '黑暗',            effect: '蓄力,+1 爆裂充能',       stats: `+${CONFIG.chant.chargePerCast} 充能 · 無冷卻`, detail: '惠惠的中二詠唱(其一):喊「黑暗」即可,無冷卻、可一直喊,每次 +1 爆裂充能,本身不造成傷害。充能愈高,之後的爆裂魔法愈強。' },
   chant2:    { name: '深淵',            effect: '蓄力,+1 爆裂充能',       stats: `+${CONFIG.chant.chargePerCast} 充能 · 無冷卻`, detail: '惠惠的中二詠唱(其二):喊「深淵」即可,無冷卻、可一直喊,每次 +1 爆裂充能。跟「黑暗」一起無限疊,堆愈多爆裂愈猛。' },
   mend:      { name: '精靈自癒',        effect: '自身持續回血',           stats: `每秒回 ${CONFIG.mend.rate} · 持續 ${CONFIG.mend.duration}s · 冷卻 ${SPELLS.mend.cooldown}s`, detail: `愛蜜莉雅與准精靈契約的自我治癒:只補自己,每秒回 ${CONFIG.mend.rate} 點、持續 ${CONFIG.mend.duration}s(共 ${CONFIG.mend.rate * CONFIG.mend.duration} 點)。` },
-  repulse:   { name: '電磁斥力',        effect: '自身範圍傷害 + 擊退',     stats: `傷害 ${CONFIG.repulse.damage} · 範圍 ${CONFIG.repulse.radius} · 擊退 ${CONFIG.repulse.knockback} · 冷卻 ${SPELLS.repulse.cooldown}s`, detail: '御坂用電磁力向外爆發斥力:對周圍敵人造成傷害並把牠們推開,製造安全距離、不讓怪貼身。類似護身的解圍技。' },
+  repulse:   { name: '鐵砂之劍',        effect: '近距離橫掃 + 擊退',       stats: `傷害 ${CONFIG.repulse.damage} · 範圍 ${CONFIG.repulse.radius} · 擊退 ${CONFIG.repulse.knockback} · 冷卻 ${SPELLS.repulse.cooldown}s`, detail: '御坂用磁力將鐵砂聚成利刃橫掃身周:對近處敵人造成傷害,並以磁力斥力把牠們擊退、拉開安全距離,不讓怪貼身。' },
   holybolt:  { name: '聖光',            effect: '自身範圍聖光爆',         stats: `傷害 ${CONFIG.holybolt.damage} · 冷卻 ${SPELLS.holybolt.cooldown}s · 範圍 ${CONFIG.holybolt.radius}`, detail: '以自身為中心爆發聖光,對周圍範圍內所有敵人造成傷害。冷卻極短,貞德站在隊伍中央邊奶邊脈衝輸出。' },
 };
