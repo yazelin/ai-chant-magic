@@ -14,6 +14,15 @@ import {
 
 const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 
+// Character names shown on the home cards (flavour); the class role (CLASSES
+// displayName) stays the system name used in-game and the room list.
+const CHAR_NAMES: Record<ClassId, string> = {
+  pyro: '惠惠',
+  cryo: '愛蜜莉雅',
+  storm: '御坂美琴',
+  warden: '貞德',
+};
+
 // A simple glyph per class shape (the in-game render uses real polygons; the
 // lobby card just needs a recognizable hint of the placeholder shape).
 const SHAPE_GLYPH: Record<string, string> = {
@@ -125,7 +134,8 @@ export class Lobby {
       }
       card.innerHTML = `
         <div class="walk-sprite" style="${sprite}"></div>
-        <div class="cname" style="color:${def.color}">${escapeHtml(def.displayName)}</div>
+        <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
+        <div class="crole">${escapeHtml(def.displayName)}</div>
         <ul class="skills">${skills}</ul>
       `;
       card.addEventListener('click', () => {
