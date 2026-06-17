@@ -24,24 +24,15 @@ const SPRITES: Array<{ key: string; url: string }> = [
   { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
 ];
 
-// LPC fire-mage pyro: a 9-frame walk-cycle spritesheet plus single idle/cast
-// frames. All three are 64x64 cells, side-view facing LEFT, character fills most
-// of the cell with feet near the bottom.
-const LPC_PYRO_WALK = new URL('../assets/lpc-pyro-walk.png', import.meta.url).href;
-const LPC_PYRO_IDLE = new URL('../assets/lpc-pyro-idle.png', import.meta.url).href;
-const LPC_PYRO_CAST = new URL('../assets/lpc-pyro-cast.png', import.meta.url).href;
-const LPC_PYRO_FRAME = { width: 128, height: 128 };
-const PYRO_WALK_ANIM = 'pyro-walk';
-
-// Sheet-walker classes: a walk-cycle spritesheet of 128x128 cells, same
-// left-facing / feet-near-bottom convention as the pyro LPC art so they reuse
-// the pyro scale/origin constants. Idle = frame 0 (no separate idle/cast art
-// yet). Made with tools/sprite-forge. Add a class here + drop its <class>-walk.png
-// in assets to give it a walk animation. (pyro stays special: dedicated idle/cast.)
+// Sheet-walker classes: all four mages are 128x128 walk-cycle spritesheets,
+// side-view facing LEFT, feet near the bottom. Idle = frame 0 (no separate
+// idle/cast art). Made with tools/sprite-forge. Add a class here + drop its
+// <class>-walk.png in assets to give it a walk animation.
 const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number }>> = {
-  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5 },
+  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8 },
   cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5 },
   storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5 },
+  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5 },
 };
 const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 
@@ -50,17 +41,18 @@ const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
-// LPC pyro: the 64px cell is mostly filled by the character, so a fixed scale
+// Walk sprites use 128px cells mostly filled by the character; a fixed scale
 // that lands the on-screen height around ~58px reads right.
-const PYRO_TARGET_H = 58;
-const PYRO_SCALE = PYRO_TARGET_H / LPC_PYRO_FRAME.height; // ≈ 0.906
+const WALKER_FRAME_H = 128;
+const WALKER_TARGET_H = 58;
+const WALKER_SCALE = WALKER_TARGET_H / WALKER_FRAME_H; // ≈ 0.453
 // Feet sit near the bottom of the cell; origin-y near the bottom + a tiny world
-// offset so the mage looks grounded at its world pos (like the old centered
-// sprites). Higher origin-y = the art's feet land closer to the world pos.
-const PYRO_ORIGIN_Y = 0.82;
+// offset so the mage looks grounded at its world pos. Higher origin-y = the
+// art's feet land closer to the world pos.
+const WALKER_ORIGIN_Y = 0.82;
 // Small downward nudge so the feet read as planted at the player pos rather than
-// slightly above it (tune by eyeball alongside PYRO_ORIGIN_Y).
-const PYRO_GROUND_OFFSET = 4;
+// slightly above it (tune by eyeball alongside WALKER_ORIGIN_Y).
+const WALKER_GROUND_OFFSET = 4;
 
 const DEPTH_ENEMY = 5;
 const DEPTH_PLAYER = 10;
@@ -141,14 +133,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     for (const s of SPRITES) this.load.image(s.key, s.url);
-    // LPC fire-mage pyro: walk-cycle spritesheet (9 frames of 64x64) + idle/cast.
-    this.load.spritesheet('lpc-pyro-walk', LPC_PYRO_WALK, {
-      frameWidth: LPC_PYRO_FRAME.width,
-      frameHeight: LPC_PYRO_FRAME.height,
-    });
-    this.load.image('lpc-pyro-idle', LPC_PYRO_IDLE);
-    this.load.image('lpc-pyro-cast', LPC_PYRO_CAST);
-    // Sheet-walker classes (128x128 cells).
+    // Sheet-walker classes (128x128 cells) — all four mages.
     for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
       this.load.spritesheet(sheetWalkerKey(cls), SHEET_WALKERS[cls]!.url, { frameWidth: 128, frameHeight: 128 });
     }
@@ -160,16 +145,8 @@ export class GameScene extends Phaser.Scene {
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
     this.makeVfxTextures();
 
-    // Define the pyro walk animation once. Guard against double-create when the
+    // Define each walk animation once. Guard against double-create when the
     // scene restarts (anims live on the global AnimationManager).
-    if (!this.anims.exists(PYRO_WALK_ANIM)) {
-      this.anims.create({
-        key: PYRO_WALK_ANIM,
-        frames: this.anims.generateFrameNumbers('lpc-pyro-walk', { start: 0, end: 8 }),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
     for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
       const sw = SHEET_WALKERS[cls]!;
       if (!this.anims.exists(sw.anim)) {
@@ -703,14 +680,13 @@ export class GameScene extends Phaser.Scene {
     const r = CONFIG.player.radius;
     const x = pl.pos.x;
     const y = pl.pos.y;
-    const isPyro = pl.classId === 'pyro';
     const sw = SHEET_WALKERS[pl.classId]; // sheet-walker config, if any
     const isSheet = !!sw; // walk sheet, idle = frame 0, no cast art
-    const isAnimated = isPyro || isSheet; // classes that play a walk-cycle anim
-    // texture keys per animated class (sheet walkers have no separate idle/cast → frame 0)
-    const walkAnim = isSheet ? sw!.anim : PYRO_WALK_ANIM;
-    const idleKey = isSheet ? sheetWalkerKey(pl.classId) : 'lpc-pyro-idle';
-    const castKey = isSheet ? sheetWalkerKey(pl.classId) : 'lpc-pyro-cast';
+    const isAnimated = isSheet; // every mage is now a sheet walker
+    // texture keys (sheet walkers have no separate idle/cast art → frame 0)
+    const walkAnim = sw?.anim ?? '';
+    const idleKey = isSheet ? sheetWalkerKey(pl.classId) : '';
+    const castKey = idleKey;
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -742,9 +718,9 @@ export class GameScene extends Phaser.Scene {
       if (isAnimated) {
         if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
         sprite.setFrame(0);
-        sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
-        sprite.setScale(PYRO_SCALE);
-        sprite.setPosition(x, y + PYRO_GROUND_OFFSET);
+        sprite.setOrigin(0.5, WALKER_ORIGIN_Y);
+        sprite.setScale(WALKER_SCALE);
+        sprite.setPosition(x, y + WALKER_GROUND_OFFSET);
       } else {
         if (sprite.texture.key !== pl.classId) sprite.setTexture(pl.classId);
         sprite.setOrigin(0.5, 0.5);
@@ -794,9 +770,9 @@ export class GameScene extends Phaser.Scene {
 
       // Feet near the cell bottom + small ground nudge so the mage looks
       // planted at its world pos rather than floating/sunk.
-      sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
-      sprite.setScale(PYRO_SCALE * punch);
-      sprite.setPosition(x, y + PYRO_GROUND_OFFSET + yOffset);
+      sprite.setOrigin(0.5, WALKER_ORIGIN_Y);
+      sprite.setScale(WALKER_SCALE * punch);
+      sprite.setPosition(x, y + WALKER_GROUND_OFFSET + yOffset);
     } else {
       // --- other classes: single legacy texture, unchanged look ---
       sprite.anims.stop();
