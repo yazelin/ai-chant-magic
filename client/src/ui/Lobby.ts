@@ -19,10 +19,18 @@ const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 // "shout the spell name to cast" gimmick. NOT anime character names, so the
 // handle never clashes with the character you control.
 const RANDOM_NAMES = [
+  // 通用「吼叫詠唱」梗
   '嘴砲法師', '純靠吼', '詠唱中勿擾', '法術冷卻中', '喉嚨已陣亡', '收音不良',
-  '麥克風測試中', '一秒爆裂', '隊友剋星', '安全距離大師', '我先撤退', '爆裂狂熱者',
-  '嘴遁忍者', '鍵盤召喚師', '喊不準協會', '今天也很大聲', '別吵我詠唱', '等我喝口水',
-  '戰術性後仰', '用吼的就贏',
+  '麥克風測試中', '隊友剋星', '安全距離大師', '我先撤退', '喊不準協會',
+  '今天也很大聲', '別吵我詠唱', '等我喝口水', '戰術性後仰', '用吼的就贏',
+  // 為美好世界(惠惠)
+  '每日一爆', '沒用女神', '抖M十字騎士',
+  // Re:Zero(愛蜜莉雅)
+  '死亡回歸', '從零開始', '蹲下來談談',
+  // 科學超電磁砲(御坂美琴)
+  '嗶哩嗶哩', '這份不幸', '三萬個妹妹',
+  // Fate(貞德)
+  '人被殺就會死', '身體由劍構成', '誓約勝利之劍',
 ];
 function randomName(): string {
   return RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
