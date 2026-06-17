@@ -119,6 +119,7 @@ export function step(
   updateWaves(world, dt, rng);
   updateEnemies(world, dt);
   updateRevives(world, dt);
+  updateRegen(world, dt);
   updateProjectiles(world, dt);
   decayEffects(world, dt);
 
@@ -221,17 +222,18 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       break;
     }
     case 'heal': {
+      // Heal-over-time: grant regen to allies in radius (applied in updateRegen).
       for (const ally of world.players) {
         if (!ally.alive || ally.downed) continue;
         if (dist(caster.pos, ally.pos) <= CONFIG.heal.radius) {
-          ally.hp = Math.min(ally.maxHp, ally.hp + CONFIG.heal.amount);
+          ally.healUntil = world.time + CONFIG.heal.duration;
         }
       }
       pushEffect(world, {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.heal.radius,
-        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+        ttl: CONFIG.heal.duration, colorHint: CLASSES[caster.classId].color, // lingers the whole HoT
       });
       break;
     }
@@ -486,6 +488,14 @@ function enterDowned(world: World, p: Player): void {
   p.hp = 0;
   p.bleedoutAt = world.time + CONFIG.bleedout.time;
   p.reviveProgress = 0;
+}
+
+// Heal-over-time tick: regen alive, non-downed players whose 治療術 is active.
+function updateRegen(world: World, dt: number): void {
+  for (const p of world.players) {
+    if (!p.alive || p.downed) continue;
+    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + CONFIG.heal.rate * dt);
+  }
 }
 
 function updateEnemies(world: World, dt: number): void {

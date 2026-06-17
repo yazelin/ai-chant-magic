@@ -41,6 +41,6 @@ export const SKILL_INFO: Record<SpellId, SkillInfo> = {
   chain:     { name: '電擊鞭',          effect: '連鎖閃電,最多跳 4 個',  stats: `傷害 ${CONFIG.chain.damage} · 冷卻 ${SPELLS.chain.cooldown}s · 跳躍 ${CONFIG.chain.maxJumps}`, detail: `從最近的敵人開始連鎖閃電,最多跳 ${CONFIG.chain.maxJumps} 個目標,每跳傷害遞減為 ${Math.round(CONFIG.chain.falloff * 100)}%。清成群雜兵的神技。` },
   shield:    { name: '護盾',            effect: '自身護盾',               stats: `持續 ${CONFIG.shield.duration}s · 冷卻 ${SPELLS.shield.cooldown}s`, detail: '為自身張開護盾,持續數秒,擋下期間受到的傷害。三系法師共通的自保技。' },
   aegis:     { name: '永恆閃耀·聖盾',   effect: '全隊護盾',               stats: `持續 ${CONFIG.aegis.duration}s · 範圍 ${CONFIG.aegis.radius} · 冷卻 ${SPELLS.aegis.cooldown}s`, detail: '揮舞聖旗,為範圍內所有隊友(含自己)張開聖盾。貞德的團隊保命寶具,危急時的最後防線。' },
-  heal:      { name: '治療術',          effect: '治療範圍內隊友',         stats: `治療 ${CONFIG.heal.amount} · 範圍 ${CONFIG.heal.radius} · 冷卻 ${SPELLS.heal.cooldown}s`, detail: '治療範圍內所有存活隊友(含自己),恢復生命值。貞德的續航核心,讓隊伍站得更久。' },
+  heal:      { name: '治療術',          effect: '範圍隊友持續回血',       stats: `每秒回 ${CONFIG.heal.rate} · 持續 ${CONFIG.heal.duration}s · 範圍 ${CONFIG.heal.radius} · 冷卻 ${SPELLS.heal.cooldown}s`, detail: `為範圍內所有存活隊友(含自己)附加持續回血:每秒恢復 ${CONFIG.heal.rate} 點、持續 ${CONFIG.heal.duration}s(共 ${CONFIG.heal.rate * CONFIG.heal.duration} 點),不是瞬補。貞德的續航核心。` },
   holybolt:  { name: '聖光',            effect: '自身範圍聖光爆',         stats: `傷害 ${CONFIG.holybolt.damage} · 冷卻 ${SPELLS.holybolt.cooldown}s · 範圍 ${CONFIG.holybolt.radius}`, detail: '以自身為中心爆發聖光,對周圍範圍內所有敵人造成傷害。冷卻極短,貞德站在隊伍中央邊奶邊脈衝輸出。' },
 };

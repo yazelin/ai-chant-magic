@@ -14,6 +14,9 @@ export interface Player {
   alive: boolean; downed: boolean;
   bleedoutAt: number; reviveProgress: number; respawnAtWave: number;
   shieldUntil: number;
+  // Heal-over-time (治療術) active until this sim time. Sim-only — not in the
+  // snapshot; the regen is applied server-side, so the client sees hp rise.
+  healUntil?: number;
   cooldowns: Record<SpellId, number>;
   connected: boolean;
 }

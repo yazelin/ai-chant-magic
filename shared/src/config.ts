@@ -3,7 +3,7 @@ export const CONFIG = {
   player: { speed: 200, maxHp: 100, radius: 14 },
   contactDps: 20,
   shield: { duration: 2.5 }, aegis: { duration: 3, radius: 160 },
-  heal: { amount: 28, radius: 150, cooldown: 7 },
+  heal: { rate: 10, duration: 4, radius: 150, cooldown: 7 }, // HoT: rate/sec over duration
   revive: { radius: 70, time: 3, hp: 40 },        // ally channels over `time` s
   bleedout: { time: 8 },                           // downed -> dead if not revived
   fireball: { speed: 420, radius: 8, ttl: 1.5, explosionRadius: 60, explosionDamage: 30 },

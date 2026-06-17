@@ -518,12 +518,15 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     b.hp = 20;
     c.hp = 0; c.downed = true;
     d.hp = d.maxHp - 2; // would overflow without cap
-    step(w, [{ kind: 'cast', playerId: 'a', spell: 'heal' }], 0.016);
-    expect(a.hp).toBeCloseTo(a.maxHp); // self healed (capped)
-    expect(b.hp).toBeCloseTo(20 + CONFIG.heal.amount); // hurt ally healed
-    expect(c.hp).toBe(0); // downed ally skipped
-    expect(d.hp).toBe(d.maxHp); // capped at maxHp
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'heal' }], 0.016); // grants HoT to a/b/d
     expect(w.effects.some((e) => e.kind === 'aura')).toBe(true);
+    // tick past the full heal duration so the regen lands
+    for (let i = 0; i < 270; i++) step(w, [], 0.016);
+    expect(a.hp).toBe(a.maxHp); // self regenerated, capped
+    expect(b.hp).toBeGreaterThanOrEqual(20 + CONFIG.heal.rate * CONFIG.heal.duration - 1); // ~+40 over time
+    expect(b.hp).toBeLessThanOrEqual(b.maxHp);
+    expect(c.hp).toBe(0); // downed ally skipped (never got the HoT)
+    expect(d.hp).toBe(d.maxHp); // capped at maxHp
   });
 });
 
