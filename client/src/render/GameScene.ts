@@ -11,7 +11,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
-import { initAudio, sfxCast, sfxFireball, sfxExplosion } from '../audio/sfx';
+import { initAudio, sfxCast, sfxFireball, sfxExplosion, sfxFrost, sfxZap, sfxShield, sfxHeal } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
@@ -61,6 +61,11 @@ function hexColor(s: string): number {
   return parseInt(s.replace('#', ''), 16);
 }
 
+// Health-bar fill colour by remaining fraction: green → yellow → red.
+function hpColor(frac: number): number {
+  return frac > 0.5 ? 0x6fe39a : frac > 0.25 ? 0xffd24d : 0xff6b6b;
+}
+
 // Per-player procedural-animation state. Lives in a Map keyed by player id and
 // is created lazily on first sight (alongside the pooled sprite).
 interface PlayerAnimState {
@@ -95,6 +100,8 @@ export class GameScene extends Phaser.Scene {
   // animation; a Sprite renders a static texture fine for the other classes too.
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private enemySprites = new Map<number, Phaser.GameObjects.Image>();
+  // First-seen hp per enemy id → treated as "full" for the damage hp bar.
+  private enemyMaxHp = new Map<number, number>();
   // Pyro pilot procedural anim state, keyed by player id.
   private playerAnim = new Map<string, PlayerAnimState>();
   // Pooled fireball/firestorm glow visuals, keyed by projectile id.
@@ -266,6 +273,7 @@ export class GameScene extends Phaser.Scene {
       if (!liveEnemies.has(id)) {
         sprite.destroy();
         this.enemySprites.delete(id);
+        this.enemyMaxHp.delete(id);
       }
     }
 
@@ -403,11 +411,9 @@ export class GameScene extends Phaser.Scene {
     const byId = new Map<string, PlayerAnimState>();
     for (const [id, s] of this.playerAnim) byId.set(id, s);
 
-    // SFX throttles: fire at most one cast/whoosh/explosion sound per frame so
-    // a burst of new ids (e.g. a multi-projectile spell or many simultaneous
-    // blasts) doesn't stack into a wall of noise.
+    // SFX throttles: at most one cast + one explosion sound per frame so a burst
+    // of new ids (multi-projectile spell, many blasts) doesn't stack into noise.
     let castPlayed = false;
-    let whooshPlayed = false;
     this.explosionPlayedThisFrame = false;
 
     for (const p of w.projectiles) {
@@ -416,33 +422,49 @@ export class GameScene extends Phaser.Scene {
       const st = byId.get(p.ownerId);
       // A freshly-set castUntil means a new owned projectile appeared this frame.
       if (st) st.castUntil = this.t + CAST_POSE_SECS;
-      if (!castPlayed) {
-        sfxCast();
-        castPlayed = true;
-      }
-      // Fire projectiles also get an airy whoosh.
-      if ((p.spell === 'fireball' || p.spell === 'firestorm') && !whooshPlayed) {
-        sfxFireball();
-        whooshPlayed = true;
-      }
+      if (!castPlayed) { this.castSfxForProjectile(p.spell); castPlayed = true; }
     }
     for (const fx of w.effects) {
-      if (this.seenFx.has(fx.id)) {
-        // already reacted to this effect id
-      } else {
-        this.seenFx.add(fx.id);
-        if (fx.ownerId) {
-          const st = byId.get(fx.ownerId);
-          if (st) st.castUntil = this.t + CAST_POSE_SECS;
-          // Effect-only casts (e.g. self-AoE) still get the cast shimmer.
-          if (!castPlayed) {
-            sfxCast();
-            castPlayed = true;
-          }
-        }
-        if (fx.kind === 'blast') this.onBlast(fx);
+      if (this.seenFx.has(fx.id)) continue;
+      this.seenFx.add(fx.id);
+      if (fx.ownerId) {
+        const st = byId.get(fx.ownerId);
+        if (st) st.castUntil = this.t + CAST_POSE_SECS;
+        // Per-element cast sound for effect-based spells (blast carries its own
+        // explosion boom via onBlast, so don't double it with a cast sound).
+        if (fx.kind !== 'blast' && !castPlayed) { this.castSfxForEffect(fx); castPlayed = true; }
       }
+      if (fx.kind === 'blast') this.onBlast(fx);
     }
+  }
+
+  // Per-spell cast SFX for projectile spells (the projectile carries its spell id).
+  private castSfxForProjectile(spell: SpellId): void {
+    if (spell === 'fireball' || spell === 'firestorm') sfxFireball();
+    else if (spell === 'frost') sfxFrost();
+    else sfxCast();
+  }
+
+  // Per-element cast SFX for effect-based spells. Effects don't carry a spell id,
+  // but kind + class colour identify the element well enough: beam/chain = 電,
+  // nova by class colour (cryo 冰 / warden 聖 / storm 斥), aura by class colour
+  // (cryo/warden = 治癒系, pyro = 詠唱 shimmer).
+  private castSfxForEffect(fx: TransientEffect): void {
+    const c = fx.colorHint;
+    if (fx.kind === 'beam' || fx.kind === 'chain') { sfxZap(); return; }
+    if (fx.kind === 'nova') {
+      if (c === CLASSES.cryo.color) sfxFrost();
+      else if (c === CLASSES.warden.color) sfxShield();
+      else if (c === CLASSES.storm.color) sfxZap();
+      else sfxCast();
+      return;
+    }
+    if (fx.kind === 'aura') {
+      if (c === CLASSES.cryo.color || c === CLASSES.warden.color) sfxHeal();
+      else sfxCast(); // pyro 詠唱 shimmer
+      return;
+    }
+    sfxCast();
   }
 
   // One-shot blast impact. A normal fireball gets a snappy ember burst + brief
@@ -660,6 +682,11 @@ export class GameScene extends Phaser.Scene {
     // subtle frost tint while slowed, else normal
     if (w.time < e.slowUntil) sprite.setTint(0x9fd8ff);
     else sprite.clearTint();
+    // hp bar above the enemy, shown ONLY once it's taken damage (render-side max:
+    // first-seen hp is treated as full, so no protocol/serialization change).
+    if (!this.enemyMaxHp.has(e.id)) this.enemyMaxHp.set(e.id, e.hp);
+    const max = this.enemyMaxHp.get(e.id)!;
+    if (e.hp < max - 0.01) this.drawBar(e.pos.x, e.pos.y - ENEMY_SPRITE_H / 2 - 6, e.hp / max, 20);
   }
 
   // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------
@@ -797,7 +824,23 @@ export class GameScene extends Phaser.Scene {
     // sprite). Drawn in the class colour on the dedicated above-sprite overlay.
     this.drawAimChevron(x, y, r, pl.facing, color);
 
-    this.drawLabel(pl, x, y - r - 14, color);
+    // name on top + a thin hp bar right under it, both above the head
+    this.drawLabel(pl, x, y - r - 22, color);
+    this.drawBar(x, y - r - 18, Math.max(0, pl.hp) / pl.maxHp, 32);
+  }
+
+  // A thin centred bar (bg + hp-coloured fill). Used for player + enemy health.
+  private drawBar(cx: number, topY: number, frac: number, w: number): void {
+    const g = this.gfx;
+    const h = 4;
+    const x0 = cx - w / 2;
+    const f = Math.max(0, Math.min(1, frac));
+    g.fillStyle(0x000000, 0.55);
+    g.fillRect(x0 - 1, topY - 1, w + 2, h + 2);
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRect(x0, topY, w, h);
+    g.fillStyle(hpColor(f), 1);
+    g.fillRect(x0, topY, f * w, h);
   }
 
   private drawDowned(pl: Player, color: number): void {
