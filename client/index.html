@@ -84,11 +84,15 @@
       .char-card .walk-sprite { width: 96px; height: 96px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
       .char-card .cname { font-size: 17px; font-weight: 700; margin-top: 2px; }
       .char-card .crole { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
-      .char-card .skills { list-style: none; padding: 0; margin: 8px 0 0; width: 100%; }
-      .char-card .skill { background: #0d0d1c; border: 1px solid var(--edge); border-radius: 7px; padding: 5px 8px; margin-bottom: 5px; text-align: left; }
-      .char-card .skill .sn { font-size: 13px; font-weight: 600; color: var(--ink); }
-      .char-card .skill .se { font-size: 11px; color: var(--muted); }
-      .char-card .skill .ss { font-size: 10px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 1px; }
+      .char-card .chant-hint { font-size: 11px; color: var(--accent); margin: 6px 0 2px; letter-spacing: 0.5px; }
+      .char-card .skills { list-style: none; padding: 0; margin: 4px 0 0; width: 100%; }
+      .char-card .skill {
+        background: #0d0d1c; border: 1px solid var(--edge); border-left: 3px solid currentColor;
+        border-radius: 8px; padding: 8px 11px; margin-bottom: 8px; text-align: left;
+      }
+      .char-card .skill .chant { font-size: 19px; font-weight: 700; letter-spacing: 1px; color: var(--ink); line-height: 1.25; }
+      .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
+      .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
       .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
       .practice-placeholder {
         background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px;

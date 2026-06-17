@@ -124,7 +124,7 @@ export class Lobby {
       const skills = def.spells
         .map((s) => {
           const k = SKILL_INFO[s];
-          return `<li class="skill"><div class="sn">${escapeHtml(k.name)}</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
+          return `<li class="skill"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
         })
         .join('');
       let sprite = '';
@@ -136,6 +136,7 @@ export class Lobby {
         <div class="walk-sprite" style="${sprite}"></div>
         <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
         <div class="crole">${escapeHtml(def.displayName)}</div>
+        <div class="chant-hint">▸ 喊出招式名即可施法</div>
         <ul class="skills">${skills}</ul>
       `;
       card.addEventListener('click', () => {
