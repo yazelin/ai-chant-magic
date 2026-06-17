@@ -36,10 +36,11 @@ function lead(barIndex: number, count: number, dur: number, oct: number, type: O
   return out;
 }
 
-// Intensity 0..2. Bar lengths get shorter + notes denser as it escalates.
+// Intensity 0..3, escalating 暗潮 → 獵殺 → 肅殺 → 狂亂 (denser + faster).
 const TRACKS: Track[] = [
   { name: '暗潮', bar: 2.0, build: (i) => [...bass(2, 1.0, 0.22), ...lead(i, 4, 0.5, 0, 'triangle', 0.16)] },
   { name: '獵殺', bar: 1.2, build: (i) => [...bass(4, 0.3, 0.24), ...lead(i, 8, 0.15, 0, 'square', 0.13)] },
+  { name: '肅殺', bar: 1.6, build: (i) => [...bass(4, 0.4, 0.26), ...lead(i, 8, 0.2, -12, 'square', 0.13), ...lead(i + 1, 4, 0.4, 7, 'triangle', 0.1)] },
   { name: '狂亂', bar: 0.9, build: (i) => [...bass(6, 0.15, 0.26), ...lead(i, 12, 0.075, 12, 'square', 0.11)] },
 ];
 
