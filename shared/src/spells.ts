@@ -25,7 +25,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   frost:     { id: 'frost',     displayName: '冰柱魔線', aliases: ['冰柱魔線', '冰柱', '冰錐', '冰霜', 'frost', 'ice'],   cooldown: 1.5, kind: 'projectile',   directional: true },
   frostnova: { id: 'frostnova', displayName: '絕對零度', aliases: ['絕對零度', '絕對零', '凍結', '冰結', 'frostnova', 'freeze'], cooldown: 5, kind: 'aoe-self', directional: false },
   thunder:   { id: 'thunder',   displayName: '雷擊',     aliases: ['超電磁砲', '電磁砲', '雷擊', '閃電', '雷', 'railgun', 'thunder', 'lightning'], cooldown: 2.5, kind: 'hitscan', directional: true },
-  chain:     { id: 'chain',     displayName: '連鎖閃電', aliases: ['電擊鞭', '連鎖閃電', '閃電鏈', 'chain', 'chainlightning'], cooldown: 3,   kind: 'chain',        directional: false },
+  chain:     { id: 'chain',     displayName: '落雷',     aliases: ['落雷', '電擊鞭', '連鎖閃電', '閃電鏈', 'chain', 'chainlightning'], cooldown: 3, kind: 'chain', directional: false },
   shield:    { id: 'shield',    displayName: '護盾',     aliases: ['護盾', '護盾術', '盾牌', '護罩', '防護罩', '結界', 'shield', 'guard'], cooldown: 6, kind: 'buff-self', directional: false },
   aegis:     { id: 'aegis',     displayName: '聖盾',     aliases: ['聖盾', '神聖護盾', 'aegis', 'barrier'],             cooldown: 9,   kind: 'buff-allies',  directional: false },
   heal:      { id: 'heal',      displayName: '治療術',   aliases: ['治療術', '治療', '治癒', '補血', 'heal', 'cure'],   cooldown: 7,   kind: 'heal-allies',  directional: false },
