@@ -16,6 +16,7 @@ import { Lobby } from './ui/Lobby';
 import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio } from './audio/sfx';
+import { MusicEngine } from './audio/music';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
 // (connected, already `started`) and hands us a GameSession + the self class id.
@@ -49,6 +50,7 @@ function startGame(session: GameSession, classId: ClassId): void {
 
   const hud = new Hud(classId);
   const incantation = new IncantationOverlay();
+  const music = new MusicEngine();
 
   // HUD refresh loop (decoupled from Phaser so game-over text updates even when
   // idle). Reads whatever World the session exposes (local sim or interpolated
@@ -62,6 +64,11 @@ function startGame(session: GameSession, classId: ClassId): void {
       const self = w.players.find((p) => p.id === session.getSelfId());
       const charge = self?.classId === 'pyro' ? self.pyroCharge ?? 0 : 0;
       incantation.update(charge, Date.now());
+      // Adaptive music intensity: calm early, escalates with the wave; calm again
+      // on game over. (Bar-aligned switch handled inside MusicEngine.)
+      music.start(); // idempotent + no-op until the AudioContext exists (any gesture)
+      const intensity = w.status === 'gameover' ? 0 : w.wave >= 5 ? 2 : w.wave >= 3 ? 1 : 0;
+      music.setIntensity(intensity);
     }
   }, 100);
 
