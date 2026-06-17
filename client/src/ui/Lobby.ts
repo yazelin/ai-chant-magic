@@ -1,4 +1,4 @@
-import { ClassId, CLASSES, SPELLS, SpellId, matchSpell, JUMON } from '@acm/shared';
+import { ClassId, CLASSES, SpellId, matchSpell, JUMON } from '@acm/shared';
 import { SKILL_INFO, castType } from './skillInfo';
 import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
@@ -44,15 +44,6 @@ const CHAR_NAMES: Record<ClassId, string> = {
   cryo: '愛蜜莉雅',
   storm: '御坂美琴',
   warden: '貞德',
-};
-
-// A simple glyph per class shape (the in-game render uses real polygons; the
-// lobby card just needs a recognizable hint of the placeholder shape).
-const SHAPE_GLYPH: Record<string, string> = {
-  diamond: '◆',
-  hexagon: '⬢',
-  triangle: '▲',
-  circle: '●',
 };
 
 const ERROR_TEXT: Record<ErrorCode, string> = {
@@ -216,8 +207,8 @@ export class Lobby {
   // walks (CSS sprite animation over the walk sheet), shows the class name, and
   // lists its 3 skills with effect + live numbers (from SKILL_INFO). Clicking a
   // card selects that class for the game we start.
-  private renderShowcase(): void {
-    const host = this.root.querySelector('#lobby-showcase');
+  private renderShowcase(hostSel = '#lobby-showcase', inRoom = false): void {
+    const host = this.root.querySelector(hostSel);
     if (!host) return;
     host.innerHTML = '';
     const AREA: Record<ClassId, string> = { pyro: 'a', cryo: 'b', storm: 'c', warden: 'd' };
@@ -249,8 +240,20 @@ export class Lobby {
         <ul class="skills">${skills}</ul>
       `;
       card.addEventListener('click', () => {
-        this.classId = id;
-        this.renderShowcase();
+        if (inRoom) {
+          if (id === this.classId) return;
+          this.classId = id;
+          this.client?.setClass(id);
+          const selfId = this.client?.selfId;
+          if (selfId) {
+            const self = this.members.find((m) => m.id === selfId);
+            if (self) self.classId = id;
+          }
+          this.renderRoom(); // re-renders the room (incl. its showcase + member list)
+        } else {
+          this.classId = id;
+          this.renderShowcase();
+        }
       });
       host.appendChild(card);
     }
@@ -264,7 +267,7 @@ export class Lobby {
         const next = window.prompt(`設定「${SKILL_INFO[sid].name}」的詠唱詞(留空=還原預設):`, cur);
         if (next === null) return; // cancelled
         setChant(sid, next);
-        this.renderShowcase();
+        this.renderShowcase(hostSel, inRoom);
       });
     });
   }
@@ -407,23 +410,33 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>房間大廳</h1>
-      <div class="code-banner">
-        <div class="sub">把這組代碼給隊友</div>
-        <div class="code">${escapeHtml(this.roomCode)}</div>
+      <div class="sub">點角色卡換職業 · 開麥克風先練幾招</div>
+      <div class="showcase">
+        <div id="room-showcase" style="display:contents"></div>
+        <div class="center-panel">
+          <div class="code-banner">
+            <div class="sub">把這組代碼給隊友</div>
+            <div class="code">${escapeHtml(this.roomCode)}</div>
+          </div>
+          <label>成員(${this.members.length}/4)</label>
+          <ul class="members">${memberItems}</ul>
+          <div class="practice">
+            <button id="btn-mic">開始詠唱練習</button>
+            <div class="mic-state" id="mic-state">開麥克風,對它喊任一招式名練習</div>
+            <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
+            <div class="hit" id="hit"></div>
+          </div>
+          <div class="btns">
+            ${
+              this.isHost
+                ? `<button id="btn-start" class="primary">開始</button>`
+                : `<button id="btn-ready">${this.selfReady ? '取消準備' : '準備'}</button>`
+            }
+            <button id="btn-leave">離開房間</button>
+          </div>
+          <div class="error" id="lobby-error"></div>
+        </div>
       </div>
-      <label>成員(${this.members.length}/4)</label>
-      <ul class="members">${memberItems}</ul>
-      <label>更換職業</label>
-      <div class="class-cards" id="room-classes"></div>
-      <div class="btns">
-        ${
-          this.isHost
-            ? `<button id="btn-start" class="primary">開始</button>`
-            : `<button id="btn-ready">${this.selfReady ? '取消準備' : '準備'}</button>`
-        }
-        <button id="btn-leave">離開房間</button>
-      </div>
-      <div class="error" id="lobby-error"></div>
     `;
 
     if (this.isHost) {
@@ -444,47 +457,10 @@ export class Lobby {
       this.renderSetup();
     });
 
-    this.renderRoomClassCards();
-  }
-
-  // In-room class picker. Reuses the setup screen's .class-cards/.class-card
-  // markup, highlights the local player's current class, and on click tells the
-  // server (which broadcasts an updated lobby so EVERYONE — including us — sees
-  // the new class in the member list). `this.classId` is the source of truth the
-  // game start uses for the voice loadout, so updating it here means the game we
-  // start reflects the latest in-room selection.
-  private renderRoomClassCards(): void {
-    const host = this.root.querySelector('#room-classes');
-    if (!host) return;
-    host.innerHTML = '';
-    for (const id of CLASS_ORDER) {
-      const def = CLASSES[id];
-      const card = document.createElement('div');
-      card.className = 'class-card' + (id === this.classId ? ' selected' : '');
-      card.style.color = def.color;
-      const spellNames = def.spells.map((s) => SPELLS[s].displayName).join('、');
-      card.innerHTML = `
-        <div class="glyph">${SHAPE_GLYPH[def.shape] ?? '◆'}</div>
-        <div class="cname" style="color:${def.color}">${def.displayName}</div>
-        <div class="spells">${escapeHtml(spellNames)}</div>
-      `;
-      card.addEventListener('click', () => {
-        if (id === this.classId) return;
-        this.classId = id;
-        this.client?.setClass(id);
-        // Optimistically reflect our own pick in the local member list right
-        // away, instead of waiting a round-trip for the server's `lobby`
-        // broadcast (which then confirms/converges). Match the self member by
-        // selfId; if that isn't available yet, leave the list as-is.
-        const selfId = this.client?.selfId;
-        if (selfId) {
-          const self = this.members.find((m) => m.id === selfId);
-          if (self) self.classId = id;
-        }
-        this.renderRoom();
-      });
-      host.appendChild(card);
-    }
+    // Same anime character cards as the home, but picking one tells the server
+    // (setClass). Plus the same chant-practice mic, so you can warm up in the room.
+    this.renderShowcase('#room-showcase', true);
+    this.wirePractice();
   }
 
   private hide(): void {
