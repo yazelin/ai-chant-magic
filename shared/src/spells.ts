@@ -31,8 +31,8 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   heal:      { id: 'heal',      displayName: '治療術',   aliases: ['治療術', '治療', '治癒', '補血', 'heal', 'cure'],   cooldown: 7,   kind: 'heal-allies',  directional: false },
   holybolt:  { id: 'holybolt',  displayName: '聖光',     aliases: ['聖光', '聖光術', 'holybolt', 'smite'],              cooldown: 1.0, kind: 'aoe-self',      directional: false },
   // 惠惠's kit: two no-cooldown chants stack 爆裂 charge; 爆裂魔法 consumes it.
-  chant1:    { id: 'chant1',    displayName: '黑暗詠唱', aliases: ['黑暗詠唱', '黑暗', '詠唱一', 'darkchant'],         cooldown: 0,   kind: 'buff-self',    directional: false },
-  chant2:    { id: 'chant2',    displayName: '深淵詠唱', aliases: ['深淵詠唱', '深淵', '詠唱二', 'abysschant'],        cooldown: 0,   kind: 'buff-self',    directional: false },
+  chant1:    { id: 'chant1',    displayName: '黑暗',     aliases: ['黑暗', '黑暗詠唱', '詠唱一', 'darkchant'],         cooldown: 0,   kind: 'buff-self',    directional: false },
+  chant2:    { id: 'chant2',    displayName: '深淵',     aliases: ['深淵', '深淵詠唱', '詠唱二', 'abysschant'],        cooldown: 0,   kind: 'buff-self',    directional: false },
   mend:      { id: 'mend',      displayName: '精靈自癒', aliases: ['精靈自癒', '自癒', '精靈護佑', 'mend'],            cooldown: 8,   kind: 'heal-self',    directional: false },
   repulse:   { id: 'repulse',   displayName: '電磁斥力', aliases: ['電磁斥力', '斥力', '電磁力場', '排斥', 'repulse'],  cooldown: 6,   kind: 'aoe-self',     directional: false },
 };
