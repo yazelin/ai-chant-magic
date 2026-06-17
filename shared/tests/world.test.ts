@@ -378,9 +378,11 @@ describe('step — thunder (hitscan ray + beam effect)', () => {
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'thunder' }], 0.016);
     expect(w.enemies.find((e) => e.id === 1)!.hp).toBe(100 - CONFIG.thunder.damage);
     expect(w.enemies.find((e) => e.id === 2)!.hp).toBe(100); // off the ray
+    // The beam now reflects off the arena walls: firing +x with range > the
+    // distance to the right wall, the first segment ends AT the wall (x=arenaWidth).
     const beam = w.effects.find((e) => e.kind === 'beam');
     expect(beam).toBeTruthy();
-    expect(beam!.b!.x).toBeCloseTo(p.pos.x + CONFIG.thunder.range);
+    expect(beam!.b!.x).toBeCloseTo(CONFIG.arenaWidth);
     expect(beam!.b!.y).toBeCloseTo(p.pos.y);
   });
 

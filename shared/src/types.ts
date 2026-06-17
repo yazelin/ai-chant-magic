@@ -21,6 +21,10 @@ export interface Player {
 export interface Enemy {
   id: number; pos: Vec2; hp: number; speed: number;
   slowUntil: number; radius: number; targetId: string | null;
+  // Fully stopped until this sim time (frostnova/「冰結」). Sim-only — not in the
+  // net snapshot; positions are server-authoritative, so the client renders the
+  // freeze via the stalled positions (and the existing slowUntil blue tint).
+  frozenUntil?: number;
 }
 
 export interface Projectile {

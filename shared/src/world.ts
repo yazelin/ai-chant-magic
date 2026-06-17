@@ -241,12 +241,15 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
   }
 }
 
-// frostnova — instant self-centred AoE: damage + slow enemies in radius, nova fx.
+// frostnova (「冰結」) — instant self-centred AoE: damage + FREEZE enemies in
+// radius (fully stopped, not just slowed). slowUntil is set too so the existing
+// blue tint shows during the freeze.
 function castFrostnova(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
     if (dist(caster.pos, e.pos) <= CONFIG.frostnova.radius + e.radius) {
       e.hp -= CONFIG.frostnova.damage;
+      e.frozenUntil = world.time + CONFIG.frostnova.slowDuration;
       e.slowUntil = world.time + CONFIG.frostnova.slowDuration;
     }
   }
@@ -259,24 +262,49 @@ function castFrostnova(world: World, caster: Player): void {
   removeDeadEnemies(world);
 }
 
-// thunder — hitscan ray along facing; damage enemies within `width`, beam fx.
+// thunder (「超電磁砲」) — hitscan ray along facing that REFLECTS off the arena
+// walls up to maxBounces times, drawing a folded beam. Each segment damages
+// enemies within `width`; damage decays by bounceFalloff per bounce.
 function castThunder(world: World, caster: Player): void {
-  const o = caster.pos;
-  const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
-  for (const e of world.enemies) {
-    if (e.hp <= 0) continue;
-    const rel = sub(e.pos, o);
-    const along = rel.x * dir.x + rel.y * dir.y;          // distance along the ray
-    if (along < 0 || along > CONFIG.thunder.range) continue;
-    const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x); // perpendicular offset
-    if (perp <= CONFIG.thunder.width + e.radius) e.hp -= CONFIG.thunder.damage;
+  const W = CONFIG.arenaWidth, H = CONFIG.arenaHeight;
+  const width = CONFIG.thunder.width;
+  let o = { x: caster.pos.x, y: caster.pos.y };
+  let dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
+  let remaining: number = CONFIG.thunder.range;
+  let dmg: number = CONFIG.thunder.damage;
+  const hit = new Set<number>(); // each enemy takes damage at most once per cast
+
+  for (let b = 0; b <= CONFIG.thunder.maxBounces; b++) {
+    // nearest wall hit within the remaining length
+    let segLen = remaining;
+    let axis: 'x' | 'y' | null = null;
+    if (dir.x > 1e-6) { const t = (W - o.x) / dir.x; if (t < segLen) { segLen = t; axis = 'x'; } }
+    else if (dir.x < -1e-6) { const t = -o.x / dir.x; if (t < segLen) { segLen = t; axis = 'x'; } }
+    if (dir.y > 1e-6) { const t = (H - o.y) / dir.y; if (t < segLen) { segLen = t; axis = 'y'; } }
+    else if (dir.y < -1e-6) { const t = -o.y / dir.y; if (t < segLen) { segLen = t; axis = 'y'; } }
+    const end = { x: o.x + dir.x * segLen, y: o.y + dir.y * segLen };
+
+    for (const e of world.enemies) {
+      if (e.hp <= 0 || hit.has(e.id)) continue;
+      const rel = sub(e.pos, o);
+      const along = rel.x * dir.x + rel.y * dir.y;
+      if (along < 0 || along > segLen) continue;
+      const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x);
+      if (perp <= width + e.radius) { e.hp -= dmg; hit.add(e.id); }
+    }
+    pushEffect(world, {
+      kind: 'beam', ownerId: caster.id,
+      a: { x: o.x, y: o.y }, b: end,
+      ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
+    });
+
+    remaining -= segLen;
+    if (remaining <= 1 || axis === null) break; // out of range, or ended in open space
+    if (axis === 'x') dir = { x: -dir.x, y: dir.y };
+    else dir = { x: dir.x, y: -dir.y };
+    o = { x: end.x + dir.x * 0.5, y: end.y + dir.y * 0.5 }; // nudge off the wall
+    dmg *= CONFIG.thunder.bounceFalloff;
   }
-  pushEffect(world, {
-    kind: 'beam', ownerId: caster.id,
-    a: { x: o.x, y: o.y },
-    b: { x: o.x + dir.x * CONFIG.thunder.range, y: o.y + dir.y * CONFIG.thunder.range },
-    ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
-  });
   removeDeadEnemies(world);
 }
 
@@ -452,7 +480,8 @@ function updateEnemies(world: World, dt: number): void {
     if (!target) continue;
     const toP = sub(target.pos, e.pos);
     const d = len(toP);
-    const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
+    const frozen = world.time < (e.frozenUntil ?? 0);
+    const speed = frozen ? 0 : world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
     if (d > 1) {
       const move = scale(toP, (speed * dt) / d);
       e.pos.x += move.x;
