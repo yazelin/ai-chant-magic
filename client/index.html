@@ -81,7 +81,21 @@
       }
       .char-card:hover { background: var(--panel-2); }
       .char-card.selected { box-shadow: 0 0 0 1px currentColor, 0 0 20px -4px currentColor; }
+      .char-card .sprite-box { position: relative; width: 96px; height: 96px; }
       .char-card .walk-sprite { width: 96px; height: 96px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
+      .char-card .fx {
+        position: absolute; inset: -18px; border-radius: 50%; pointer-events: none; opacity: 0;
+        background: radial-gradient(circle, currentColor 0%, transparent 62%);
+      }
+      .char-card .fx::after {
+        content: ''; position: absolute; inset: 22%; border: 3px solid currentColor; border-radius: 50%; opacity: 0.9;
+      }
+      .char-card .fx.go { animation: fx-burst 0.7s ease-out; }
+      @keyframes fx-burst {
+        0% { opacity: 0; transform: scale(0.2); }
+        25% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(1.9); }
+      }
       .char-card .cname { font-size: 17px; font-weight: 700; margin-top: 2px; }
       .char-card .crole { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
       .char-card .chant-hint { font-size: 11px; color: var(--accent); margin: 6px 0 2px; letter-spacing: 0.5px; }
@@ -94,10 +108,31 @@
       .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
       .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
       .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-      .practice-placeholder {
+      .name-row { display: flex; gap: 8px; }
+      .name-row input { flex: 1 1 auto; }
+      .name-row #btn-reroll {
+        flex: 0 0 auto; background: var(--panel); color: var(--ink); border: 1px solid var(--edge);
+        border-radius: 8px; padding: 0 12px; font-size: 13px; cursor: pointer; font-family: inherit; white-space: nowrap;
+      }
+      .name-row #btn-reroll:hover { background: var(--panel-2); }
+      .practice {
         background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px;
-        padding: 18px; text-align: center; color: var(--muted); font-size: 13px; min-height: 80px;
-        display: flex; align-items: center; justify-content: center;
+        padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      }
+      .practice #btn-mic {
+        background: var(--panel); color: var(--ink); border: 1px solid var(--accent);
+        border-radius: 8px; padding: 9px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
+      }
+      .practice #btn-mic.primary { background: #2a1f4d; }
+      .practice .mic-state { font-size: 12px; color: var(--muted); text-align: center; min-height: 16px; }
+      .practice .heard-wrap { width: 100%; text-align: center; margin-top: 4px; }
+      .practice .heard-label { font-size: 11px; color: var(--muted); }
+      .practice .heard { font-size: 22px; font-weight: 700; color: var(--ink); min-height: 30px; word-break: break-all; }
+      .practice .hit { font-size: 16px; font-weight: 700; color: #6fe39a; min-height: 22px; }
+      .char-card .skill.hit { animation: skill-hit 0.9s ease-out; }
+      @keyframes skill-hit {
+        0% { box-shadow: 0 0 0 2px currentColor, 0 0 22px -2px currentColor; background: #1a1430; }
+        100% { box-shadow: none; background: #0d0d1c; }
       }
       @keyframes walk4 { to { background-position-x: -384px; } }
       @keyframes walk5 { to { background-position-x: -480px; } }

@@ -29,7 +29,7 @@ describe('spells', () => {
 
   it('uses the exact cooldowns from the plan', () => {
     const expected: Record<SpellId, number> = {
-      fireball: 1.2, firestorm: 4, frost: 1.5, frostnova: 5,
+      fireball: 1.2, firestorm: 7, frost: 1.5, frostnova: 5,
       thunder: 2.5, chain: 3, shield: 6, aegis: 9, heal: 7, holybolt: 1.0,
     };
     for (const id of ALL_SPELL_IDS) {

@@ -1,6 +1,7 @@
-import { ClassId, CLASSES, SPELLS } from '@acm/shared';
+import { ClassId, CLASSES, SPELLS, SpellId, matchSpell, JUMON } from '@acm/shared';
 import { SKILL_INFO } from './skillInfo';
 import { SHEET_WALKERS } from '../render/walkSheets';
+import { WebSpeechVoiceInput } from '../voice/recognizer';
 import { GameSession } from '../session/GameSession';
 import { LocalSession } from '../session/LocalSession';
 import { NetSession } from '../session/NetSession';
@@ -13,6 +14,19 @@ import {
 } from '../net/NetClient';
 
 const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
+
+// Random default summoner handles — meme/joke names riffing on this game's
+// "shout the spell name to cast" gimmick. NOT anime character names, so the
+// handle never clashes with the character you control.
+const RANDOM_NAMES = [
+  '嘴砲法師', '純靠吼', '詠唱中勿擾', '法術冷卻中', '喉嚨已陣亡', '收音不良',
+  '麥克風測試中', '一秒爆裂', '隊友剋星', '安全距離大師', '我先撤退', '爆裂狂熱者',
+  '嘴遁忍者', '鍵盤召喚師', '喊不準協會', '今天也很大聲', '別吵我詠唱', '等我喝口水',
+  '戰術性後仰', '用吼的就贏',
+];
+function randomName(): string {
+  return RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+}
 
 // Character names shown on the home cards (flavour); the class role (CLASSES
 // displayName) stays the system name used in-game and the room list.
@@ -56,9 +70,14 @@ export class Lobby {
   private roomCode = '';
   private isHost = false;
   private selfReady = false;
+  // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
+  private voice: WebSpeechVoiceInput | null = null;
+  private practicing = false;
+  private hitTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private onStart: (session: GameSession, classId: ClassId) => void) {
     this.root = document.getElementById('lobby')!;
+    this.name = randomName(); // a fun default; player can edit or re-roll
     this.renderSetup();
   }
 
@@ -74,8 +93,19 @@ export class Lobby {
         <div id="lobby-showcase" style="display:contents"></div>
         <div class="center-panel">
           <label for="lobby-name">召喚師名稱</label>
-          <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
-          <div class="practice-placeholder" id="practice-area">詠唱練習區(下一步開放:對著麥克風喊技能名,練習詠唱)</div>
+          <div class="name-row">
+            <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
+            <button id="btn-reroll" title="隨機換一個名字">換一個</button>
+          </div>
+          <div class="practice">
+            <button id="btn-mic">開始詠唱練習</button>
+            <div class="mic-state" id="mic-state">點上方按鈕開麥克風,對著它喊任一招式名</div>
+            <div class="heard-wrap">
+              <div class="heard-label">聽到</div>
+              <div class="heard" id="heard">—</div>
+            </div>
+            <div class="hit" id="hit"></div>
+          </div>
           <div class="btns">
             <button id="btn-create" class="primary">建立房間</button>
             <button id="btn-join">輸入代碼加入</button>
@@ -96,13 +126,81 @@ export class Lobby {
     nameEl.addEventListener('input', () => {
       this.name = nameEl.value;
     });
+    this.root.querySelector('#btn-reroll')!.addEventListener('click', () => {
+      this.name = randomName();
+      nameEl.value = this.name;
+    });
 
     this.renderShowcase();
+    this.wirePractice();
 
     this.root.querySelector('#btn-create')!.addEventListener('click', () => this.doNet('create'));
     this.root.querySelector('#btn-join')!.addEventListener('click', () => this.doJoinByCode());
     this.root.querySelector('#btn-quick')!.addEventListener('click', () => this.doNet('quickJoin'));
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
+  }
+
+  // --- Chant practice: mic → live transcript → highlight the matched skill ---
+  private wirePractice(): void {
+    const btn = this.root.querySelector<HTMLButtonElement>('#btn-mic');
+    if (!btn) return;
+    btn.addEventListener('click', () => this.togglePractice());
+    // reflect current state if the setup screen re-rendered mid-practice
+    btn.textContent = this.practicing ? '停止練習' : '開始詠唱練習';
+    btn.classList.toggle('primary', !this.practicing);
+  }
+
+  private togglePractice(): void {
+    if (!this.voice) {
+      this.voice = new WebSpeechVoiceInput('zh-TW');
+      this.voice.onStatusChange((s, msg) => {
+        const el = this.root.querySelector('#mic-state');
+        if (el) el.textContent = msg ?? (s === 'listening' ? '聆聽中…喊出招式名' : s);
+      });
+      this.voice.onTranscript((text) => this.onPracticeTranscript(text));
+    }
+    this.practicing = !this.practicing;
+    if (this.practicing) this.voice.start();
+    else this.voice.stop();
+    const btn = this.root.querySelector<HTMLButtonElement>('#btn-mic');
+    if (btn) {
+      btn.textContent = this.practicing ? '停止練習' : '開始詠唱練習';
+      btn.classList.toggle('primary', !this.practicing);
+    }
+  }
+
+  private onPracticeTranscript(text: string): void {
+    const heard = this.root.querySelector('#heard');
+    if (heard) heard.textContent = text || '—';
+    const id = matchSpell(text, { mode: 'mueisho', jumon: JUMON });
+    if (id) this.flashHit(id);
+  }
+
+  private flashHit(id: SpellId): void {
+    const hit = this.root.querySelector('#hit');
+    if (hit) hit.textContent = `命中 「${SKILL_INFO[id].name}」!`;
+    const els = this.root.querySelectorAll<HTMLElement>(`.skill[data-spell="${id}"]`);
+    els.forEach((e) => {
+      e.classList.add('hit');
+      // play a spell burst on that character's card sprite
+      const fx = e.closest('.char-card')?.querySelector<HTMLElement>('.fx');
+      if (fx) {
+        fx.classList.remove('go');
+        void fx.offsetWidth; // reflow so the animation restarts
+        fx.classList.add('go');
+      }
+    });
+    if (this.hitTimer) clearTimeout(this.hitTimer);
+    this.hitTimer = setTimeout(() => {
+      els.forEach((e) => e.classList.remove('hit'));
+      const h = this.root.querySelector('#hit');
+      if (h) h.textContent = '';
+    }, 900);
+  }
+
+  private stopPractice(): void {
+    this.practicing = false;
+    if (this.voice) this.voice.stop();
   }
 
   // Home showcase: one animated card per class in the four corners. The card
@@ -124,7 +222,7 @@ export class Lobby {
       const skills = def.spells
         .map((s) => {
           const k = SKILL_INFO[s];
-          return `<li class="skill"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
+          return `<li class="skill" data-spell="${s}"><div class="chant">「${escapeHtml(k.name)}」</div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div></li>`;
         })
         .join('');
       let sprite = '';
@@ -133,7 +231,7 @@ export class Lobby {
         sprite = `background-image:url(${sw.url});background-size:${sw.frames * 96}px 96px;animation:walk${sw.frames} ${dur}s steps(${sw.frames}) infinite`;
       }
       card.innerHTML = `
-        <div class="walk-sprite" style="${sprite}"></div>
+        <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div><div class="fx"></div></div>
         <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
         <div class="crole">${escapeHtml(def.displayName)}</div>
         <div class="chant-hint">▸ 喊出招式名即可施法</div>
@@ -366,6 +464,7 @@ export class Lobby {
   }
 
   private hide(): void {
+    this.stopPractice(); // don't let the practice mic run into the game's own mic
     this.root.style.display = 'none';
   }
 }
