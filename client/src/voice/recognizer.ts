@@ -69,6 +69,10 @@ export class WebSpeechVoiceInput implements VoiceInput {
       this.gotResultSinceStart = true;
       this.consecutiveBadEnds = 0;
       for (let i = e.resultIndex; i < e.results.length; i++) {
+        // Only act on FINAL results. interimResults fire the same utterance as
+        // interim THEN final — casting on both double-triggered every spell
+        // (and double-charged 惠惠's no-cooldown 詠唱).
+        if (!e.results[i].isFinal) continue;
         const text = e.results[i][0].transcript;
         if (text) this.transcriptCb(text);
       }
