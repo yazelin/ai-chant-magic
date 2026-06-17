@@ -55,6 +55,7 @@ export interface SnapshotEffect {
   radius?: number;
   ttl: number;
   colorHint: string;
+  spell?: SpellId;
 }
 
 export interface Snapshot {
@@ -116,6 +117,7 @@ export function toSnapshot(world: World): Snapshot {
       if (fx.ownerId !== undefined) out.ownerId = fx.ownerId;
       if (fx.b !== undefined) out.b = cloneVec(fx.b);
       if (fx.radius !== undefined) out.radius = fx.radius;
+      if (fx.spell !== undefined) out.spell = fx.spell;
       return out;
     }),
   };

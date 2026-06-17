@@ -1,3 +1,5 @@
+import type { SpellId } from '@acm/shared';
+
 // Procedural Web Audio SFX. No asset files — every sound is synthesized at play
 // time from oscillators + a single shared white-noise buffer. Designed to be
 // cheap, punchy, and totally optional: every entry point is guarded so a missing
@@ -344,4 +346,44 @@ export function sfxWave(): void {
 // PLAYER DOWN/DEATH — long 420→60Hz sine downslide.
 export function sfxDeath(): void {
   try { blip('sine', 420, 60, 0.7, 0.4); } catch { /* ignore */ }
+}
+
+// --- Per-skill cast SFX ----------------------------------------------------
+// One distinct sound per spell so every skill is recognizable by ear. Reuses
+// the blip/arp/noise helpers; best-effort + guarded like everything else.
+export function sfxSpell(spell: SpellId): void {
+  try {
+    switch (spell) {
+      case 'fireball':                                  // 火球: airy whoosh
+        sfxFireball(); break;
+      case 'firestorm':                                 // 爆裂: deeper charged whoosh
+        sfxFireball(); blip('sawtooth', 140, 60, 0.3, 0.25); break;
+      case 'frost':                                     // 冰柱魔線: icy triple ping
+        arp([1568, 1318, 1046], 0.05, 'triangle', 0.22); break;
+      case 'frostnova':                                 // 絕對零度: deep descending freeze
+        blip('triangle', 1000, 280, 0.45, 0.26); blip('sine', 320, 110, 0.5, 0.2); break;
+      case 'thunder':                                   // 超電磁砲: big railgun zap
+        blip('square', 2200, 180, 0.22, 0.36); sfxZap(); break;
+      case 'chain':                                     // 落雷: rapid crackle
+        arp([1500, 1000, 1400, 900, 1300], 0.04, 'square', 0.2); break;
+      case 'repulse':                                   // 鐵砂之劍: rising metallic sweep
+        blip('square', 280, 1300, 0.16, 0.3); blip('sawtooth', 200, 900, 0.18, 0.16); break;
+      case 'holybolt':                                  // 聖光: bright high holy chime
+        arp([1046, 1318, 1568], 0.06, 'sine', 0.3); break;
+      case 'aegis':                                     // 聖盾: protective rising shimmer
+        sfxShield(); break;
+      case 'heal':                                      // 治療術: warm 784+1046 chime
+        sfxHeal(); break;
+      case 'mend':                                      // 精靈自癒: soft two-note (distinct from heal)
+        arp([659, 988], 0.1, 'sine', 0.26); break;
+      case 'chant1':                                    // 黑暗詠唱: dark low blip
+        blip('sawtooth', 180, 120, 0.14, 0.3); break;
+      case 'chant2':                                    // 深淵詠唱: deeper blip
+        blip('sawtooth', 110, 70, 0.17, 0.32); break;
+      case 'shield':                                    // (orphan) generic shield shimmer
+        sfxShield(); break;
+      default:
+        sfxCast();
+    }
+  } catch { /* ignore */ }
 }

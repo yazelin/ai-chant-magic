@@ -2,9 +2,10 @@
 // build). Imports the REAL sfx.ts / music.ts so what you hear is what ships.
 import {
   initAudio, sfxCast, sfxFireball, sfxExplosion,
-  sfxHit, sfxHurt, sfxHeal, sfxZap, sfxFrost, sfxShield, sfxWave, sfxDeath,
+  sfxHit, sfxHurt, sfxHeal, sfxZap, sfxFrost, sfxShield, sfxWave, sfxDeath, sfxSpell,
 } from './audio/sfx';
 import { MusicEngine } from './audio/music';
+import { CLASSES, SPELLS } from '@acm/shared';
 
 const SFX: Array<[string, () => void]> = [
   ['施法 cast', sfxCast],
@@ -20,6 +21,18 @@ const SFX: Array<[string, () => void]> = [
   ['升波 wave', sfxWave],
   ['死亡 death', sfxDeath],
 ];
+
+// Per-skill cast SFX, grouped by class loadout — exactly what plays in-game
+// when each spell is cast (drives sfxSpell, the same call GameScene uses).
+const spellHost = document.getElementById('spells')!;
+for (const cls of Object.values(CLASSES)) {
+  for (const id of cls.spells) {
+    const b = document.createElement('button');
+    b.textContent = `${cls.displayName}·${SPELLS[id].displayName}`;
+    b.addEventListener('click', () => { initAudio(); sfxSpell(id); });
+    spellHost.appendChild(b);
+  }
+}
 
 const sfxHost = document.getElementById('sfx')!;
 for (const [label, fn] of SFX) {

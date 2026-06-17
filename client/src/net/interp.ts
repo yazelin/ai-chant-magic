@@ -63,6 +63,7 @@ export interface SnapshotEffect {
   radius?: number;
   ttl: number;
   colorHint: string;
+  spell?: SpellId;
 }
 
 export interface Snapshot {
@@ -148,6 +149,7 @@ function toWorldEffect(fx: SnapshotEffect): TransientEffect {
   if (fx.ownerId !== undefined) out.ownerId = fx.ownerId;
   if (fx.b !== undefined) out.b = { x: fx.b.x, y: fx.b.y };
   if (fx.radius !== undefined) out.radius = fx.radius;
+  if (fx.spell !== undefined) out.spell = fx.spell;
   return out;
 }
 

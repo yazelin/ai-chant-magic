@@ -212,7 +212,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.player.radius * 1.5,
-        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES.pyro.color,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES.pyro.color, spell,
       });
       break;
     case 'mend': {
@@ -223,7 +223,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.player.radius * 2,
-        ttl: CONFIG.mend.duration, colorHint: CLASSES.cryo.color,
+        ttl: CONFIG.mend.duration, colorHint: CLASSES.cryo.color, spell: 'mend',
       });
       break;
     }
@@ -245,7 +245,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.player.radius * 1.6,
-        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color, spell: 'shield',
       });
       break;
     case 'aegis': {
@@ -259,7 +259,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.aegis.radius,
-        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES[caster.classId].color, spell: 'aegis',
       });
       break;
     }
@@ -276,7 +276,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         kind: 'aura', ownerId: caster.id,
         a: { x: caster.pos.x, y: caster.pos.y },
         radius: CONFIG.heal.radius,
-        ttl: CONFIG.heal.duration, colorHint: CLASSES[caster.classId].color, // lingers the whole HoT
+        ttl: CONFIG.heal.duration, colorHint: CLASSES[caster.classId].color, spell: 'heal', // lingers the whole HoT
       });
       break;
     }
@@ -301,7 +301,7 @@ function castFrostnova(world: World, caster: Player): void {
     kind: 'nova', ownerId: caster.id,
     a: { x: caster.pos.x, y: caster.pos.y },
     radius: CONFIG.frostnova.radius,
-    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.cryo.color,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.cryo.color, spell: 'frostnova',
   });
   removeDeadEnemies(world);
 }
@@ -326,7 +326,7 @@ function castRepulse(world: World, caster: Player): void {
     kind: 'nova', ownerId: caster.id,
     a: { x: o.x, y: o.y },
     radius: CONFIG.repulse.radius,
-    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.storm.color,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.storm.color, spell: 'repulse',
   });
   removeDeadEnemies(world);
 }
@@ -342,7 +342,7 @@ function castHolyburst(world: World, caster: Player): void {
     kind: 'nova', ownerId: caster.id,
     a: { x: caster.pos.x, y: caster.pos.y },
     radius: CONFIG.holybolt.radius,
-    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.warden.color,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.warden.color, spell: 'holybolt',
   });
   removeDeadEnemies(world);
 }
@@ -380,7 +380,7 @@ function castThunder(world: World, caster: Player): void {
     pushEffect(world, {
       kind: 'beam', ownerId: caster.id,
       a: { x: o.x, y: o.y }, b: end,
-      ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color,
+      ttl: CONFIG.effectTtl.beam, colorHint: CLASSES.storm.color, spell: 'thunder',
     });
 
     remaining -= segLen;
@@ -413,7 +413,7 @@ function castChain(world: World, caster: Player): void {
       kind: 'chain', ownerId: caster.id,
       a: { x: from.x, y: from.y },
       b: { x: target.pos.x, y: target.pos.y },
-      ttl: CONFIG.effectTtl.chain, colorHint: CLASSES.storm.color,
+      ttl: CONFIG.effectTtl.chain, colorHint: CLASSES.storm.color, spell: 'chain',
     });
     from = target.pos;
     range = CONFIG.chain.jumpRange; // subsequent hops use jumpRange

@@ -46,6 +46,8 @@ export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura';
 export interface TransientEffect {
   id: number; kind: EffectKind; ownerId?: string;
   a: Vec2; b?: Vec2; radius?: number; ttl: number; colorHint: string;
+  // Which spell produced this effect (lets the renderer play a per-skill SFX).
+  spell?: SpellId;
 }
 
 export interface World {
