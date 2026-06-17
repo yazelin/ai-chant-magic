@@ -233,17 +233,17 @@ describe('step — frost (fan + slow) and holybolt (single projectile)', () => {
     expect(w.enemies[0].hp).toBeLessThan(100);
   });
 
-  it('holybolt spawns a single projectile that damages an enemy', () => {
+  it('holybolt is a self-centred burst that damages a nearby enemy', () => {
     const w = createSoloWorld('warden');
     w.breakTimer = 999;
     const p = w.players[0];
-    p.facing = 0;
-    w.enemies.push(makeEnemy({ hp: 100, pos: { x: p.pos.x + 30, y: p.pos.y } }));
+    const near = makeEnemy({ id: 1, hp: 100, pos: { x: p.pos.x + 30, y: p.pos.y } });
+    const far = makeEnemy({ id: 2, hp: 100, pos: { x: p.pos.x + CONFIG.holybolt.radius + 80, y: p.pos.y } });
+    w.enemies.push(near, far);
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'holybolt' }], 0.016);
-    expect(w.projectiles.length).toBe(1);
-    expect(w.projectiles[0].spell).toBe('holybolt');
-    for (let i = 0; i < 20; i++) step(w, [], 0.016);
-    expect(w.enemies[0].hp).toBeLessThan(100);
+    expect(w.enemies.find((e) => e.id === 1)!.hp).toBe(100 - CONFIG.holybolt.damage); // in radius
+    expect(w.enemies.find((e) => e.id === 2)!.hp).toBe(100); // out of radius
+    expect(w.effects.some((e) => e.kind === 'nova')).toBe(true);
   });
 
   it('frost from one player never harms an ally standing in the line', () => {

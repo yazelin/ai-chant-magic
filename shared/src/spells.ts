@@ -28,7 +28,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   shield:    { id: 'shield',    displayName: '護盾',     aliases: ['護盾', '護盾術', '盾牌', '護罩', '防護罩', '結界', 'shield', 'guard'], cooldown: 6, kind: 'buff-self', directional: false },
   aegis:     { id: 'aegis',     displayName: '聖盾',     aliases: ['聖盾', '神聖護盾', 'aegis', 'barrier'],             cooldown: 9,   kind: 'buff-allies',  directional: false },
   heal:      { id: 'heal',      displayName: '治療術',   aliases: ['治療術', '治療', '治癒', '補血', 'heal', 'cure'],   cooldown: 7,   kind: 'heal-allies',  directional: false },
-  holybolt:  { id: 'holybolt',  displayName: '聖光',     aliases: ['聖光', '聖光術', 'holybolt', 'smite'],              cooldown: 1.0, kind: 'projectile',   directional: true },
+  holybolt:  { id: 'holybolt',  displayName: '聖光',     aliases: ['聖光', '聖光術', 'holybolt', 'smite'],              cooldown: 1.0, kind: 'aoe-self',      directional: false },
 };
 
 // Default incantation (呪文) required before a spell name in 詠唱(eishō) mode.

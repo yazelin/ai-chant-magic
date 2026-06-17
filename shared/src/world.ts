@@ -166,8 +166,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         CONFIG.fireball.speed, 0, CONFIG.fireball.radius, CONFIG.fireball.ttl);
       break;
     case 'holybolt':
-      spawnFacingProjectile(world, caster, 'holybolt',
-        CONFIG.holybolt.speed, CONFIG.holybolt.damage, CONFIG.holybolt.radius, CONFIG.holybolt.ttl);
+      castHolyburst(world, caster);
       break;
     case 'frost': {
       const count = CONFIG.frost.count;
@@ -258,6 +257,22 @@ function castFrostnova(world: World, caster: Player): void {
     a: { x: caster.pos.x, y: caster.pos.y },
     radius: CONFIG.frostnova.radius,
     ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.cryo.color,
+  });
+  removeDeadEnemies(world);
+}
+
+// holybolt (「聖光」) — self-centred holy burst: damage enemies within radius
+// (Jeanne's kit is all self-centred — no aiming). Gold nova fx.
+function castHolyburst(world: World, caster: Player): void {
+  for (const e of world.enemies) {
+    if (e.hp <= 0) continue;
+    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= CONFIG.holybolt.damage;
+  }
+  pushEffect(world, {
+    kind: 'nova', ownerId: caster.id,
+    a: { x: caster.pos.x, y: caster.pos.y },
+    radius: CONFIG.holybolt.radius,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.warden.color,
   });
   removeDeadEnemies(world);
 }

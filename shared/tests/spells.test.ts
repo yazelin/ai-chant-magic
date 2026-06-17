@@ -43,7 +43,7 @@ describe('spells', () => {
     expect(SPELLS.frost.directional).toBe(true);
     expect(SPELLS.thunder.directional).toBe(true);
     expect(SPELLS.chain.directional).toBe(false);
-    expect(SPELLS.holybolt.directional).toBe(true);
+    expect(SPELLS.holybolt.directional).toBe(false);
     expect(SPELLS.frostnova.directional).toBe(false);
     expect(SPELLS.shield.directional).toBe(false);
     expect(SPELLS.aegis.directional).toBe(false);

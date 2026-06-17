@@ -42,5 +42,5 @@ export const SKILL_INFO: Record<SpellId, SkillInfo> = {
   shield:    { name: '護盾',            effect: '自身護盾',               stats: `持續 ${CONFIG.shield.duration}s · 冷卻 ${SPELLS.shield.cooldown}s`, detail: '為自身張開護盾,持續數秒,擋下期間受到的傷害。三系法師共通的自保技。' },
   aegis:     { name: '永恆閃耀·聖盾',   effect: '全隊護盾',               stats: `持續 ${CONFIG.aegis.duration}s · 範圍 ${CONFIG.aegis.radius} · 冷卻 ${SPELLS.aegis.cooldown}s`, detail: '揮舞聖旗,為範圍內所有隊友(含自己)張開聖盾。貞德的團隊保命寶具,危急時的最後防線。' },
   heal:      { name: '治療術',          effect: '治療範圍內隊友',         stats: `治療 ${CONFIG.heal.amount} · 範圍 ${CONFIG.heal.radius} · 冷卻 ${SPELLS.heal.cooldown}s`, detail: '治療範圍內所有存活隊友(含自己),恢復生命值。貞德的續航核心,讓隊伍站得更久。' },
-  holybolt:  { name: '聖光',            effect: '飛行聖光彈',             stats: `傷害 ${CONFIG.holybolt.damage} · 冷卻 ${SPELLS.holybolt.cooldown}s`, detail: '朝滑鼠方向發射聖光彈,直線單體傷害,冷卻極短。貞德的基本攻擊,邊奶邊磨輸出。' },
+  holybolt:  { name: '聖光',            effect: '自身範圍聖光爆',         stats: `傷害 ${CONFIG.holybolt.damage} · 冷卻 ${SPELLS.holybolt.cooldown}s · 範圍 ${CONFIG.holybolt.radius}`, detail: '以自身為中心爆發聖光,對周圍範圍內所有敵人造成傷害。冷卻極短,貞德站在隊伍中央邊奶邊脈衝輸出。' },
 };
