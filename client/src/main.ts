@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameScene } from './render/GameScene';
 import { Hud } from './render/hud';
+import { IncantationOverlay } from './render/incantation';
 import {
   CONFIG,
   matchSpell,
@@ -47,13 +48,21 @@ function startGame(session: GameSession, classId: ClassId): void {
   });
 
   const hud = new Hud(classId);
+  const incantation = new IncantationOverlay();
 
   // HUD refresh loop (decoupled from Phaser so game-over text updates even when
   // idle). Reads whatever World the session exposes (local sim or interpolated
   // snapshot), so the party panel renders all players in both modes.
   setInterval(() => {
     const w = session.getWorld();
-    if (w) hud.render(w);
+    if (w) {
+      hud.render(w);
+      // 惠惠 chant easter egg: drive the incantation overlay from the local
+      // pyro's 爆裂 charge (0 / non-pyro → hidden).
+      const self = w.players.find((p) => p.id === session.getSelfId());
+      const charge = self?.classId === 'pyro' ? self.pyroCharge ?? 0 : 0;
+      incantation.update(charge, Date.now());
+    }
   }, 100);
 
   // Mode toggle
