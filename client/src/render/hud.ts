@@ -57,7 +57,9 @@ export class Hud {
           const pct = Math.round(Math.max(0, Math.min(1, p.reviveProgress)) * 100);
           return `${p.name}(${cls}):倒地 ${pct}%`;
         }
-        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}`;
+        // 惠惠: show the stacked 爆裂 charge so the player knows their explosion power.
+        const charge = p.classId === 'pyro' ? `(爆裂充能 ${p.pyroCharge ?? 0})` : '';
+        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}${charge}`;
       })
       .join(' ｜ ');
 

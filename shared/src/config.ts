@@ -7,7 +7,13 @@ export const CONFIG = {
   revive: { radius: 70, time: 3, hp: 40 },        // ally channels over `time` s
   bleedout: { time: 8 },                           // downed -> dead if not revived
   fireball: { speed: 420, radius: 8, ttl: 1.5, explosionRadius: 60, explosionDamage: 30 },
-  firestorm: { speed: 300, radius: 10, ttl: 1.1, explosionRadius: 190, explosionDamage: 70 },
+  // 爆裂魔法 scales with 惠惠's charge: per-cast explosionDamage = explosionDamage*charge,
+  // radius = min(maxRadius, baseRadius + perChargeRadius*charge), cooldown = baseCd + cdPerCharge*charge.
+  firestorm: { speed: 300, radius: 10, ttl: 1.1, explosionRadius: 190, explosionDamage: 70,
+               baseRadius: 150, perChargeRadius: 40, maxRadius: 360, baseCd: 2, cdPerCharge: 1 },
+  chant: { chargePerCast: 1 },                          // each 詠唱 adds this much 爆裂 charge
+  mend: { rate: 12, duration: 3 },                      // 精靈自癒: self HoT
+  repulse: { damage: 25, radius: 140, knockback: 100 }, // 電磁斥力: dmg + shove enemies outward
   frost:    { speed: 360, radius: 6, ttl: 1.2, damage: 18, slowDuration: 2, spread: 0.25, count: 3 },
   frostnova: { radius: 150, damage: 20, slowDuration: 2.5 },
   thunder:  { range: 1000, width: 28, damage: 55, maxBounces: 2, bounceFalloff: 0.8 },

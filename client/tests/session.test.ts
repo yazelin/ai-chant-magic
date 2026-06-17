@@ -11,16 +11,17 @@ describe('LocalSession', () => {
     expect(w.players[0].classId).toBe('cryo');
   });
 
-  it('sendCast(fireball) for a pyro spawns a projectile on the next tick', () => {
+  it('sendCast(爆裂魔法) for a pyro spawns a projectile after a chant charge', () => {
     const s = new LocalSession('pyro');
     s.start();
     s.getWorld().breakTimer = 999; // isolate from wave auto-spawn
     s.sendFace(0);
-    s.sendCast('fireball');
+    s.sendCast('chant1');   // +1 爆裂 charge (no cooldown)
+    s.sendCast('firestorm');
     s.tick(0.05);
     const w = s.getWorld();
     expect(w.projectiles.length).toBeGreaterThan(0);
-    expect(w.projectiles[0].spell).toBe('fireball');
+    expect(w.projectiles[0].spell).toBe('firestorm');
     expect(w.projectiles[0].ownerId).toBe(s.getSelfId());
   });
 
@@ -31,14 +32,15 @@ describe('LocalSession', () => {
     w.breakTimer = 999; // no new spawns
     const self = w.players[0];
     self.pos = { x: 100, y: 100 };
-    // put an enemy straight ahead (to the right) within fireball reach
+    // put an enemy straight ahead (to the right) within 爆裂 reach
     w.enemies.push({
       id: 9001, pos: { x: 220, y: 100 }, hp: 30, speed: 0,
       slowUntil: 0, radius: 12, targetId: null,
     });
     const startHp = w.enemies[0].hp;
     s.sendFace(0); // face +x
-    s.sendCast('fireball');
+    s.sendCast('chant1');   // charge then 爆裂
+    s.sendCast('firestorm');
     for (let i = 0; i < 20; i++) s.tick(0.05); // let the projectile travel + explode
     // either the enemy took damage or was killed (removed) — both prove a hit
     const survivor = w.enemies.find((e) => e.id === 9001);

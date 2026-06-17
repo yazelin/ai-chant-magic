@@ -18,6 +18,7 @@ function zeroCooldowns(): Record<SpellId, number> {
   return {
     fireball: 0, firestorm: 0, frost: 0, frostnova: 0,
     thunder: 0, chain: 0, shield: 0, aegis: 0, heal: 0, holybolt: 0,
+    chant1: 0, chant2: 0, mend: 0, repulse: 0,
   };
 }
 
@@ -159,7 +160,14 @@ function movePlayers(world: World, moveDirs: Map<string, Vec2>, dt: number): voi
 function castSpell(world: World, caster: Player, spell: SpellId): void {
   if (world.time < caster.cooldowns[spell]) return;          // on cooldown
   if (!classSpellSet(caster.classId).has(spell)) return;     // not in loadout
-  caster.cooldowns[spell] = world.time + SPELLS[spell].cooldown;
+  // 爆裂魔法 needs ≥1 charge; abort (no cooldown spent) if none stacked yet.
+  if (spell === 'firestorm' && (caster.pyroCharge ?? 0) < 1) return;
+  if (spell === 'firestorm') {
+    // cooldown scales with the charge being consumed: bigger blast → longer recovery.
+    caster.cooldowns[spell] = world.time + CONFIG.firestorm.baseCd + (caster.pyroCharge ?? 0) * CONFIG.firestorm.cdPerCharge;
+  } else {
+    caster.cooldowns[spell] = world.time + SPELLS[spell].cooldown;
+  }
 
   switch (spell) {
     case 'fireball':
@@ -181,13 +189,47 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       break;
     }
     case 'firestorm': {
-      // Slow fused mortar: explodes on enemy contact OR when ttl expires.
+      // 爆裂魔法: slow fused mortar whose explosion scales with the stacked charge,
+      // then the charge is consumed.
+      const charge = caster.pyroCharge ?? 0;
+      const exDmg = CONFIG.firestorm.explosionDamage * charge;
+      const exRadius = Math.min(
+        CONFIG.firestorm.maxRadius,
+        CONFIG.firestorm.baseRadius + CONFIG.firestorm.perChargeRadius * charge,
+      );
       const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
       spawnProjectile(world, caster, 'firestorm', dir,
         CONFIG.firestorm.speed, 0, CONFIG.firestorm.radius, CONFIG.firestorm.ttl,
-        CONFIG.firestorm.ttl);
+        CONFIG.firestorm.ttl, exDmg, exRadius);
+      caster.pyroCharge = 0; // consumed
       break;
     }
+    case 'chant1':
+    case 'chant2':
+      // No-cooldown chant: stack 爆裂 charge (no damage). Small aura to show the chant.
+      caster.pyroCharge = (caster.pyroCharge ?? 0) + CONFIG.chant.chargePerCast;
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.player.radius * 1.5,
+        ttl: CONFIG.effectTtl.aura, colorHint: CLASSES.pyro.color,
+      });
+      break;
+    case 'mend': {
+      // 精靈自癒: self-only heal-over-time.
+      caster.healUntil = world.time + CONFIG.mend.duration;
+      caster.healRate = CONFIG.mend.rate;
+      pushEffect(world, {
+        kind: 'aura', ownerId: caster.id,
+        a: { x: caster.pos.x, y: caster.pos.y },
+        radius: CONFIG.player.radius * 2,
+        ttl: CONFIG.mend.duration, colorHint: CLASSES.cryo.color,
+      });
+      break;
+    }
+    case 'repulse':
+      castRepulse(world, caster);
+      break;
     case 'frostnova':
       castFrostnova(world, caster);
       break;
@@ -227,6 +269,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         if (!ally.alive || ally.downed) continue;
         if (dist(caster.pos, ally.pos) <= CONFIG.heal.radius) {
           ally.healUntil = world.time + CONFIG.heal.duration;
+          ally.healRate = CONFIG.heal.rate;
         }
       }
       pushEffect(world, {
@@ -259,6 +302,31 @@ function castFrostnova(world: World, caster: Player): void {
     a: { x: caster.pos.x, y: caster.pos.y },
     radius: CONFIG.frostnova.radius,
     ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.cryo.color,
+  });
+  removeDeadEnemies(world);
+}
+
+// repulse (「電磁斥力」) — self-centred burst: damage enemies in radius and shove
+// them outward (knockback, clamped to the arena) to keep them off 美琴.
+function castRepulse(world: World, caster: Player): void {
+  const o = caster.pos;
+  for (const e of world.enemies) {
+    if (e.hp <= 0) continue;
+    const rel = sub(e.pos, o);
+    const d = len(rel);
+    if (d <= CONFIG.repulse.radius + e.radius) {
+      e.hp -= CONFIG.repulse.damage;
+      const ux = d > 0.001 ? rel.x / d : 1;
+      const uy = d > 0.001 ? rel.y / d : 0;
+      e.pos.x = Math.max(0, Math.min(CONFIG.arenaWidth, e.pos.x + ux * CONFIG.repulse.knockback));
+      e.pos.y = Math.max(0, Math.min(CONFIG.arenaHeight, e.pos.y + uy * CONFIG.repulse.knockback));
+    }
+  }
+  pushEffect(world, {
+    kind: 'nova', ownerId: caster.id,
+    a: { x: o.x, y: o.y },
+    radius: CONFIG.repulse.radius,
+    ttl: CONFIG.effectTtl.nova, colorHint: CLASSES.storm.color,
   });
   removeDeadEnemies(world);
 }
@@ -363,7 +431,8 @@ function spawnFacingProjectile(
 
 function spawnProjectile(
   world: World, caster: Player, spell: SpellId, dir: Vec2,
-  speed: number, damage: number, radius: number, ttl: number, fuse?: number
+  speed: number, damage: number, radius: number, ttl: number, fuse?: number,
+  explosionDamage?: number, explosionRadius?: number
 ): void {
   world.projectiles.push({
     id: world.nextEntityId++,
@@ -371,7 +440,7 @@ function spawnProjectile(
     ownerId: caster.id,
     pos: { x: caster.pos.x, y: caster.pos.y },
     vel: { x: dir.x * speed, y: dir.y * speed },
-    damage, radius, ttl, fuse,
+    damage, radius, ttl, fuse, explosionDamage, explosionRadius,
   });
 }
 
@@ -414,7 +483,8 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
       return false;
     case 'firestorm':
       explodeAoE(world, proj.pos, proj.ownerId,
-        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
+        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
       return true; // detonated on contact; fuse loop must skip it
     case 'frost':
       hit.hp -= proj.damage;
@@ -456,7 +526,8 @@ function updateProjectiles(world: World, dt: number): void {
     if (proj.spell === 'firestorm' && proj.fuse !== undefined &&
         proj.ttl <= 0 && !detonated.has(proj.id)) {
       explodeAoE(world, proj.pos, proj.ownerId,
-        CONFIG.firestorm.explosionRadius, CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
+        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
     }
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
@@ -494,7 +565,7 @@ function enterDowned(world: World, p: Player): void {
 function updateRegen(world: World, dt: number): void {
   for (const p of world.players) {
     if (!p.alive || p.downed) continue;
-    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + CONFIG.heal.rate * dt);
+    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + (p.healRate ?? CONFIG.heal.rate) * dt);
   }
 }
 

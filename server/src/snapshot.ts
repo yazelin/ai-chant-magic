@@ -28,6 +28,7 @@ export interface SnapshotPlayer {
   downed: boolean;
   reviveProgress: number;
   shieldUntil: number;
+  pyroCharge: number;
 }
 
 export interface SnapshotEnemy {
@@ -89,6 +90,7 @@ export function toSnapshot(world: World): Snapshot {
       downed: p.downed,
       reviveProgress: p.reviveProgress,
       shieldUntil: p.shieldUntil,
+      pyroCharge: p.pyroCharge ?? 0,
     })),
     enemies: world.enemies.map((e) => ({
       id: e.id,

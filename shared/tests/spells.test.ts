@@ -6,10 +6,11 @@ import type { SpellId } from '../src/types';
 const ALL_SPELL_IDS: SpellId[] = [
   'fireball', 'firestorm', 'frost', 'frostnova',
   'thunder', 'chain', 'shield', 'aegis', 'heal', 'holybolt',
+  'chant1', 'chant2', 'mend', 'repulse',
 ];
 
 describe('spells', () => {
-  it('defines exactly the ten spells', () => {
+  it('defines exactly the expected spells', () => {
     expect(Object.keys(SPELLS).sort()).toEqual([...ALL_SPELL_IDS].sort());
   });
 
@@ -19,10 +20,10 @@ describe('spells', () => {
     }
   });
 
-  it('every spell has at least two aliases (zh + en), a positive cooldown and a name', () => {
+  it('every spell has at least two aliases (zh + en), a non-negative cooldown and a name', () => {
     for (const def of Object.values(SPELLS)) {
       expect(def.aliases.length).toBeGreaterThanOrEqual(2);
-      expect(def.cooldown).toBeGreaterThan(0);
+      expect(def.cooldown).toBeGreaterThanOrEqual(0); // 詠唱 chants are no-cooldown
       expect(def.displayName.length).toBeGreaterThan(0);
     }
   });
@@ -31,6 +32,7 @@ describe('spells', () => {
     const expected: Record<SpellId, number> = {
       fireball: 1.2, firestorm: 7, frost: 1.5, frostnova: 5,
       thunder: 2.5, chain: 3, shield: 6, aegis: 9, heal: 7, holybolt: 1.0,
+      chant1: 0, chant2: 0, mend: 8, repulse: 6,
     };
     for (const id of ALL_SPELL_IDS) {
       expect(SPELLS[id].cooldown).toBe(expected[id]);
@@ -53,7 +55,7 @@ describe('spells', () => {
   it('declares a kind for every spell', () => {
     const kinds = new Set([
       'projectile', 'aoe-self', 'hitscan', 'chain',
-      'buff-self', 'buff-allies', 'heal-allies',
+      'buff-self', 'buff-allies', 'heal-allies', 'heal-self',
     ]);
     for (const def of Object.values(SPELLS)) {
       expect(kinds.has(def.kind)).toBe(true);

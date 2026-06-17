@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import { createWorld, createSoloWorld, step } from '../src/world';
 import { CONFIG } from '../src/config';
 import { CLASSES } from '../src/classes';
-import { SPELLS } from '../src/spells';
 import { Enemy, Player, World } from '../src/types';
 
 function makeEnemy(over: Partial<Enemy> = {}): Enemy {
@@ -150,13 +149,15 @@ describe('step — cooldown + class gating', () => {
     expect(w.players[0].cooldowns.fireball).toBe(0); // never set
   });
 
-  it('sets cooldown to time + def.cooldown and blocks an immediate repeat', () => {
+  it('sets a dynamic 爆裂 cooldown (base + charge) and blocks an immediate repeat', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
-    expect(w.players[0].cooldowns.fireball).toBeCloseTo(w.time + SPELLS.fireball.cooldown);
+    // chant once → 1 charge, then 爆裂魔法
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
+    expect(w.players[0].cooldowns.firestorm).toBeCloseTo(w.time + CONFIG.firestorm.baseCd + 1 * CONFIG.firestorm.cdPerCharge);
     expect(w.projectiles.length).toBe(1);
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016); // still on cooldown
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016); // on cooldown + 0 charge
     expect(w.projectiles.length).toBe(1); // no second projectile
   });
 
@@ -164,17 +165,21 @@ describe('step — cooldown + class gating', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
     w.players[0].downed = true;
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     expect(w.projectiles.length).toBe(0);
+    expect(w.players[0].pyroCharge ?? 0).toBe(0); // chant ignored too
   });
 });
 
-describe('step — fireball, projectile update, no friendly fire', () => {
+describe('step — 爆裂 projectile update, no friendly fire', () => {
+  // pyro's only projectile is now 爆裂魔法 (firestorm), which needs ≥1 chant charge.
   it('spawns a projectile carrying ownerId travelling along facing', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
     w.players[0].facing = 0; // +x
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     expect(w.projectiles.length).toBe(1);
     expect(w.projectiles[0].ownerId).toBe('local');
     expect(w.projectiles[0].vel.x).toBeGreaterThan(0);
@@ -186,7 +191,8 @@ describe('step — fireball, projectile update, no friendly fire', () => {
     const p = w.players[0];
     p.facing = 0;
     w.enemies.push(makeEnemy({ hp: 10, pos: { x: p.pos.x + 30, y: p.pos.y } }));
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'fireball' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     let sawBlast = false;
     for (let i = 0; i < 30; i++) {
       step(w, [], 0.016);
@@ -197,7 +203,7 @@ describe('step — fireball, projectile update, no friendly fire', () => {
     expect(sawBlast).toBe(true); // a blast effect was spawned at the explosion
   });
 
-  it('never damages allies caught in a fireball explosion (no friendly fire)', () => {
+  it('never damages allies caught in the explosion (no friendly fire)', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'pyro' },
       { id: 'b', name: 'Bo', classId: 'pyro' },
@@ -211,7 +217,8 @@ describe('step — fireball, projectile update, no friendly fire', () => {
     b.pos = { x: a.pos.x + 70, y: a.pos.y };
     const allyHp = b.hp;
     w.enemies.push(makeEnemy({ hp: 10, pos: { x: a.pos.x + 30, y: a.pos.y } }));
-    step(w, [{ kind: 'cast', playerId: 'a', spell: 'fireball' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'chant1' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'firestorm' }], 0.016);
     for (let i = 0; i < 30; i++) step(w, [], 0.016);
     expect(w.enemies.length).toBe(0);   // enemy killed by the blast
     expect(b.hp).toBe(allyHp);          // ally completely unhurt by the explosion
@@ -268,6 +275,7 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
     w.players[0].facing = 0;
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016); // 1 charge
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     expect(w.projectiles.length).toBe(1);
     const proj = w.projectiles[0];
@@ -285,6 +293,7 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     // of the projectile's resting/expiry point — only ttl-expiry AoE can hit it.
     const landX = p.pos.x + CONFIG.firestorm.speed * CONFIG.firestorm.ttl;
     w.enemies.push(makeEnemy({ hp: 200, pos: { x: landX, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016); // 1 charge
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     let sawBlast = false;
     for (let i = 0; i < 120; i++) {
@@ -304,6 +313,7 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     // Direct-contact enemy plus a second enemy nearby (within explosion radius).
     w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: p.pos.x + 30, y: p.pos.y } }));
     w.enemies.push(makeEnemy({ id: 2, hp: 200, pos: { x: p.pos.x + 60, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016); // 1 charge
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'firestorm' }], 0.016);
     // Step until the firestorm detonates on contact, capturing the blast effect on
     // the very frame it spawns (before it decays away).
@@ -333,6 +343,7 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     b.pos = { x: a.pos.x + 90, y: a.pos.y };
     const allyHp = b.hp;
     w.enemies.push(makeEnemy({ hp: 10, pos: { x: a.pos.x + 30, y: a.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'chant1' }], 0.016); // 1 charge
     step(w, [{ kind: 'cast', playerId: 'a', spell: 'firestorm' }], 0.016);
     for (let i = 0; i < 30; i++) step(w, [], 0.016);
     expect(b.hp).toBe(allyHp);
@@ -464,15 +475,6 @@ describe('step — chain (greedy nearest-unhit traversal)', () => {
 });
 
 describe('step — shield / aegis / heal (buff + heal allies, alive only)', () => {
-  it('shield sets caster shieldUntil and spawns an aura effect', () => {
-    const w = createSoloWorld('pyro');
-    w.breakTimer = 999;
-    const p = w.players[0];
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'shield' }], 0.016);
-    expect(p.shieldUntil).toBeCloseTo(w.time + CONFIG.shield.duration);
-    expect(w.effects.some((e) => e.kind === 'aura')).toBe(true);
-  });
-
   it('aegis shields alive allies in radius incl self, but skips out-of-range and downed allies', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'warden' },
@@ -534,7 +536,7 @@ describe('step — transient effects decay', () => {
   it('decays effect ttl over time and removes expired effects', () => {
     const w = createSoloWorld('pyro');
     w.breakTimer = 999;
-    step(w, [{ kind: 'cast', playerId: 'local', spell: 'shield' }], 0.016);
+    step(w, [{ kind: 'cast', playerId: 'local', spell: 'chant1' }], 0.016); // spawns an aura fx
     expect(w.effects.length).toBeGreaterThan(0);
     const ttl0 = w.effects[0].ttl;
     step(w, [], 0.05);
