@@ -6,7 +6,7 @@ Usage: assemble.py <job-dir> <n1,n2,...> [--out sheet.png] [--cell 128] [--fps 8
 Writes <out> (a single-row sheet, len*CELL x CELL, transparent) and <out>.gif
 (animated preview on a solid bg) next to it.
 """
-import sys, os, argparse
+import sys, os, json, argparse
 from PIL import Image
 
 ap = argparse.ArgumentParser()
@@ -25,6 +25,8 @@ out = a.out or os.path.join(a.jobdir, os.path.basename(a.jobdir.rstrip("/")) + "
 sheet = Image.new("RGBA", (CELL * len(cells), CELL), (0, 0, 0, 0))
 for i, c in enumerate(cells): sheet.alpha_composite(c, (i * CELL, 0))
 sheet.save(out)
+# remember the chosen order so the picker can restore it on next open
+json.dump(nums, open(os.path.join(a.jobdir, "pick.json"), "w"))
 
 bg = tuple(int(a.bg[i:i+2], 16) for i in (0, 2, 4)) + (255,)
 sc = 4; dur = int(1000 / a.fps)

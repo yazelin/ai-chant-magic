@@ -75,10 +75,19 @@ document.getElementById('jobname').textContent=JOB||'(未指定 ?job=)';
 let frames=[], picked=[], playing=true, idx=0, acc=0, last=0;
 const $=s=>document.querySelector(s), stage=$('#stage'), ctx=stage.getContext('2d');
 const path=f=>`jobs/${JOB}/${f}`;
+const LSKEY='forge:'+JOB;
 async function load(){
   const list=await fetch(path('frames.json')).then(r=>r.json());
   frames=list.map(f=>({...f,img:Object.assign(new Image(),{src:path(f.file)})}));
   await Promise.all(frames.map(f=>f.img.decode().catch(()=>{})));
+  // restore last selection: localStorage (your in-browser tweaks) > pick.json (last build)
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem(LSKEY)); }catch(e){}
+  if(!Array.isArray(saved)||!saved.length){
+    try{ saved=await fetch(path('pick.json')).then(r=>r.ok?r.json():null); }catch(e){}
+  }
+  const valid=new Set(frames.map(f=>f.n));
+  if(Array.isArray(saved)) picked=saved.filter(n=>valid.has(n));
   buildGrid(); requestAnimationFrame(loop);
 }
 function buildGrid(){
@@ -105,6 +114,7 @@ function refresh(){
     c.ondrop=e=>{e.preventDefault(); const from=+e.dataTransfer.getData('text'); const [m]=picked.splice(from,1); picked.splice(pos,0,m); refresh();};
     s.appendChild(c);});
   $('#out').value=picked.join(','); if(idx>=picked.length) idx=0;
+  try{ localStorage.setItem(LSKEY, JSON.stringify(picked)); }catch(e){}
 }
 function drawBG(){const box=$('#previewBox'),v=$('#bg').value; box.classList.toggle('bg-checker',v==='checker');
   box.style.background=v==='dark'?'#0d0d14':v==='game'?'#2b2440':'';}
