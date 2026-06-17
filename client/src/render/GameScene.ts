@@ -33,6 +33,13 @@ const LPC_PYRO_CAST = new URL('../assets/lpc-pyro-cast.png', import.meta.url).hr
 const LPC_PYRO_FRAME = { width: 128, height: 128 };
 const PYRO_WALK_ANIM = 'pyro-walk';
 
+// Warden (white Jeanne): a walk-cycle spritesheet of 128x128 cells, same
+// left-facing / feet-near-bottom convention as the pyro LPC art so it reuses
+// the pyro scale/origin constants. Idle = frame 0 (no separate idle/cast art yet).
+const WARDEN_WALK = new URL('../assets/warden-walk.png', import.meta.url).href;
+const WARDEN_WALK_ANIM = 'warden-walk';
+const WARDEN_WALK_FRAMES = 5; // ponytail: bump if we re-pick more frames
+
 // Target on-screen heights for the upright sprites (px). The scale is derived
 // from each texture's real pixel height so source art can be any size.
 const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
@@ -136,6 +143,8 @@ export class GameScene extends Phaser.Scene {
     });
     this.load.image('lpc-pyro-idle', LPC_PYRO_IDLE);
     this.load.image('lpc-pyro-cast', LPC_PYRO_CAST);
+    // Warden walk-cycle sheet (128x128 cells).
+    this.load.spritesheet('warden-walk', WARDEN_WALK, { frameWidth: 128, frameHeight: 128 });
   }
 
   create(): void {
@@ -150,6 +159,14 @@ export class GameScene extends Phaser.Scene {
       this.anims.create({
         key: PYRO_WALK_ANIM,
         frames: this.anims.generateFrameNumbers('lpc-pyro-walk', { start: 0, end: 8 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists(WARDEN_WALK_ANIM)) {
+      this.anims.create({
+        key: WARDEN_WALK_ANIM,
+        frames: this.anims.generateFrameNumbers('warden-walk', { start: 0, end: WARDEN_WALK_FRAMES - 1 }),
         frameRate: 10,
         repeat: -1,
       });
@@ -677,6 +694,12 @@ export class GameScene extends Phaser.Scene {
     const x = pl.pos.x;
     const y = pl.pos.y;
     const isPyro = pl.classId === 'pyro';
+    const isWarden = pl.classId === 'warden';
+    const isAnimated = isPyro || isWarden; // classes that use a walk-cycle sheet
+    // texture keys per animated class (warden has no separate idle/cast yet → frame 0)
+    const walkAnim = isWarden ? WARDEN_WALK_ANIM : PYRO_WALK_ANIM;
+    const idleKey = isWarden ? 'warden-walk' : 'lpc-pyro-idle';
+    const castKey = isWarden ? 'warden-walk' : 'lpc-pyro-cast';
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -695,8 +718,8 @@ export class GameScene extends Phaser.Scene {
     st.lastX = x;
     st.lastY = y;
 
-    // Initial texture: pyro starts idle, others use their legacy <classId>.
-    const initialKey = isPyro ? 'lpc-pyro-idle' : pl.classId;
+    // Initial texture: animated classes start on their idle key, others use their legacy <classId>.
+    const initialKey = isAnimated ? idleKey : pl.classId;
     const sprite = this.playerSpriteFor(pl.id, initialKey);
     sprite.setDepth(DEPTH_PLAYER);
     sprite.setAlpha(pl.downed ? 0.4 : 1);
@@ -705,8 +728,9 @@ export class GameScene extends Phaser.Scene {
       // downed: no anim/bob/cast. Stop any walk anim and show the idle/legacy
       // texture, keep the legacy dim + cross marker.
       sprite.anims.stop();
-      if (isPyro) {
-        if (sprite.texture.key !== 'lpc-pyro-idle') sprite.setTexture('lpc-pyro-idle');
+      if (isAnimated) {
+        if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
+        sprite.setFrame(0);
         sprite.setOrigin(0.5, PYRO_ORIGIN_Y);
         sprite.setScale(PYRO_SCALE);
         sprite.setPosition(x, y + PYRO_GROUND_OFFSET);
@@ -732,15 +756,16 @@ export class GameScene extends Phaser.Scene {
     // cast punch: a quick scale-up that decays over CAST_POSE_SECS
     const punch = casting ? 1 + 0.15 * ((st.castUntil - this.t) / CAST_POSE_SECS) : 1;
 
-    if (isPyro) {
-      // --- LPC pyro state machine: cast > walk > idle ---
+    if (isAnimated) {
+      // --- animated-class state machine: cast > walk > idle ---
       if (casting) {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
-        if (sprite.texture.key !== 'lpc-pyro-cast') sprite.setTexture('lpc-pyro-cast');
+        if (sprite.texture.key !== castKey) sprite.setTexture(castKey);
+        if (isWarden) sprite.setFrame(0); // no cast frame yet → hold neutral
       } else if (moving) {
         // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
-        sprite.play(PYRO_WALK_ANIM, true);
+        sprite.play(walkAnim, true);
         // Foot-sliding sync: drive the walk playback rate from the actual
         // movement speed so faster movement → faster steps and the feet appear
         // planted instead of skating. Clamp so it never crawls or strobes.
@@ -748,7 +773,8 @@ export class GameScene extends Phaser.Scene {
       } else {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
-        if (sprite.texture.key !== 'lpc-pyro-idle') sprite.setTexture('lpc-pyro-idle');
+        if (sprite.texture.key !== idleKey) sprite.setTexture(idleKey);
+        if (isWarden) sprite.setFrame(0);
       }
 
       // The walk frames carry the motion; keep only a tiny idle bob.

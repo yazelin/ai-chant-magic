@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sprite-forge picker</title>
+<style>
+  :root { --bg:#15151c; --panel:#1f1f2b; --line:#33334a; --accent:#ffd24d; --pick:#4ca3ff; --thumb:200px; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,sans-serif; background:var(--bg); color:#e8e8f0; }
+  header { padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0 0 2px; }
+  header .hint { color:#9a9ab0; font-size:12px; }
+  .wrap { display:grid; grid-template-columns:1fr 340px; }
+  .gridpane { padding:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--thumb),1fr)); gap:8px; }
+  .cell { position:relative; background:#2a2a38; border:2px solid transparent; border-radius:8px; cursor:pointer; aspect-ratio:1; }
+  .cell img { width:100%; height:100%; image-rendering:pixelated; object-fit:contain; }
+  .cell .num { position:absolute; left:4px; top:3px; font-size:15px; font-weight:700; color:#fff; background:#000a; padding:1px 7px; border-radius:5px; }
+  .cell.sel { border-color:var(--pick); }
+  .cell .ord { position:absolute; right:3px; top:2px; min-width:20px; height:20px; line-height:20px; text-align:center; font-weight:700; font-size:12px; color:#08121f; background:var(--accent); border-radius:10px; display:none; }
+  .cell.sel .ord { display:block; }
+  aside { position:sticky; top:54px; height:calc(100vh - 54px); overflow:auto; padding:12px; background:var(--panel); border-left:1px solid var(--line); }
+  .preview { display:flex; flex-direction:column; align-items:center; padding:10px; background:#0d0d14; border:1px solid var(--line); border-radius:10px; }
+  #stage { image-rendering:pixelated; border-radius:8px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin:10px 0; font-size:13px; }
+  .controls label { display:flex; gap:6px; align-items:center; }
+  button { font:inherit; color:#e8e8f0; background:#2c2c3c; border:1px solid var(--line); border-radius:7px; padding:5px 10px; cursor:pointer; }
+  button:hover { background:#37374b; }
+  button.primary { background:var(--pick); color:#06121f; border-color:var(--pick); font-weight:700; }
+  .seq { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
+  .chip { display:flex; align-items:center; gap:4px; background:#2a2a3a; border:1px solid var(--line); border-radius:6px; padding:2px 4px; cursor:grab; }
+  .chip img { width:40px; height:40px; image-rendering:pixelated; }
+  .chip .x { color:#ff7a7a; cursor:pointer; font-weight:700; padding:0 2px; }
+  .chip.drag { opacity:.4; }
+  textarea { width:100%; height:54px; background:#0d0d14; color:#bfe; border:1px solid var(--line); border-radius:7px; font-family:monospace; padding:6px; }
+  h2 { font-size:13px; color:#9a9ab0; margin:14px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
+  .bg-checker { background-image:linear-gradient(45deg,#444 25%,transparent 25%),linear-gradient(-45deg,#444 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#444 75%),linear-gradient(-45deg,transparent 75%,#444 75%); background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>sprite-forge picker — <span id="jobname">?</span></h1>
+  <div class="hint">點縮圖加入序列 → 右側即時預覽動畫。拖曳重排,選順了把右下角編號丟回給 agent:<code>forge.sh build &lt;job&gt; &lt;編號&gt;</code></div>
+  <div class="controls" style="margin-top:6px">
+    <label>縮圖大小 <input id="thumb" type="range" min="110" max="360" value="200"><span id="thumbv">200px</span></label>
+    <label><input id="px" type="checkbox" checked> 像素銳化</label>
+  </div>
+</header>
+<div class="wrap">
+  <div class="gridpane"><div id="grid" class="grid"></div></div>
+  <aside>
+    <h2>預覽</h2>
+    <div class="preview bg-checker" id="previewBox"><canvas id="stage" width="256" height="256"></canvas></div>
+    <div class="controls">
+      <button id="play" class="primary">⏸ 暫停</button>
+      <label>FPS <input id="fps" type="range" min="1" max="20" value="8"><span id="fpsv">8</span></label>
+      <label><input id="flip" type="checkbox"> 翻轉</label>
+      <label>放大 <input id="zoom" type="range" min="1" max="4" step="1" value="2"><span id="zoomv">2x</span></label>
+      <label>底 <select id="bg"><option value="checker">棋盤</option><option value="dark">深色</option><option value="game">遊戲場</option></select></label>
+    </div>
+    <h2>序列(可拖曳重排)</h2>
+    <div id="seq" class="seq"></div>
+    <div class="controls">
+      <button id="clear">清空</button><button id="reverse">反向</button><button id="autosort">依差異自動排</button>
+    </div>
+    <h2>輸出</h2>
+    <textarea id="out" readonly></textarea>
+    <button id="copy">複製編號序列</button>
+  </aside>
+</div>
+<script>
+const JOB=new URLSearchParams(location.search).get('job')||'';
+document.getElementById('jobname').textContent=JOB||'(未指定 ?job=)';
+let frames=[], picked=[], playing=true, idx=0, acc=0, last=0;
+const $=s=>document.querySelector(s), stage=$('#stage'), ctx=stage.getContext('2d');
+const path=f=>`jobs/${JOB}/${f}`;
+async function load(){
+  const list=await fetch(path('frames.json')).then(r=>r.json());
+  frames=list.map(f=>({...f,img:Object.assign(new Image(),{src:path(f.file)})}));
+  await Promise.all(frames.map(f=>f.img.decode().catch(()=>{})));
+  buildGrid(); requestAnimationFrame(loop);
+}
+function buildGrid(){
+  const g=$('#grid'); g.innerHTML='';
+  frames.forEach(f=>{
+    const d=document.createElement('div'); d.className='cell'; d.dataset.n=f.n;
+    d.innerHTML=`<span class="num">${f.n}</span><span class="ord"></span>`;
+    const im=document.createElement('img'); im.src=path(f.file); d.appendChild(im);
+    d.onclick=()=>toggle(f.n); g.appendChild(d);
+  });
+  refresh();
+}
+function toggle(n){const i=picked.indexOf(n); i>=0?picked.splice(i,1):picked.push(n); refresh();}
+function refresh(){
+  document.querySelectorAll('.cell').forEach(c=>{const n=+c.dataset.n,i=picked.indexOf(n);
+    c.classList.toggle('sel',i>=0); c.querySelector('.ord').textContent=i>=0?(i+1):'';});
+  const s=$('#seq'); s.innerHTML='';
+  picked.forEach((n,pos)=>{const f=frames.find(x=>x.n===n); if(!f)return;
+    const c=document.createElement('div'); c.className='chip'; c.draggable=true;
+    c.innerHTML=`<img src="${path(f.file)}"><span>${n}</span><span class="x">×</span>`;
+    c.querySelector('.x').onclick=e=>{e.stopPropagation(); picked.splice(pos,1); refresh();};
+    c.ondragstart=e=>{c.classList.add('drag'); e.dataTransfer.setData('text',pos);};
+    c.ondragend=()=>c.classList.remove('drag'); c.ondragover=e=>e.preventDefault();
+    c.ondrop=e=>{e.preventDefault(); const from=+e.dataTransfer.getData('text'); const [m]=picked.splice(from,1); picked.splice(pos,0,m); refresh();};
+    s.appendChild(c);});
+  $('#out').value=picked.join(','); if(idx>=picked.length) idx=0;
+}
+function drawBG(){const box=$('#previewBox'),v=$('#bg').value; box.classList.toggle('bg-checker',v==='checker');
+  box.style.background=v==='dark'?'#0d0d14':v==='game'?'#2b2440':'';}
+function loop(ts){const dt=(ts-last)/1000; last=ts;
+  const z=+$('#zoom').value,S=128*z; if(stage.width!==S){stage.width=stage.height=S;}
+  ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,S,S);
+  if(picked.length){ if(playing){acc+=dt; const spf=1/(+$('#fps').value); while(acc>=spf){acc-=spf; idx=(idx+1)%picked.length;}}
+    const f=frames.find(x=>x.n===picked[idx%picked.length]);
+    if(f&&f.img.complete){ctx.save(); if($('#flip').checked){ctx.translate(S,0);ctx.scale(-1,1);} ctx.drawImage(f.img,0,0,S,S); ctx.restore();}}
+  requestAnimationFrame(loop);
+}
+function autosort(){ if(picked.length<3)return;
+  const c=document.createElement('canvas');c.width=c.height=64;const cx=c.getContext('2d'),data={};
+  picked.forEach(n=>{const f=frames.find(x=>x.n===n);cx.clearRect(0,0,64,64);cx.drawImage(f.img,0,0,64,64);data[n]=cx.getImageData(0,0,64,64).data;});
+  const diff=(a,b)=>{let s=0;for(let i=0;i<a.length;i+=4){s+=(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])+Math.abs(a[i+3]-b[i+3]))*(Math.floor((i/4)/64)>32?2:1);}return s;};
+  let best=null;
+  for(const start of picked){const used=[start],rem=new Set(picked);rem.delete(start);
+    while(rem.size){let bn=null,bd=1e18;for(const k of rem){const d=diff(data[used[used.length-1]],data[k]);if(d<bd){bd=d;bn=k;}}used.push(bn);rem.delete(bn);}
+    let cost=0;for(let i=0;i<used.length-1;i++)cost+=diff(data[used[i]],data[used[i+1]]);cost+=diff(data[used[used.length-1]],data[used[0]]);
+    if(!best||cost<best.cost)best={cost,used};}
+  picked=best.used; refresh();
+}
+$('#thumb').oninput=e=>{document.documentElement.style.setProperty('--thumb',e.target.value+'px');$('#thumbv').textContent=e.target.value+'px';};
+$('#px').onchange=e=>document.querySelectorAll('.cell img,.chip img').forEach(im=>im.style.imageRendering=e.target.checked?'pixelated':'auto');
+$('#play').onclick=()=>{playing=!playing;$('#play').textContent=playing?'⏸ 暫停':'▶ 播放';};
+$('#fps').oninput=e=>$('#fpsv').textContent=e.target.value;
+$('#zoom').oninput=e=>$('#zoomv').textContent=e.target.value+'x';
+$('#bg').onchange=drawBG; drawBG();
+$('#clear').onclick=()=>{picked=[];refresh();};
+$('#reverse').onclick=()=>{picked.reverse();refresh();};
+$('#autosort').onclick=autosort;
+$('#copy').onclick=()=>{$('#out').select();document.execCommand('copy');};
+if(!JOB){document.getElementById('grid').innerHTML='<p style="color:#ff9">缺 ?job=&lt;name&gt;。例:picker.html?job=jeanne-walk</p>';}else load();
+</script>
+</body>
+</html>
