@@ -9,13 +9,15 @@ export interface WalkSheet {
   anim: string;
   frames: number;
   idleFrame: number;
+  castUrl: string; // single 128px cast-pose frame, shown while casting
 }
 
 export const SHEET_WALKERS: Partial<Record<ClassId, WalkSheet>> = {
-  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8, idleFrame: 0 },
-  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5, idleFrame: 4 },
-  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5, idleFrame: 4 },
-  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5, idleFrame: 3 },
+  pyro:   { url: new URL('../assets/pyro-walk.png', import.meta.url).href,   anim: 'pyro-walk',   frames: 8, idleFrame: 0, castUrl: new URL('../assets/pyro-cast.png', import.meta.url).href },
+  cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5, idleFrame: 4, castUrl: new URL('../assets/cryo-cast.png', import.meta.url).href },
+  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5, idleFrame: 4, castUrl: new URL('../assets/storm-cast.png', import.meta.url).href },
+  warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5, idleFrame: 3, castUrl: new URL('../assets/warden-cast.png', import.meta.url).href },
 };
 
-export const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
+export const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // walk texture key
+export const castKeyFor = (c: ClassId) => `${c}-cast`; // cast texture key

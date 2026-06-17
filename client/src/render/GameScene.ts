@@ -12,7 +12,7 @@ import {
 import { moveDirFromKeys, facingFromMouse } from '../input/controls';
 import { GameSession } from '../session/GameSession';
 import { initAudio, sfxCast, sfxFireball, sfxExplosion } from '../audio/sfx';
-import { SHEET_WALKERS, sheetWalkerKey } from './walkSheets';
+import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
 // player's texture is just `player.classId`; enemies share one 'enemy' key.
@@ -122,9 +122,12 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     for (const s of SPRITES) this.load.image(s.key, s.url);
-    // Sheet-walker classes (128x128 cells) — all four mages.
+    // Sheet-walker classes (128x128 cells) — all four mages. Walk sheet + a
+    // single cast-pose frame each.
     for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
-      this.load.spritesheet(sheetWalkerKey(cls), SHEET_WALKERS[cls]!.url, { frameWidth: 128, frameHeight: 128 });
+      const sw = SHEET_WALKERS[cls]!;
+      this.load.spritesheet(sheetWalkerKey(cls), sw.url, { frameWidth: 128, frameHeight: 128 });
+      this.load.image(castKeyFor(cls), sw.castUrl);
     }
   }
 
@@ -675,8 +678,8 @@ export class GameScene extends Phaser.Scene {
     // texture keys (sheet walkers have no separate idle/cast art → frame 0)
     const walkAnim = sw?.anim ?? '';
     const idleKey = isSheet ? sheetWalkerKey(pl.classId) : '';
-    const castKey = idleKey;
-    const idleFrame = sw?.idleFrame ?? 0; // feet-together frame for standing/cast
+    const castKey = isSheet ? castKeyFor(pl.classId) : ''; // dedicated cast-pose image
+    const idleFrame = sw?.idleFrame ?? 0; // feet-together frame for standing
 
     // anim state (lazy)
     let st = this.playerAnim.get(pl.id);
@@ -738,8 +741,9 @@ export class GameScene extends Phaser.Scene {
       if (casting) {
         sprite.anims.stop();
         sprite.anims.timeScale = 1;
+        // cast pose is a dedicated single-frame image
         if (sprite.texture.key !== castKey) sprite.setTexture(castKey);
-        if (isSheet) sprite.setFrame(idleFrame); // no cast art yet → hold idle pose
+        sprite.setFrame(0);
       } else if (moving) {
         // ignoreIfPlaying=true so the walk cycle isn't restarted every frame.
         sprite.play(walkAnim, true);
