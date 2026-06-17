@@ -749,7 +749,7 @@ export class GameScene extends Phaser.Scene {
       }
       sprite.setFlipX(false);
       this.drawDowned(pl, color);
-      this.drawLabel(pl, x, y - r - 14, 0x9aa0b5);
+      this.drawLabel(pl, x, y - WALKER_TARGET_H * WALKER_ORIGIN_Y - 12, 0x9aa0b5);
       return;
     }
 
@@ -824,9 +824,12 @@ export class GameScene extends Phaser.Scene {
     // sprite). Drawn in the class colour on the dedicated above-sprite overlay.
     this.drawAimChevron(x, y, r, pl.facing, color);
 
-    // name on top + a thin hp bar right under it, both above the head
-    this.drawLabel(pl, x, y - r - 22, color);
-    this.drawBar(x, y - r - 18, Math.max(0, pl.hp) / pl.maxHp, 32);
+    // name on top + a thin hp bar right under it, placed ABOVE the sprite's head
+    // (the walk sprite is ~WALKER_TARGET_H tall with feet near the world pos, so
+    // the head sits ~WALKER_TARGET_H*WALKER_ORIGIN_Y above y — clear it + margin).
+    const headY = y - WALKER_TARGET_H * WALKER_ORIGIN_Y - 8;
+    this.drawBar(x, headY, Math.max(0, pl.hp) / pl.maxHp, 32);
+    this.drawLabel(pl, x, headY - 4, color);
   }
 
   // A thin centred bar (bg + hp-coloured fill). Used for player + enemy health.
