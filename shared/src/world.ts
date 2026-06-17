@@ -306,8 +306,8 @@ function castFrostnova(world: World, caster: Player): void {
   removeDeadEnemies(world);
 }
 
-// repulse (「電磁斥力」) — self-centred burst: damage enemies in radius and shove
-// them outward (knockback, clamped to the arena) to keep them off 美琴.
+// repulse (「鐵砂之劍」) — magnetised iron-sand sweep: damage enemies in radius
+// and shove them outward (magnetic knockback, clamped to the arena) off 美琴.
 function castRepulse(world: World, caster: Player): void {
   const o = caster.pos;
   for (const e of world.enemies) {
