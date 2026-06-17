@@ -7,7 +7,7 @@ export const CONFIG = {
   revive: { radius: 70, time: 3, hp: 40 },        // ally channels over `time` s
   bleedout: { time: 8 },                           // downed -> dead if not revived
   fireball: { speed: 420, radius: 8, ttl: 1.5, explosionRadius: 60, explosionDamage: 30 },
-  firestorm: { speed: 300, radius: 10, ttl: 1.1, explosionRadius: 200, explosionDamage: 70 },
+  firestorm: { speed: 300, radius: 10, ttl: 1.1, explosionRadius: 190, explosionDamage: 70 },
   frost:    { speed: 360, radius: 6, ttl: 1.2, damage: 18, slowDuration: 2, spread: 0.25, count: 3 },
   frostnova: { radius: 150, damage: 20, slowDuration: 2.5 },
   thunder:  { range: 500, width: 28, damage: 55 },
