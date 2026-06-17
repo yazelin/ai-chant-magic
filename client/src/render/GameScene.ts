@@ -41,6 +41,7 @@ const PYRO_WALK_ANIM = 'pyro-walk';
 const SHEET_WALKERS: Partial<Record<ClassId, { url: string; anim: string; frames: number }>> = {
   warden: { url: new URL('../assets/warden-walk.png', import.meta.url).href, anim: 'warden-walk', frames: 5 },
   cryo:   { url: new URL('../assets/cryo-walk.png', import.meta.url).href,   anim: 'cryo-walk',   frames: 5 },
+  storm:  { url: new URL('../assets/storm-walk.png', import.meta.url).href,  anim: 'storm-walk',  frames: 5 },
 };
 const sheetWalkerKey = (c: ClassId) => `${c}-walk`; // texture key per class
 
