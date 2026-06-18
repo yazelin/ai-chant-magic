@@ -8,7 +8,7 @@ import { Enemy, Player, World } from '../src/types';
 function makeEnemy(over: Partial<Enemy> = {}): Enemy {
   return {
     id: 999, pos: { x: 0, y: 0 }, hp: 30, speed: 0,
-    slowUntil: 0, radius: CONFIG.enemy.radius, targetId: null, ...over,
+    slowUntil: 0, radius: CONFIG.enemy.radius, targetId: null, element: 'normal', ...over,
   };
 }
 

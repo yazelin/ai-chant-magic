@@ -14,6 +14,7 @@ import type {
   SpellId,
   GameStatus,
   EffectKind,
+  EnemyElement,
 } from '@acm/shared';
 
 export interface SnapshotPlayer {
@@ -40,6 +41,7 @@ export interface SnapshotEnemy {
   hp: number;
   slowUntil: number;
   radius: number;
+  element: EnemyElement;
 }
 
 export interface SnapshotProjectile {
@@ -103,6 +105,7 @@ export function toSnapshot(world: World): Snapshot {
       hp: e.hp,
       slowUntil: e.slowUntil,
       radius: e.radius,
+      element: e.element,
     })),
     projectiles: world.projectiles.map((pr) => ({
       id: pr.id,

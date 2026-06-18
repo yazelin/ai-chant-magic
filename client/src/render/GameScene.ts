@@ -3,6 +3,7 @@ import {
   World,
   Player,
   Enemy,
+  EnemyElement,
   TransientEffect,
   SpellId,
   ClassId,
@@ -29,6 +30,14 @@ const SPRITES: Array<{ key: string; url: string }> = [
 // Target on-screen heights for the upright sprites (px). The scale is derived
 // from each texture's real pixel height so source art can be any size.
 const ENEMY_SPRITE_H = CONFIG.enemy.radius * 2.8; // ≈ 34px
+// Slime body colour per attribute (phase 1: look only).
+const SLIME_COLOR: Record<EnemyElement, number> = {
+  normal: 0x76c442, // green
+  fire: 0xff8c1a, // orange
+  ice: 0x39c5e0, // cyan
+  storm: 0xb06cff, // purple
+  holy: 0xffd24d, // gold
+};
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
 // Walk sprites use 128px cells mostly filled by the character; a fixed scale
@@ -44,7 +53,6 @@ const WALKER_ORIGIN_Y = 0.82;
 // slightly above it (tune by eyeball alongside WALKER_ORIGIN_Y).
 const WALKER_GROUND_OFFSET = 4;
 
-const DEPTH_ENEMY = 5;
 const DEPTH_PLAYER = 10;
 const DEPTH_VFX = 8; // glow images sit above enemies, below players
 const DEPTH_TRAIL = 7; // ember trails just under the projectile core
@@ -100,7 +108,6 @@ export class GameScene extends Phaser.Scene {
   // Players are Sprites (not Images) so the pyro LPC mage can play its walk-cycle
   // animation; a Sprite renders a static texture fine for the other classes too.
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  private enemySprites = new Map<number, Phaser.GameObjects.Image>();
   // First-seen hp per enemy id → treated as "full" for the damage hp bar.
   private enemyMaxHp = new Map<number, number>();
   // Impact detection (drives hit/kill/hurt SFX + visual feedback): previous-frame
@@ -327,18 +334,15 @@ export class GameScene extends Phaser.Scene {
 
     this.drawEffects(w);
 
-    // enemies — pooled upright sprites (texture 'enemy'), below players
+    // enemies — procedurally-drawn bouncing slimes (coloured by element), below players
     const liveEnemies = new Set<number>();
     for (const e of w.enemies) {
       this.drawEnemy(w, e);
       liveEnemies.add(e.id);
     }
-    for (const [id, sprite] of this.enemySprites) {
-      if (!liveEnemies.has(id)) {
-        sprite.destroy();
-        this.enemySprites.delete(id);
-        this.enemyMaxHp.delete(id);
-      }
+    // prune render-side per-enemy hp memory for enemies that have left the world
+    for (const id of this.enemyMaxHp.keys()) {
+      if (!liveEnemies.has(id)) this.enemyMaxHp.delete(id);
     }
 
     // projectiles: fire spells get the additive glow + ember trail; the others
@@ -689,25 +693,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Lazily create (or fetch) a pooled Image for `key` at `id` (enemies). Sizing
-  // is owned by the caller, so this only guarantees the Image exists with the
-  // right base texture.
-  private spriteFor(
-    pool: Map<string | number, Phaser.GameObjects.Image>,
-    id: string | number,
-    key: string,
-    targetH: number,
-  ): Phaser.GameObjects.Image {
-    let sprite = pool.get(id);
-    if (!sprite) {
-      sprite = this.add.image(0, 0, key);
-      const texH = sprite.height || targetH;
-      sprite.setScale(targetH / texH);
-      pool.set(id, sprite);
-    }
-    return sprite;
-  }
-
   // Lazily create (or fetch) a pooled Sprite for a player. Players are Sprites
   // (not Images) so the pyro LPC mage can play animations; static textures render
   // fine on a Sprite for the other classes. Sizing/origin/position are owned by
@@ -832,26 +817,49 @@ export class GameScene extends Phaser.Scene {
     if (vfx.smoke) vfx.smoke.destroy();
   }
 
-  // --- enemies: pooled 'enemy' sprite, upright, below players -----------------
+  // --- enemies: procedural bouncing slime, coloured by element ----------------
+  // Drawn immediate-mode on this.gfx (no pooled sprite): an ellipse body with a
+  // squash/stretch + hop bounce, a highlight, and two eyes. Colour = element
+  // (white when just hit, frosty when slowed/frozen). Phase 2 will add behaviour.
   private drawEnemy(w: World, e: Enemy): void {
-    const sprite = this.spriteFor(
-      this.enemySprites as Map<string | number, Phaser.GameObjects.Image>,
-      e.id,
-      'enemy',
-      ENEMY_SPRITE_H,
-    );
-    sprite.setPosition(e.pos.x, e.pos.y); // upright — never rotated
-    sprite.setDepth(DEPTH_ENEMY);
-    // tint priority: just-hit white flash > frost-slow blue > normal
-    const flashUntil = this.enemyHitFlash.get(e.id);
-    if (flashUntil !== undefined && this.t < flashUntil) sprite.setTintFill(0xffffff);
-    else if (w.time < e.slowUntil) sprite.setTint(0x9fd8ff);
-    else sprite.clearTint();
-    // hp bar above the enemy, shown ONLY once it's taken damage (render-side max:
-    // first-seen hp is treated as full, so no protocol/serialization change).
+    const g = this.gfx;
+    const slowed = w.time < e.slowUntil || w.time < (e.frozenUntil ?? 0);
+    const flashing = (this.enemyHitFlash.get(e.id) ?? 0) > this.t;
+    let color = SLIME_COLOR[e.element] ?? SLIME_COLOR.normal;
+    if (flashing) color = 0xffffff;
+    else if (slowed) color = 0x9fd8ff;
+
+    // bounce: hop up + squash/stretch, phase staggered per enemy id
+    const ph = this.t * 6 + e.id * 0.9;
+    const hop = Math.abs(Math.sin(ph)) * 5;
+    const sq = Math.sin(ph * 2) * 0.16;
+    const bw = e.radius * 2.6 * (1 + sq);
+    const bh = e.radius * 2.2 * (1 - sq);
+    const cx = e.pos.x;
+    const cy = e.pos.y - hop;
+
+    g.fillStyle(color, 0.92);
+    g.fillEllipse(cx, cy, bw, bh);
+    g.lineStyle(2, 0x101018, 0.3);
+    g.strokeEllipse(cx, cy, bw, bh);
+    g.lineStyle(0, 0, 0);
+    // glossy highlight
+    g.fillStyle(0xffffff, 0.22);
+    g.fillEllipse(cx - bw * 0.18, cy - bh * 0.22, bw * 0.32, bh * 0.18);
+    // eyes
+    const eyeY = cy - bh * 0.06;
+    const ex = bw * 0.16;
+    g.fillStyle(0xffffff, 0.95);
+    g.fillCircle(cx - ex, eyeY, 2.6);
+    g.fillCircle(cx + ex, eyeY, 2.6);
+    g.fillStyle(0x222233, 1);
+    g.fillCircle(cx - ex, eyeY, 1.3);
+    g.fillCircle(cx + ex, eyeY, 1.3);
+
+    // hp bar above the slime, shown ONLY once it's taken damage (render-side max).
     if (!this.enemyMaxHp.has(e.id)) this.enemyMaxHp.set(e.id, e.hp);
     const max = this.enemyMaxHp.get(e.id)!;
-    if (e.hp < max - 0.01) this.drawBar(e.pos.x, e.pos.y - ENEMY_SPRITE_H / 2 - 6, e.hp / max, 20);
+    if (e.hp < max - 0.01) this.drawBar(cx, cy - bh / 2 - 8, e.hp / max, 20);
   }
 
   // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------
