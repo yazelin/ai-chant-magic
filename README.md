@@ -44,6 +44,14 @@ npm run dev          # 同時起 server(ws://localhost:8787)與 client(Vite)
 
 人越多,怪潮越瘋狂(超線性);治療/護盾對範圍內**存活**隊友(含自己)生效。技能名是預設「詠唱詞」,可在首頁逐招改成你順口的短詞。
 
+## 音效與音樂
+
+全部是 Web Audio 程序合成(無音檔,零資產):
+
+- **每招專屬施法音效**:12 招各有一組可辨識的合成音(`shared` 把產生特效的 spell id 一路帶到 client,由 `client/src/audio/sfx.ts` 的 `sfxSpell()` 對應播放),外加爆炸/大爆炸音。
+- **自適應背景音樂**:look-ahead scheduler 排程,4 段強度 **微焰 → 星火 → 燎原 → 焚天**,隨波數遞增、落在小節邊界無縫切換(`client/src/audio/music.ts`)。
+- 瀏覽器需要使用者手勢才放音 —— 第一次點擊會同時啟動麥克風與音訊。
+
 ## 連線部署
 
 - **客戶端 → GitHub Pages**:`.github/workflows/deploy.yml` 會 build `client` workspace 並部署 `client/dist`。
@@ -73,6 +81,14 @@ npm run build -w @acm/server  # esbuild 打包伺服器到 server/dist/index.js
 - `tools/sprite-forge/` —— 角色 sprite 製作工具:用一張 AI 圖抽出大量姿勢 → 瀏覽器挑 → 組成 walk/idle/cast sprite(四角色的動漫造型都用它做的,詳見該夾 README)。
 
 設計與計劃文件見 `docs/superpowers/`。
+
+## 開發工具
+
+工具驅動開發:要調的東西做成可直接聽/看的頁面。以下都是 **Vite dev-only**(`npm run dev:client` 後開,不進 production build):
+
+- `client/dev.html` —— 工具箱 hub,連到下列各工具。
+- `client/audio-lab.html` —— 音效實驗室:逐招試聽每個技能專屬施法音效、事件音效、以及 4 段自適應背景音樂(直接呼叫遊戲用的同一份 `sfx.ts` / `music.ts`,所見即所得)。
+- `tools/sprite-forge/` —— 上述的 sprite 挑選/組裝工具(見該夾 README)。
 
 ## 授權
 
