@@ -13,7 +13,7 @@ import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
 import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
-import { initAudio } from './audio/sfx';
+import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
 import { MusicEngine } from './audio/music';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
@@ -53,6 +53,10 @@ function startGame(session: GameSession, classId: ClassId): void {
   // HUD refresh loop (decoupled from Phaser so game-over text updates even when
   // idle). Reads whatever World the session exposes (local sim or interpolated
   // snapshot), so the party panel renders all players in both modes.
+  // Wave/gameover SFX are detected here (this loop already tracks both for music);
+  // hit/hurt/kill SFX live in GameScene off per-frame hp deltas.
+  let prevWave = -1;
+  let prevStatus = '';
   setInterval(() => {
     const w = session.getWorld();
     if (w) {
@@ -62,6 +66,12 @@ function startGame(session: GameSession, classId: ClassId): void {
       const self = w.players.find((p) => p.id === session.getSelfId());
       const charge = self?.classId === 'pyro' ? self.pyroCharge ?? 0 : 0;
       incantation.update(charge, Date.now());
+      // New-wave fanfare (skip the very first observation = game start).
+      if (prevWave >= 0 && w.wave > prevWave && w.status === 'playing') sfxWave();
+      prevWave = w.wave;
+      // Game-over sting on the transition into gameover.
+      if (w.status === 'gameover' && prevStatus !== 'gameover') sfxDeath();
+      prevStatus = w.status;
       // Adaptive music intensity: calm early, escalates with the wave; calm again
       // on game over. (Bar-aligned switch handled inside MusicEngine.)
       music.start(); // idempotent + no-op until the AudioContext exists (any gesture)
