@@ -402,7 +402,9 @@ describe('step — thunder (hitscan ray + beam effect)', () => {
     w.breakTimer = 999;
     const p = w.players[0];
     p.facing = 0;
-    const behind = makeEnemy({ id: 1, hp: 100, pos: { x: p.pos.x - 80, y: p.pos.y } });
+    // Off the beam axis (the reflected segment now travels back along y=p.pos.y,
+    // so "behind" must also be off-axis to be a clean "not on any segment" check).
+    const behind = makeEnemy({ id: 1, hp: 100, pos: { x: p.pos.x - 80, y: p.pos.y + 250 } });
     const tooFar = makeEnemy({ id: 2, hp: 100, pos: { x: p.pos.x + CONFIG.thunder.range + 50, y: p.pos.y } });
     w.enemies.push(behind, tooFar);
     step(w, [{ kind: 'cast', playerId: 'local', spell: 'thunder' }], 0.016);

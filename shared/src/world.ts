@@ -675,12 +675,19 @@ function beginWave(world: World): void {
 function spawnEnemy(world: World, rng: () => number): void {
   const W = CONFIG.arenaWidth;
   const H = CONFIG.arenaHeight;
-  const edge = Math.floor(rng() * 4) % 4;
-  let pos;
-  if (edge === 0) pos = { x: rng() * W, y: 0 };
-  else if (edge === 1) pos = { x: rng() * W, y: H };
-  else if (edge === 2) pos = { x: 0, y: rng() * H };
-  else pos = { x: W, y: rng() * H };
+  // Spawn on a ring around a random living player so enemies arrive from just
+  // off-screen regardless of how big the arena is (the arena is now larger than
+  // most screens). Falls back to the arena centre if nobody is up.
+  const targets = world.players.filter((p) => p.alive && !p.downed);
+  const c = targets.length
+    ? targets[Math.floor(rng() * targets.length) % targets.length].pos
+    : { x: W / 2, y: H / 2 };
+  const ang = rng() * Math.PI * 2;
+  const dist = CONFIG.wave.spawnRadius + rng() * CONFIG.wave.spawnRadiusJitter;
+  const pos = {
+    x: clamp(c.x + Math.cos(ang) * dist, 0, W),
+    y: clamp(c.y + Math.sin(ang) * dist, 0, H),
+  };
   world.enemies.push({
     id: world.nextEntityId++,
     pos,
