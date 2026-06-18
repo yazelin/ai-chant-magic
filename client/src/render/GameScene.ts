@@ -6,10 +6,11 @@ import {
   TransientEffect,
   SpellId,
   ClassId,
+  Vec2,
   CONFIG,
   CLASSES,
 } from '@acm/shared';
-import { moveDirFromKeys, facingFromMouse } from '../input/controls';
+import { moveDirFromKeys, facingFromMouse, touchMoveDir } from '../input/controls';
 import { GameSession } from '../session/GameSession';
 import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
@@ -124,6 +125,11 @@ export class GameScene extends Phaser.Scene {
   private keys = new Set<string>();
   // default face right until first pointer move
   private mouse: { x: number; y: number } = { x: CONFIG.arenaWidth, y: CONFIG.arenaHeight / 2 };
+  // Touch virtual-joystick state (left-half drag → move). null id = inactive.
+  private joyPointerId: number | null = null;
+  private joyOrigin = { x: 0, y: 0 };
+  private joyCur = { x: 0, y: 0 };
+  private touchMove: Vec2 = { x: 0, y: 0 };
 
   // GameScene is session-agnostic: it renders whatever World the injected
   // GameSession exposes (LocalSession runs the sim locally; NetSession returns
@@ -176,8 +182,36 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.input.keyboard!.on('keyup', (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase()));
+
+    // INPUT — mouse drives aim directly; touch splits the screen into a left
+    // virtual joystick (move) + right aim zone. Casting stays voice-only on
+    // every platform (no touch-to-cast). Allow up to 3 pointers for 2 fingers.
+    this.input.addPointer(2);
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      this.mouse = { x: p.x, y: p.y };
+      if (!p.wasTouch) { this.mouse = { x: p.x, y: p.y }; return; }
+      if (p.id === this.joyPointerId) {
+        this.joyCur = { x: p.x, y: p.y };
+        this.touchMove = touchMoveDir(this.joyOrigin, this.joyCur);
+      } else if (p.x >= this.scale.width / 2) {
+        this.mouse = { x: p.x, y: p.y }; // aim toward the finger
+      }
+    });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!p.wasTouch) return;
+      if (p.x < this.scale.width / 2) {
+        this.joyPointerId = p.id; // left half: anchor the joystick here
+        this.joyOrigin = { x: p.x, y: p.y };
+        this.joyCur = { x: p.x, y: p.y };
+        this.touchMove = { x: 0, y: 0 };
+      } else {
+        this.mouse = { x: p.x, y: p.y };
+      }
+    });
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (p.id === this.joyPointerId) {
+        this.joyPointerId = null;
+        this.touchMove = { x: 0, y: 0 };
+      }
     });
 
     // Audio needs a user gesture to start; resume the SFX context on the first
@@ -255,7 +289,9 @@ export class GameScene extends Phaser.Scene {
     const self = this.self();
     if (self) {
       this.session.sendFace(facingFromMouse(self.pos, this.mouse));
-      this.session.sendMove(moveDirFromKeys(this.keys));
+      // Touch joystick wins when active; otherwise keyboard.
+      const active = this.touchMove.x !== 0 || this.touchMove.y !== 0;
+      this.session.sendMove(active ? this.touchMove : moveDirFromKeys(this.keys));
     }
 
     this.session.tick(dt);
@@ -341,6 +377,7 @@ export class GameScene extends Phaser.Scene {
 
     // local player's aim crosshair, pinned to the cursor (drawn last, on top)
     this.drawAimReticle();
+    this.drawTouchJoystick();
 
     // Prune seen-id sets to the ids currently in the world so they never grow
     // unbounded across a long session.
@@ -417,6 +454,30 @@ export class GameScene extends Phaser.Scene {
     // bright center
     g.fillStyle(0xfff0c0, 1);
     g.fillCircle(mx, my, 2.2);
+  }
+
+  // Touch virtual joystick — base ring at the anchor + a knob clamped to a max
+  // radius in the drag direction. Only drawn while a finger holds the left half.
+  private drawTouchJoystick(): void {
+    if (this.joyPointerId === null) return;
+    const g = this.aimGfx;
+    const baseR = 46;
+    const ox = this.joyOrigin.x;
+    const oy = this.joyOrigin.y;
+    g.fillStyle(0xffffff, 0.06);
+    g.fillCircle(ox, oy, baseR);
+    g.lineStyle(2, 0xffffff, 0.35);
+    g.strokeCircle(ox, oy, baseR);
+    // knob: clamp the raw drag to baseR
+    const dx = this.joyCur.x - ox;
+    const dy = this.joyCur.y - oy;
+    const l = Math.hypot(dx, dy) || 1;
+    const k = Math.min(l, baseR);
+    const kx = ox + (dx / l) * k;
+    const ky = oy + (dy / l) * k;
+    g.lineStyle(0, 0, 0);
+    g.fillStyle(0xffffff, 0.5);
+    g.fillCircle(kx, ky, 18);
   }
 
   // CAST DETECTION + impact reactions. For every NEW projectile or effect id
