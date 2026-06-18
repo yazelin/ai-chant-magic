@@ -191,7 +191,30 @@
       }
 
       /* --- In-game chrome (hidden until a session starts) ----------------- */
+      /* Full-bleed play view: the canvas fills the viewport (FIT-centered by
+         Phaser), and the info rows float on top as NON-blocking overlays so the
+         whole screen routes touch into the game (no dead zones outside a small
+         canvas). Works the same on desktop and mobile. */
       #game-chrome { display: none; }
+      #game-chrome.playing { display: block; position: fixed; inset: 0; background: var(--bg); z-index: 50; }
+      #game-chrome.playing #game {
+        position: absolute; inset: 0; z-index: 1;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #game-chrome.playing #game canvas { display: block; }
+      #game-chrome.playing > .row,
+      #game-chrome.playing > #hud {
+        position: absolute; left: 10px; right: 10px; z-index: 2;
+        pointer-events: none; text-shadow: 0 1px 3px #000;
+      }
+      #game-chrome.playing > .row { top: 8px; display: flex; gap: 12px; align-items: center; }
+      #game-chrome.playing > #hud { top: 42px; }
+      #fs-btn {
+        pointer-events: auto; margin-left: auto; cursor: pointer;
+        background: var(--panel-2); color: var(--ink); border: 1px solid var(--edge);
+        border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px;
+      }
+      #fs-btn:hover { background: var(--panel); }
       #class-picker { display: none; }
     </style>
   </head>
@@ -201,6 +224,7 @@
         <div class="row">
           <strong>真。AI。咏唱魔法</strong>
           <span id="mic-status">麥克風:未啟動</span>
+          <button id="fs-btn" type="button">全螢幕</button>
         </div>
         <div id="class-picker" class="row"></div>
         <div id="hud" class="row"></div>

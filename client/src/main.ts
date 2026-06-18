@@ -24,26 +24,37 @@ function startGame(session: GameSession, classId: ClassId): void {
   // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
   // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
   // leaving the canvas at 0x0 — must set an explicit display.
+  // Full-bleed play view (CSS .playing): canvas fills the viewport, info rows
+  // overlay on top without blocking touch.
   const chrome = document.getElementById('game-chrome');
-  if (chrome) {
-    chrome.style.display = 'flex';
-    chrome.style.flexDirection = 'column';
-    chrome.style.alignItems = 'center';
-    chrome.style.gap = '8px';
-  }
+  if (chrome) chrome.classList.add('playing');
   // Hide the lobby panel so it doesn't sit above the game.
   const lobbyEl = document.getElementById('lobby');
   if (lobbyEl) lobbyEl.style.display = 'none';
 
   const scene = new GameScene(session);
 
-  new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    width: CONFIG.arenaWidth,
-    height: CONFIG.arenaHeight,
     backgroundColor: '#0b0b14',
+    // FIT scales the fixed 960x640 arena to fill the viewport (letterboxed,
+    // centered) on any screen; CENTER_BOTH keeps it centered.
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: CONFIG.arenaWidth,
+      height: CONFIG.arenaHeight,
+    },
     scene,
+  });
+
+  // Fullscreen toggle (needs a user gesture → button click). Maximizes play
+  // area and hides browser chrome, especially helpful on phones.
+  const fsBtn = document.getElementById('fs-btn');
+  fsBtn?.addEventListener('click', () => {
+    if (game.scale.isFullscreen) game.scale.stopFullscreen();
+    else game.scale.startFullscreen();
   });
 
   const hud = new Hud(classId);
