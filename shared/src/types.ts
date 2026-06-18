@@ -22,6 +22,9 @@ export interface Player {
   // applies until this sim time. Stops swarms from melting you frame-by-frame.
   // Sim-only (not serialized; the client reads hp from snapshots).
   invulnUntil?: number;
+  // Movement slow from an ice slime hit (sim-only; server applies the slow to
+  // movement, client just sees the slower positions).
+  slowUntil?: number;
   // Heal-over-time active until this sim time, regenerating healRate/sec.
   healUntil?: number;
   healRate?: number;
@@ -36,6 +39,11 @@ export interface Enemy {
   id: number; pos: Vec2; hp: number; speed: number;
   slowUntil: number; radius: number; targetId: string | null;
   element: EnemyElement;
+  // Sim-only per-element behaviour state (not serialized; visuals ride on effects):
+  maxHp?: number;                                  // heal cap (holy), set at spawn
+  telegraphUntil?: number; dashUntil?: number;     // storm dash wind-up / lunge windows
+  nextDashAt?: number; dashDir?: Vec2;             // storm dash schedule + locked direction
+  nextHealAt?: number;                             // holy heal-pulse schedule
   // Fully stopped until this sim time (frostnova/「冰結」). Sim-only — not in the
   // net snapshot; positions are server-authoritative, so the client renders the
   // freeze via the stalled positions (and the existing slowUntil blue tint).

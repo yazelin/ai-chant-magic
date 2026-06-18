@@ -27,6 +27,13 @@ export const CONFIG = {
   chain:    { range: 260, jumpRange: 170, maxJumps: 4, damage: 34, falloff: 0.8 },
   holybolt: { damage: 14, radius: 120 },
   enemy: { baseSpeed: 60, radius: 12, baseHp: 30, hpPerWave: 5, speedPerWave: 4 },
+  // Per-element slime behaviour (phase 2). Damage to players is gated by i-frames.
+  slime: {
+    fire:  { explodeRadius: 85, explodeDamage: 14 },                                  // 死亡小爆炸,波及貼太近的玩家
+    ice:   { slowDuration: 1.2, slowFactor: 0.5 },                                    // 命中後玩家短暫減速
+    storm: { speedMul: 1.35, dashInterval: 2.6, telegraph: 0.4, dashSpeed: 430, dashTime: 0.3 }, // 快+突進(先蓄力telegraph)
+    holy:  { hpMul: 2.2, healRadius: 130, healAmount: 8, healInterval: 1.5 },         // 肉+幫周圍史萊姆回血
+  },
   wave: { baseCount: 6, perWave: 3, baseCadence: 1.2, cadenceDecay: 0.05, minCadence: 0.4, breakTime: 2, scaleExp: 1.4,
           spawnRadius: 680, spawnRadiusJitter: 240 }, // enemies appear this far from a player (just off-screen)
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },
