@@ -3,7 +3,6 @@ import { GameScene } from './render/GameScene';
 import { Hud } from './render/hud';
 import { IncantationOverlay } from './render/incantation';
 import {
-  CONFIG,
   matchSpell,
   ClassId,
   classSpellSet,
@@ -38,14 +37,10 @@ function startGame(session: GameSession, classId: ClassId): void {
     type: Phaser.AUTO,
     parent: 'game',
     backgroundColor: '#0b0b14',
-    // FIT scales the fixed 960x640 arena to fill the viewport (letterboxed,
-    // centered) on any screen; CENTER_BOTH keeps it centered.
-    scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: CONFIG.arenaWidth,
-      height: CONFIG.arenaHeight,
-    },
+    // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
+    // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
+    // turns the fixed 960x640 world into a screen-filling, player-centered view.
+    scale: { mode: Phaser.Scale.RESIZE },
     scene,
   });
 

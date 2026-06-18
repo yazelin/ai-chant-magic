@@ -215,6 +215,17 @@
         border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px;
       }
       #fs-btn:hover { background: var(--panel); }
+      /* Portrait phones: nudge to rotate (landscape shows the full battlefield). */
+      #rotate-hint { display: none; }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #game-chrome.playing #rotate-hint {
+          display: flex; position: fixed; inset: 0; z-index: 100;
+          align-items: center; justify-content: center; text-align: center;
+          background: var(--bg); color: var(--ink);
+          font-size: 24px; font-weight: 700; line-height: 1.8; padding: 40px;
+        }
+        #rotate-hint small { color: var(--muted); font-size: 15px; font-weight: 400; }
+      }
       #class-picker { display: none; }
     </style>
   </head>
@@ -229,6 +240,7 @@
         <div id="class-picker" class="row"></div>
         <div id="hud" class="row"></div>
         <div id="game"></div>
+        <div id="rotate-hint"><div>請將手機橫放<br /><small>橫向才能看到完整戰場</small></div></div>
       </div>
       <div id="lobby"></div>
     </div>
