@@ -15,3 +15,13 @@ export function moveDirFromKeys(keys: Set<string>): Vec2 {
 export function facingFromMouse(playerScreen: Vec2, mouse: Vec2): number {
   return Math.atan2(mouse.y - playerScreen.y, mouse.x - playerScreen.x);
 }
+
+// Virtual-joystick move dir: normalized (cur - origin), or zero inside the
+// deadzone. Mirrors moveDirFromKeys' contract (unit vector or {0,0}).
+export function touchMoveDir(origin: Vec2, cur: Vec2, deadzone = 8): Vec2 {
+  const dx = cur.x - origin.x;
+  const dy = cur.y - origin.y;
+  const l = Math.hypot(dx, dy);
+  if (l < deadzone) return { x: 0, y: 0 };
+  return { x: dx / l, y: dy / l };
+}
