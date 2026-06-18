@@ -10,6 +10,7 @@ import {
 } from '@acm/shared';
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
+import { SkillBar } from './ui/skillbar';
 import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
@@ -52,7 +53,8 @@ function startGame(session: GameSession, classId: ClassId): void {
     else game.scale.startFullscreen();
   });
 
-  const hud = new Hud(classId);
+  const hud = new Hud();
+  const skillbar = new SkillBar();
   const incantation = new IncantationOverlay();
   const music = new MusicEngine();
 
@@ -66,7 +68,8 @@ function startGame(session: GameSession, classId: ClassId): void {
   setInterval(() => {
     const w = session.getWorld();
     if (w) {
-      hud.render(w);
+      hud.render(w, session.getSelfId());
+      skillbar.update(w, session.getSelfId());
       // 惠惠 chant easter egg: drive the incantation overlay from the local
       // pyro's 爆裂 charge (0 / non-pyro → hidden).
       const self = w.players.find((p) => p.id === session.getSelfId());

@@ -44,13 +44,19 @@ describe('toSnapshot', () => {
     expect(sp.shieldUntil).toBeCloseTo(9.9);
   });
 
-  it('omits server-only player fields (cooldowns, connected, bleedout, respawn)', () => {
+  it('omits server-only player fields (connected, bleedout, respawn)', () => {
     const w = pyroSolo();
     const sp = toSnapshot(w).players[0];
-    expect(sp).not.toHaveProperty('cooldowns');
     expect(sp).not.toHaveProperty('connected');
     expect(sp).not.toHaveProperty('bleedoutAt');
     expect(sp).not.toHaveProperty('respawnAtWave');
+  });
+
+  it('includes per-player cooldowns (for skill-cooldown HUD)', () => {
+    const w = pyroSolo();
+    const sp = toSnapshot(w).players[0];
+    expect(sp).toHaveProperty('cooldowns');
+    expect(typeof sp.cooldowns).toBe('object');
   });
 
   it('serializes enemies with id/pos/hp/slowUntil/radius', () => {

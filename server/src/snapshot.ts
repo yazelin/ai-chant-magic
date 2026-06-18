@@ -29,6 +29,9 @@ export interface SnapshotPlayer {
   reviveProgress: number;
   shieldUntil: number;
   pyroCharge: number;
+  // Cooldown ready-times (sim time) per spell, so clients can show each player's
+  // skill cooldowns (HUD ring/countdown). Small map, fine at snapshot rate.
+  cooldowns: Record<SpellId, number>;
 }
 
 export interface SnapshotEnemy {
@@ -92,6 +95,7 @@ export function toSnapshot(world: World): Snapshot {
       reviveProgress: p.reviveProgress,
       shieldUntil: p.shieldUntil,
       pyroCharge: p.pyroCharge ?? 0,
+      cooldowns: { ...p.cooldowns },
     })),
     enemies: world.enemies.map((e) => ({
       id: e.id,

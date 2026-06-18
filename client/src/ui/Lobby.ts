@@ -1,5 +1,6 @@
 import { ClassId, CLASSES, SpellId, matchSpell } from '@acm/shared';
 import { SKILL_INFO, castType } from './skillInfo';
+import { skillIconSvg } from './skillIcons';
 import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
 import { WebSpeechVoiceInput } from '../voice/recognizer';
@@ -224,7 +225,8 @@ export class Lobby {
           const k = SKILL_INFO[s];
           const phrase = chantFor(s, k.name); // custom chant or default name
           const tip = `<div class="tip"><div class="tip-name">「${escapeHtml(phrase)}」</div><div class="tip-cast">施法:${escapeHtml(castType(s))}</div><div class="tip-detail">${escapeHtml(k.detail)}</div><div class="tip-stats">${escapeHtml(k.stats)}</div></div>`;
-          return `<li class="skill" data-spell="${s}"><div class="chant-row"><div class="chant">「${escapeHtml(phrase)}」</div><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
+          const ico = `<span class="skill-ico" style="color:${def.color};display:inline-block;width:20px;height:20px;flex:0 0 auto">${skillIconSvg(s)}</span>`;
+          return `<li class="skill" data-spell="${s}"><div class="chant-row"><div style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<div class="chant">「${escapeHtml(phrase)}」</div></div><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
         })
         .join('');
       let sprite = '';
