@@ -37,6 +37,7 @@ export interface SnapshotPlayer {
   reviveProgress: number;
   shieldUntil: number;
   pyroCharge?: number;
+  cooldowns?: Record<SpellId, number>;
 }
 
 export interface SnapshotEnemy {
@@ -108,7 +109,7 @@ function toWorldPlayer(sp: SnapshotPlayer, pos: Vec2, facing: number): Player {
     respawnAtWave: 0,
     shieldUntil: sp.shieldUntil,
     pyroCharge: sp.pyroCharge ?? 0,
-    cooldowns: {} as Record<SpellId, number>,
+    cooldowns: sp.cooldowns ?? ({} as Record<SpellId, number>),
     connected: true,
   };
 }

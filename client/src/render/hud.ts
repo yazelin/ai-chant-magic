@@ -1,5 +1,18 @@
-import { World, ClassId, SPELLS, CLASSES } from '@acm/shared';
+import { World, Player, CLASSES } from '@acm/shared';
 import { VoiceStatus } from '../voice/recognizer';
+import { skillIconSvg } from '../ui/skillIcons';
+
+// A small per-spell cooldown pip for the party panel (so players can see each
+// other's cooldowns): coloured when ready, greyscale + dimmed while cooling.
+function cdPips(p: Player, now: number): string {
+  return CLASSES[p.classId].spells
+    .map((id) => {
+      const cooling = (p.cooldowns?.[id] ?? 0) - now > 0.05;
+      const f = cooling ? 'filter:grayscale(1) brightness(0.55);opacity:.7' : '';
+      return `<span style="display:inline-block;width:15px;height:15px;color:${CLASSES[p.classId].color};${f}">${skillIconSvg(id)}</span>`;
+    })
+    .join('');
+}
 
 const MIC_LABEL: Record<VoiceStatus, string> = {
   idle: '麥克風:未啟動',
@@ -13,12 +26,10 @@ export class Hud {
   private hud: HTMLElement;
   private mic: HTMLElement;
   private heard: HTMLElement;
-  private selfClass: ClassId;
 
-  constructor(selfClass: ClassId) {
+  constructor() {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
-    this.selfClass = selfClass;
     // "Last heard" line: shows exactly what speech recognition transcribed and
     // whether it matched a spell — the fastest way to debug why a spell name
     // isn't firing (the transcript rarely equals what you think you said).
@@ -46,32 +57,34 @@ export class Hud {
     }
   }
 
-  render(world: World): void {
-    // Party panel: one line per connected player (name / class / hp / state).
+  render(world: World, selfId: string | null = null): void {
+    // Party panel: one entry per connected player (name / class / hp / state) plus
+    // small cooldown pips so everyone can see each other's skill cooldowns.
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
     const party = world.players
       .filter((p) => p.connected)
       .map((p) => {
         const cls = CLASSES[p.classId].displayName;
-        if (!p.alive) return `${p.name}(${cls}):陣亡`;
-        if (p.downed) {
+        const me = p.id === selfId ? '★' : '';
+        let line: string;
+        if (!p.alive) line = `${me}${esc(p.name)}(${cls}):陣亡`;
+        else if (p.downed) {
           const pct = Math.round(Math.max(0, Math.min(1, p.reviveProgress)) * 100);
-          return `${p.name}(${cls}):倒地 ${pct}%`;
+          line = `${me}${esc(p.name)}(${cls}):倒地 ${pct}%`;
+        } else {
+          const charge = p.classId === 'pyro' ? ` 爆裂×${p.pyroCharge ?? 0}` : '';
+          line = `${me}${esc(p.name)}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}${charge}`;
         }
-        // 惠惠: show the stacked 爆裂 charge so the player knows their explosion power.
-        const charge = p.classId === 'pyro' ? `(爆裂充能 ${p.pyroCharge ?? 0})` : '';
-        return `${p.name}(${cls}):HP ${Math.ceil(p.hp)}/${p.maxHp}${charge}`;
+        const pips = p.alive && !p.downed ? ` <span style="vertical-align:middle">${cdPips(p, world.time)}</span>` : '';
+        return `<span style="white-space:nowrap">${line}${pips}</span>`;
       })
-      .join(' ｜ ');
-
-    const spellHints = CLASSES[this.selfClass].spells
-      .map((id, i) => `${i + 1} ${SPELLS[id].displayName}`)
-      .join('、');
+      .join(' <span style="opacity:.4">｜</span> ');
 
     const head =
       world.status === 'gameover'
         ? `遊戲結束 — 撐到第 ${world.wave} 波,擊殺 ${world.score}(按 R 重來)`
         : `第 ${world.wave} 波 ｜ 隊伍擊殺 ${world.score}`;
 
-    this.hud.textContent = `${head} ｜ ${party} ｜ 你的法術:${spellHints}`;
+    this.hud.innerHTML = `${esc(head)} <span style="opacity:.4">｜</span> ${party}`;
   }
 }
