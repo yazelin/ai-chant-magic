@@ -219,6 +219,13 @@ export class GameScene extends Phaser.Scene {
     // covered by main.ts's first-click handler).
     this.input.once('pointerdown', () => initAudio());
     this.input.keyboard!.once('keydown', () => initAudio());
+
+    // Camera: zoom stays 1 so sprites keep their native size — a bigger screen
+    // simply reveals MORE of the world, a smaller one less. Bounds = arena, and
+    // update() centers the camera on the local player each frame so the view
+    // follows them (clamped to the arena edges).
+    this.cameras.main.setBounds(0, 0, CONFIG.arenaWidth, CONFIG.arenaHeight);
+    this.cameras.main.setRoundPixels(true);
   }
 
   // Generate two soft radial textures at runtime so the VFX need no PNG assets:
@@ -288,7 +295,11 @@ export class GameScene extends Phaser.Scene {
     this.t += dt;
     const self = this.self();
     if (self) {
-      this.session.sendFace(facingFromMouse(self.pos, this.mouse));
+      // Follow the local player (camera scroll clamps to the arena bounds).
+      this.cameras.main.centerOn(self.pos.x, self.pos.y);
+      // Aim is in SCREEN space; convert through the camera to world space.
+      const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
+      this.session.sendFace(facingFromMouse(self.pos, aim));
       // Touch joystick wins when active; otherwise keyboard.
       const active = this.touchMove.x !== 0 || this.touchMove.y !== 0;
       this.session.sendMove(active ? this.touchMove : moveDirFromKeys(this.keys));
@@ -431,8 +442,11 @@ export class GameScene extends Phaser.Scene {
     const self = this.self();
     if (!self || !self.connected || self.downed) return;
     const g = this.aimGfx;
-    const mx = this.mouse.x;
-    const my = this.mouse.y;
+    // this.mouse is screen-space; reticle is drawn on the world-space aimGfx, so
+    // convert through the camera (zoom 1 → screen size preserved).
+    const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
+    const mx = aim.x;
+    const my = aim.y;
     const ringR = 9;
     // warm outer glow
     g.fillStyle(0xff8c28, 0.1);
@@ -462,15 +476,20 @@ export class GameScene extends Phaser.Scene {
     if (this.joyPointerId === null) return;
     const g = this.aimGfx;
     const baseR = 46;
-    const ox = this.joyOrigin.x;
-    const oy = this.joyOrigin.y;
+    // Joystick anchor/knob are screen-space; draw on world-space aimGfx via the
+    // camera (zoom 1 → on-screen radius unchanged).
+    const cam = this.cameras.main;
+    const o = cam.getWorldPoint(this.joyOrigin.x, this.joyOrigin.y);
+    const c = cam.getWorldPoint(this.joyCur.x, this.joyCur.y);
+    const ox = o.x;
+    const oy = o.y;
     g.fillStyle(0xffffff, 0.06);
     g.fillCircle(ox, oy, baseR);
     g.lineStyle(2, 0xffffff, 0.35);
     g.strokeCircle(ox, oy, baseR);
     // knob: clamp the raw drag to baseR
-    const dx = this.joyCur.x - ox;
-    const dy = this.joyCur.y - oy;
+    const dx = c.x - ox;
+    const dy = c.y - oy;
     const l = Math.hypot(dx, dy) || 1;
     const k = Math.min(l, baseR);
     const kx = ox + (dx / l) * k;
