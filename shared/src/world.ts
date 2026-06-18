@@ -192,11 +192,9 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
       // 爆裂魔法: slow fused mortar whose explosion scales with the stacked charge,
       // then the charge is consumed.
       const charge = caster.pyroCharge ?? 0;
-      const exDmg = CONFIG.firestorm.explosionDamage * charge;
-      const exRadius = Math.min(
-        CONFIG.firestorm.maxRadius,
-        CONFIG.firestorm.baseRadius + CONFIG.firestorm.perChargeRadius * charge,
-      );
+      // Damage = base + perCharge*層;radius grows with 層 (no cap — 惠惠 dream).
+      const exDmg = CONFIG.firestorm.baseDamage + CONFIG.firestorm.perChargeDamage * charge;
+      const exRadius = CONFIG.firestorm.baseRadius + CONFIG.firestorm.perChargeRadius * charge;
       const dir = { x: Math.cos(caster.facing), y: Math.sin(caster.facing) };
       spawnProjectile(world, caster, 'firestorm', dir,
         CONFIG.firestorm.speed, 0, CONFIG.firestorm.radius, CONFIG.firestorm.ttl,
@@ -484,7 +482,7 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
     case 'firestorm':
       explodeAoE(world, proj.pos, proj.ownerId,
         proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
-        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionDamage ?? CONFIG.firestorm.baseDamage, CLASSES.pyro.color);
       return true; // detonated on contact; fuse loop must skip it
     case 'frost':
       hit.hp -= proj.damage;
@@ -527,7 +525,7 @@ function updateProjectiles(world: World, dt: number): void {
         proj.ttl <= 0 && !detonated.has(proj.id)) {
       explodeAoE(world, proj.pos, proj.ownerId,
         proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
-        proj.explosionDamage ?? CONFIG.firestorm.explosionDamage, CLASSES.pyro.color);
+        proj.explosionDamage ?? CONFIG.firestorm.baseDamage, CLASSES.pyro.color);
     }
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
