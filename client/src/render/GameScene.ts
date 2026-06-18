@@ -221,10 +221,10 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.once('keydown', () => initAudio());
 
     // Camera: zoom stays 1 so sprites keep their native size — a bigger screen
-    // simply reveals MORE of the world, a smaller one less. Bounds = arena, and
-    // update() centers the camera on the local player each frame so the view
-    // follows them (clamped to the arena edges).
-    this.cameras.main.setBounds(0, 0, CONFIG.arenaWidth, CONFIG.arenaHeight);
+    // simply reveals MORE of the world. update() positions the scroll manually
+    // (see followCamera): an axis larger than the arena is CENTERED; a smaller
+    // one follows the local player, clamped to the arena edge. (No setBounds —
+    // it would pin the arena to the top-left when the window exceeds it.)
     this.cameras.main.setRoundPixels(true);
   }
 
@@ -295,8 +295,7 @@ export class GameScene extends Phaser.Scene {
     this.t += dt;
     const self = this.self();
     if (self) {
-      // Follow the local player (camera scroll clamps to the arena bounds).
-      this.cameras.main.centerOn(self.pos.x, self.pos.y);
+      this.followCamera(self);
       // Aim is in SCREEN space; convert through the camera to world space.
       const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
       this.session.sendFace(facingFromMouse(self.pos, aim));
@@ -468,6 +467,19 @@ export class GameScene extends Phaser.Scene {
     // bright center
     g.fillStyle(0xfff0c0, 1);
     g.fillCircle(mx, my, 2.2);
+  }
+
+  // Position the camera (zoom 1): an axis wider than the arena is centered (so
+  // the arena sits in the middle with even margins, not pinned top-left); a
+  // narrower axis follows the local player, clamped so we never scroll past the
+  // arena edge.
+  private followCamera(self: Player): void {
+    const cam = this.cameras.main;
+    const aw = CONFIG.arenaWidth;
+    const ah = CONFIG.arenaHeight;
+    const sx = cam.width >= aw ? (aw - cam.width) / 2 : Phaser.Math.Clamp(self.pos.x - cam.width / 2, 0, aw - cam.width);
+    const sy = cam.height >= ah ? (ah - cam.height) / 2 : Phaser.Math.Clamp(self.pos.y - cam.height / 2, 0, ah - cam.height);
+    cam.setScroll(sx, sy);
   }
 
   // Touch virtual joystick — base ring at the anchor + a knob clamped to a max
