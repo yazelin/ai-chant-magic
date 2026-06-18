@@ -44,10 +44,10 @@ for (const [label, fn] of SFX) {
 
 const music = new MusicEngine();
 const state = document.getElementById('music-state')!;
-const TRACKS = ['0 暗潮', '1 獵殺', '2 肅殺', '3 狂亂'];
+const TRACKS = ['0 微焰', '1 星火', '2 燎原', '3 焚天'];
 
 document.getElementById('m-start')!.addEventListener('click', () => {
-  initAudio(); music.start(); state.textContent = '播放中(強度 0 暗潮)';
+  initAudio(); music.start(); state.textContent = '播放中(強度 0 微焰)';
 });
 document.getElementById('m-stop')!.addEventListener('click', () => {
   music.stop(); state.textContent = '已停止';

@@ -27,88 +27,53 @@ describe('levenshtein', () => {
 import { matchSpell } from '../src/matcher';
 import { classSpellSet } from '../src/classes';
 
-describe('matchSpell — mueisho mode', () => {
-  const opts = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
-
+describe('matchSpell — direct name / chant matching', () => {
   it('matches a chinese alias embedded in chatter', () => {
-    expect(matchSpell('快放火球術啊', opts)).toBe('fireball');
+    expect(matchSpell('快放火球術啊')).toBe('fireball');
   });
   it('matches an english alias', () => {
-    expect(matchSpell('cast fireball now', opts)).toBe('fireball');
+    expect(matchSpell('cast fireball now')).toBe('fireball');
   });
   it('fuzzy-matches a one-char homophone error', () => {
-    expect(matchSpell('火球树', opts)).toBe('fireball'); // 術→树
+    expect(matchSpell('火球树')).toBe('fireball'); // 術→树
   });
   it('matches heal aliases', () => {
-    expect(matchSpell('補血', opts)).toBe('heal');
-    expect(matchSpell('please heal', opts)).toBe('heal');
+    expect(matchSpell('補血')).toBe('heal');
+    expect(matchSpell('please heal')).toBe('heal');
   });
   it('returns null when no spell is present', () => {
-    expect(matchSpell('今天天氣真好', opts)).toBeNull();
-  });
-});
-
-describe('matchSpell — eisho mode', () => {
-  const opts = { mode: 'eisho' as const, jumon: '我命汝顯現' };
-
-  it('requires the jumon before the spell name', () => {
-    expect(matchSpell('我命汝顯現火球術', opts)).toBe('fireball');
-  });
-  it('rejects a bare spell name without the jumon', () => {
-    expect(matchSpell('火球術', opts)).toBeNull();
-  });
-  it('ignores a spell name that appears before the jumon', () => {
-    // "火球術" before jumon must not trigger; only text after jumon counts
-    expect(matchSpell('火球術 我命汝顯現 冰霜', opts)).toBe('frost');
+    expect(matchSpell('今天天氣真好')).toBeNull();
   });
 });
 
 describe('matchSpell — per-class allowed filtering', () => {
-  const mueisho = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
-
   it('rejects a spell outside the caster class loadout (warden + 火球術 → null)', () => {
-    expect(
-      matchSpell('火球術', { ...mueisho, allowed: classSpellSet('warden') })
-    ).toBeNull();
+    expect(matchSpell('火球術', { allowed: classSpellSet('warden') })).toBeNull();
   });
 
   it('matches a spell inside the caster class loadout (warden + 治療術 → heal)', () => {
-    expect(
-      matchSpell('治療術', { ...mueisho, allowed: classSpellSet('warden') })
-    ).toBe('heal');
+    expect(matchSpell('治療術', { allowed: classSpellSet('warden') })).toBe('heal');
   });
 
   it('matches a spell inside the pyro loadout (pyro + 爆裂魔法 → firestorm)', () => {
-    expect(
-      matchSpell('爆裂魔法', { ...mueisho, allowed: classSpellSet('pyro') })
-    ).toBe('firestorm');
+    expect(matchSpell('爆裂魔法', { allowed: classSpellSet('pyro') })).toBe('firestorm');
   });
 
   it('keeps scanning past a disallowed alias to the first allowed match', () => {
     // text mentions fireball (not allowed) then heal (allowed); should return heal
     expect(
-      matchSpell('火球術然後治療術', { ...mueisho, allowed: classSpellSet('warden') })
+      matchSpell('火球術然後治療術', { allowed: classSpellSet('warden') })
     ).toBe('heal');
   });
 
-  it('falls back to legacy behavior when no allowed set is given', () => {
-    expect(matchSpell('火球術', mueisho)).toBe('fireball');
-    expect(matchSpell('治療術', mueisho)).toBe('heal');
-  });
-
-  it('honors allowed filtering in eisho mode', () => {
-    const eisho = { mode: 'eisho' as const, jumon: '我命汝顯現' };
-    expect(
-      matchSpell('我命汝顯現爆裂魔法', { ...eisho, allowed: classSpellSet('warden') })
-    ).toBeNull();
-    expect(
-      matchSpell('我命汝顯現爆裂魔法', { ...eisho, allowed: classSpellSet('pyro') })
-    ).toBe('firestorm');
+  it('falls back to scanning all spells when no allowed set is given', () => {
+    expect(matchSpell('火球術')).toBe('fireball');
+    expect(matchSpell('治療術')).toBe('heal');
   });
 });
 
 describe('matchSpell — broadened firestorm / shield aliases', () => {
-  const pyro = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('pyro') };
+  const pyro = { allowed: classSpellSet('pyro') };
 
   it('matches firestorm via easier-to-recognize variants', () => {
     for (const t of ['火海', '火焰', '烈焰', '大火', '火燄', 'firestorm', 'flame']) {
@@ -117,26 +82,23 @@ describe('matchSpell — broadened firestorm / shield aliases', () => {
   });
 
   // shield + fireball are no longer in any class loadout (kept as defined spells);
-  // test their aliases on the legacy no-allowed path.
-  const legacy = { mode: 'mueisho' as const, jumon: '我命汝顯現' };
-
-  it('matches shield via multi-char variants (legacy/no-loadout)', () => {
+  // test their aliases on the no-allowed path.
+  it('matches shield via multi-char variants (no-loadout)', () => {
     for (const t of ['護盾', '護盾術', '盾牌', '護罩', '防護罩', '結界', 'shield']) {
-      expect(matchSpell(t, legacy)).toBe('shield');
+      expect(matchSpell(t)).toBe('shield');
     }
   });
 
   it('still distinguishes fireball from firestorm by longest alias', () => {
-    expect(matchSpell('火球', legacy)).toBe('fireball');
-    expect(matchSpell('火球術', legacy)).toBe('fireball');
-    expect(matchSpell('火海', legacy)).toBe('firestorm');
+    expect(matchSpell('火球')).toBe('fireball');
+    expect(matchSpell('火球術')).toBe('fireball');
+    expect(matchSpell('火海')).toBe('firestorm');
   });
 
   it('does not let shield aliases swallow aegis (聖盾 → aegis for warden)', () => {
-    const warden = { mode: 'mueisho' as const, jumon: '我命汝顯現', allowed: classSpellSet('warden') };
-    expect(matchSpell('聖盾', warden)).toBe('aegis');
-    // even on the legacy no-allowed path, 聖盾 must not match shield now that
+    expect(matchSpell('聖盾', { allowed: classSpellSet('warden') })).toBe('aegis');
+    // even on the no-allowed path, 聖盾 must not match shield now that
     // bare '盾' was dropped from shield's aliases
-    expect(matchSpell('聖盾', { mode: 'mueisho', jumon: '我命汝顯現' })).toBe('aegis');
+    expect(matchSpell('聖盾')).toBe('aegis');
   });
 });

@@ -134,7 +134,7 @@ Command 增加施法者:`{kind:'cast', playerId, spell}`、`{kind:'move', player
 | 職業 | 造型(placeholder) | 法術組(中文/英別名) | 角色定位 |
 |---|---|---|---|
 | **火 Pyro** 炎術士 | 菱形 · 橘紅霓虹 | 火球術(fireball/fire)、火海(firestorm/inferno)、護盾(shield/guard) | 爆發輸出 |
-| **冰 Cryo** 霜法師 | 六角 · 青藍霓虹 | 冰錐(frost/ice)、冰霜新星(frostnova/nova)、護盾(shield/guard) | 控場減速 |
+| **冰 Cryo** 冰精靈 | 六角 · 青藍霓虹 | 冰錐(frost/ice)、冰霜新星(frostnova/nova)、護盾(shield/guard) | 控場減速 |
 | **雷 Storm** 雷術士 | 三角 · 紫霓虹 | 雷擊(thunder/lightning)、連鎖閃電(chain/chainlightning)、護盾(shield/guard) | 穿透連鎖 |
 | **守護 Warden** 守護者 | 圓 · 金/翠霓虹 | 治療術(heal/cure,治隊友)、聖盾(aegis/barrier,護全隊)、聖光(holybolt/smite,小遠程傷) | 輔助續航 |
 

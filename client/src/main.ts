@@ -5,8 +5,6 @@ import { IncantationOverlay } from './render/incantation';
 import {
   CONFIG,
   matchSpell,
-  CastMode,
-  JUMON,
   ClassId,
   classSpellSet,
   SPELLS,
@@ -72,13 +70,6 @@ function startGame(session: GameSession, classId: ClassId): void {
     }
   }, 100);
 
-  // Mode toggle
-  const modeSelect = document.getElementById('mode') as HTMLSelectElement;
-  let mode: CastMode = (modeSelect.value as CastMode) ?? 'mueisho';
-  modeSelect.addEventListener('change', () => {
-    mode = modeSelect.value as CastMode;
-  });
-
   // Restart (solo only; NetSession.restart is a no-op).
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'r') scene.restart();
@@ -89,7 +80,7 @@ function startGame(session: GameSession, classId: ClassId): void {
   const voice = new WebSpeechVoiceInput('zh-TW');
   voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
   voice.onTranscript((text) => {
-    const spell = matchSpell(text, { mode, jumon: JUMON, allowed, extra: chantsAsExtra() });
+    const spell = matchSpell(text, { allowed, extra: chantsAsExtra() });
     hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
     if (spell) session.sendCast(spell);
   });
