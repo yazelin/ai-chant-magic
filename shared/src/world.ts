@@ -145,7 +145,8 @@ function movePlayers(world: World, moveDirs: Map<string, Vec2>, dt: number): voi
     // speed (a {x:5,y:0} dir must not move 5x further than a unit vector).
     const l = len(dir);
     const unit = l > 1 ? scale(dir, 1 / l) : dir;
-    const speed = CONFIG.player.speed * CLASSES[p.classId].speedMod;
+    const iceSlow = world.time < (p.slowUntil ?? 0) ? CONFIG.slime.ice.slowFactor : 1;
+    const speed = CONFIG.player.speed * CLASSES[p.classId].speedMod * iceSlow;
     p.pos.x += unit.x * speed * dt;
     p.pos.y += unit.y * speed * dt;
     p.pos.x = clamp(p.pos.x, r, CONFIG.arenaWidth - r);
@@ -496,9 +497,32 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
 }
 
 function removeDeadEnemies(world: World): void {
-  const survivors = world.enemies.filter((e) => e.hp > 0);
+  const survivors: Enemy[] = [];
+  for (const e of world.enemies) {
+    if (e.hp > 0) { survivors.push(e); continue; }
+    if (e.element === 'fire') fireDeathExplosion(world, e); // 火史萊姆死亡小爆炸
+  }
   world.score += world.enemies.length - survivors.length;
   world.enemies = survivors;
+}
+
+// Fire slime detonates on death: AoE that hits players who hugged it (i-frame +
+// shield gated, like contact). Pushes a small blast effect (client plays boom).
+function fireDeathExplosion(world: World, e: Enemy): void {
+  const s = CONFIG.slime.fire;
+  for (const p of world.players) {
+    if (!inFight(p) || p.downed) continue;
+    if (world.time < p.shieldUntil || world.time < (p.invulnUntil ?? 0)) continue;
+    if (dist(e.pos, p.pos) <= s.explodeRadius + CONFIG.player.radius) {
+      p.hp -= s.explodeDamage;
+      p.invulnUntil = world.time + CONFIG.player.invulnTime;
+      if (p.hp <= 0) enterDowned(world, p);
+    }
+  }
+  pushEffect(world, {
+    kind: 'blast', a: { x: e.pos.x, y: e.pos.y },
+    radius: s.explodeRadius, ttl: CONFIG.effectTtl.blast, colorHint: CLASSES.pyro.color,
+  });
 }
 
 function updateProjectiles(world: World, dt: number): void {
@@ -575,12 +599,23 @@ function updateEnemies(world: World, dt: number): void {
     const toP = sub(target.pos, e.pos);
     const d = len(toP);
     const frozen = world.time < (e.frozenUntil ?? 0);
-    const speed = frozen ? 0 : world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
-    if (d > 1) {
-      const move = scale(toP, (speed * dt) / d);
-      e.pos.x += move.x;
-      e.pos.y += move.y;
+
+    // Movement: storm slimes dash (telegraph → lunge); others walk toward target.
+    if (!frozen) {
+      if (e.element === 'storm') stormMove(world, e, toP, d, dt);
+      else {
+        const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
+        if (d > 1) {
+          const move = scale(toP, (speed * dt) / d);
+          e.pos.x += move.x;
+          e.pos.y += move.y;
+        }
+      }
     }
+
+    // Holy slimes periodically heal nearby slimes (kept alive → 優先清).
+    if (e.element === 'holy') holyHeal(world, e);
+
     if (
       d <= e.radius + CONFIG.player.radius &&
       world.time >= target.shieldUntil &&
@@ -591,8 +626,69 @@ function updateEnemies(world: World, dt: number): void {
       // on in the same instant.
       target.hp -= CONFIG.player.contactHit;
       target.invulnUntil = world.time + CONFIG.player.invulnTime;
+      // Ice slime also slows the player's movement briefly.
+      if (e.element === 'ice') target.slowUntil = world.time + CONFIG.slime.ice.slowDuration;
       if (target.hp <= 0) enterDowned(world, target);
     }
+  }
+}
+
+// Storm slime movement: every dashInterval it winds up (telegraph: holds still +
+// a storm-colour aura tell) with its direction LOCKED, then lunges fast along
+// that direction. Otherwise it chases at its (already faster) base speed.
+function stormMove(world: World, e: Enemy, toP: Vec2, d: number, dt: number): void {
+  const s = CONFIG.slime.storm;
+  if (e.nextDashAt === undefined) e.nextDashAt = world.time + s.dashInterval;
+  const telegraphing = world.time < (e.telegraphUntil ?? 0);
+  const dashing = !telegraphing && world.time < (e.dashUntil ?? 0);
+
+  if (!telegraphing && !dashing && world.time >= e.nextDashAt && d > 1) {
+    e.telegraphUntil = world.time + s.telegraph;
+    e.dashUntil = e.telegraphUntil + s.dashTime;
+    e.nextDashAt = e.dashUntil + s.dashInterval;
+    e.dashDir = scale(toP, 1 / d); // lock aim at wind-up so the telegraph is fair
+    pushEffect(world, {
+      kind: 'aura', a: { x: e.pos.x, y: e.pos.y },
+      radius: e.radius * 2.4, ttl: s.telegraph, colorHint: CLASSES.storm.color,
+    });
+    return; // winding up: no move this frame
+  }
+  if (telegraphing) return; // hold still — readable tell
+  if (dashing && e.dashDir) {
+    e.pos.x += e.dashDir.x * s.dashSpeed * dt;
+    e.pos.y += e.dashDir.y * s.dashSpeed * dt;
+    return;
+  }
+  const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
+  if (d > 1) {
+    const move = scale(toP, (speed * dt) / d);
+    e.pos.x += move.x;
+    e.pos.y += move.y;
+  }
+}
+
+// Holy slime heal pulse: every healInterval, top up nearby slimes (incl. itself)
+// up to their spawn hp, with a holy-colour aura tell.
+function holyHeal(world: World, e: Enemy): void {
+  const s = CONFIG.slime.holy;
+  if (e.nextHealAt === undefined) e.nextHealAt = world.time + s.healInterval;
+  if (world.time < e.nextHealAt) return;
+  e.nextHealAt = world.time + s.healInterval;
+  let healed = false;
+  for (const other of world.enemies) {
+    if (other.hp <= 0) continue;
+    const cap = other.maxHp ?? other.hp;
+    if (other.hp >= cap) continue;
+    if (dist(e.pos, other.pos) <= s.healRadius) {
+      other.hp = Math.min(cap, other.hp + s.healAmount);
+      healed = true;
+    }
+  }
+  if (healed) {
+    pushEffect(world, {
+      kind: 'aura', a: { x: e.pos.x, y: e.pos.y },
+      radius: s.healRadius, ttl: 0.4, colorHint: CLASSES.warden.color,
+    });
   }
 }
 
@@ -706,15 +802,21 @@ function spawnEnemy(world: World, rng: () => number): void {
     x: clamp(c.x + Math.cos(ang) * dist, 0, W),
     y: clamp(c.y + Math.sin(ang) * dist, 0, H),
   };
+  const element = pickElement(world.wave, rng);
+  let hp = CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave;
+  let speed = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
+  if (element === 'holy') hp *= CONFIG.slime.holy.hpMul; // 聖史萊姆是肉盾
+  if (element === 'storm') speed *= CONFIG.slime.storm.speedMul; // 雷史萊姆又快
   world.enemies.push({
     id: world.nextEntityId++,
     pos,
-    hp: CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave,
-    speed: CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave,
+    hp,
+    speed,
     slowUntil: 0,
     radius: CONFIG.enemy.radius,
     targetId: null,
-    element: pickElement(world.wave, rng),
+    element,
+    maxHp: hp,
   });
 }
 

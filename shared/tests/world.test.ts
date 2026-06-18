@@ -856,3 +856,56 @@ describe('step — gameover', () => {
     expect(w.status).toBe('playing');
   });
 });
+
+describe('step — slime elements (phase 2 behaviour)', () => {
+  it('ice slime slows the player on contact', () => {
+    const w = createSoloWorld('storm');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    w.enemies.push(makeEnemy({ id: 1, hp: 9999, element: 'ice', pos: { x: p.pos.x, y: p.pos.y } }));
+    step(w, [], 0.05);
+    expect((p.slowUntil ?? 0)).toBeGreaterThan(w.time);
+  });
+
+  it('fire slime explodes on death, hurting a nearby (non-contact) player', () => {
+    const w = createSoloWorld('storm');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    const hp0 = p.hp;
+    // within explode radius (85) but beyond contact range (~26) so only the blast hits
+    w.enemies.push(makeEnemy({ id: 1, hp: 0, element: 'fire', pos: { x: p.pos.x + 55, y: p.pos.y } }));
+    step(w, [], 0.05);
+    expect(p.hp).toBe(hp0 - CONFIG.slime.fire.explodeDamage);
+    // the dead fire slime is gone and left a blast effect
+    expect(w.enemies.find((e) => e.id === 1)).toBeUndefined();
+    expect(w.effects.some((e) => e.kind === 'blast')).toBe(true);
+  });
+
+  it('holy slime heals a damaged nearby slime over time', () => {
+    const w = createSoloWorld('storm');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    const spot = { x: p.pos.x - 200, y: p.pos.y };
+    w.enemies.push(makeEnemy({ id: 1, hp: 9999, element: 'holy', pos: { ...spot } }));
+    const patient = makeEnemy({ id: 2, hp: 5, maxHp: 30, element: 'normal', pos: { ...spot } });
+    w.enemies.push(patient);
+    for (let i = 0; i < 40; i++) step(w, [], 0.05); // > healInterval
+    expect(w.enemies.find((e) => e.id === 2)!.hp).toBeGreaterThan(5);
+  });
+
+  it('storm slime winds up (telegraph) then lunges further than a walk', () => {
+    const w = createSoloWorld('storm');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    const startX = p.pos.x - 300;
+    const slime = makeEnemy({ id: 1, hp: 9999, element: 'storm', speed: 81, pos: { x: startX, y: p.pos.y }, nextDashAt: 0 });
+    w.enemies.push(slime);
+    step(w, [], 0.05); // enters telegraph: locks dir, holds still
+    const s = w.enemies.find((e) => e.id === 1)!;
+    expect(s.telegraphUntil ?? 0).toBeGreaterThan(w.time);
+    expect(s.dashDir).toBeTruthy();
+    for (let i = 0; i < 16; i++) step(w, [], 0.05); // through telegraph + dash
+    // dashed toward the player (+x) by more than a plain 0.8s walk would manage
+    expect(w.enemies.find((e) => e.id === 1)!.pos.x - startX).toBeGreaterThan(90);
+  });
+});

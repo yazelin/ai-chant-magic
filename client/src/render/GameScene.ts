@@ -17,14 +17,14 @@ import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt } from '../audio/sfx
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
-// player's texture is just `player.classId`; enemies share one 'enemy' key.
+// player's texture is just `player.classId`. Enemies are no longer textured —
+// they're drawn procedurally as slimes (see drawEnemy), so there's no 'enemy' key.
 // Vite rewrites these URLs at build time so the PNGs are hashed + bundled.
 const SPRITES: Array<{ key: string; url: string }> = [
   { key: 'pyro', url: new URL('../assets/pyro.png', import.meta.url).href },
   { key: 'cryo', url: new URL('../assets/cryo.png', import.meta.url).href },
   { key: 'storm', url: new URL('../assets/storm.png', import.meta.url).href },
   { key: 'warden', url: new URL('../assets/warden.png', import.meta.url).href },
-  { key: 'enemy', url: new URL('../assets/enemy.png', import.meta.url).href },
 ];
 
 // Target on-screen heights for the upright sprites (px). The scale is derived
