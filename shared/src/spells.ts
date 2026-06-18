@@ -36,6 +36,3 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   mend:      { id: 'mend',      displayName: '精靈自癒', aliases: ['精靈自癒', '精靈治癒', '自癒', '精靈護佑', 'mend'],  cooldown: 8,   kind: 'heal-self',    directional: false },
   repulse:   { id: 'repulse',   displayName: '鐵砂之劍', aliases: ['鐵砂之劍', '鐵砂劍', '鐵砂', '沙鐵劍', 'ironsand'],  cooldown: 6,   kind: 'aoe-self',     directional: false },
 };
-
-// Default incantation (呪文) required before a spell name in 詠唱(eishō) mode.
-export const JUMON = '我命汝顯現';

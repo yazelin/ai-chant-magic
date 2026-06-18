@@ -1,4 +1,4 @@
-import { ClassId, CLASSES, SpellId, matchSpell, JUMON } from '@acm/shared';
+import { ClassId, CLASSES, SpellId, matchSpell } from '@acm/shared';
 import { SKILL_INFO, castType } from './skillInfo';
 import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
@@ -172,7 +172,7 @@ export class Lobby {
   private onPracticeTranscript(text: string): void {
     const heard = this.root.querySelector('#heard');
     if (heard) heard.textContent = text || '—';
-    const id = matchSpell(text, { mode: 'mueisho', jumon: JUMON, extra: chantsAsExtra() });
+    const id = matchSpell(text, { extra: chantsAsExtra() });
     if (id) this.flashHit(id);
   }
 

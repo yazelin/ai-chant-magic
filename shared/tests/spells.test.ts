@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SPELLS, JUMON } from '../src/spells';
+import { SPELLS } from '../src/spells';
 import { CLASSES } from '../src/classes';
 import type { SpellId } from '../src/types';
 
@@ -69,9 +69,5 @@ describe('spells', () => {
         expect(keys.has(spell)).toBe(true);
       }
     }
-  });
-
-  it('exposes a non-empty default jumon', () => {
-    expect(JUMON.length).toBeGreaterThan(0);
   });
 });
