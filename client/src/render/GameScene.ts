@@ -113,7 +113,7 @@ export class GameScene extends Phaser.Scene {
   // Impact detection (drives hit/kill/hurt SFX + visual feedback): previous-frame
   // hp + last-known position per enemy, the local player's previous hp, and a
   // per-enemy "flash white" expiry (scene time) applied in drawEnemy.
-  private prevEnemy = new Map<number, { hp: number; x: number; y: number }>();
+  private prevEnemy = new Map<number, { hp: number; x: number; y: number; element: EnemyElement }>();
   private prevSelfHp = -1;
   private enemyHitFlash = new Map<number, number>();
   // Local player hurt cue: scene time until which to tint the self sprite red.
@@ -567,13 +567,13 @@ export class GameScene extends Phaser.Scene {
         this.spawnDamageNumber(e.pos.x, e.pos.y - ENEMY_SPRITE_H / 2, Math.round(prev.hp - e.hp));
         this.enemyHitFlash.set(e.id, this.t + 0.08); // flash white ~0.08s
       }
-      this.prevEnemy.set(e.id, { hp: e.hp, x: e.pos.x, y: e.pos.y });
+      this.prevEnemy.set(e.id, { hp: e.hp, x: e.pos.x, y: e.pos.y, element: e.element });
     }
     // Kills: ids tracked last frame but absent now (enemies only leave by dying).
     let killed = false;
     for (const [id, prev] of this.prevEnemy) {
       if (!liveIds.has(id)) {
-        this.spawnDeathBurst(prev.x, prev.y);
+        this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal);
         this.prevEnemy.delete(id);
         this.enemyHitFlash.delete(id);
         killed = true;
@@ -617,15 +617,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Red ember pop where an enemy died, then self-destruct.
-  private spawnDeathBurst(x: number, y: number): void {
+  // Ember pop where a slime died, tinted by its element, then self-destruct.
+  private spawnDeathBurst(x: number, y: number, color: number): void {
     const burst = this.add.particles(x, y, 'spark', {
       lifespan: 380,
       speed: { min: 50, max: 190 },
       angle: { min: 0, max: 360 },
       scale: { start: 1.3, end: 0 },
       alpha: { start: 1, end: 0 },
-      tint: [0xff7a7a, 0xd63a3a],
+      tint: [0xffffff, color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     });
@@ -855,6 +855,36 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x222233, 1);
     g.fillCircle(cx - ex, eyeY, 1.3);
     g.fillCircle(cx + ex, eyeY, 1.3);
+
+    // per-element ambient accent — read the attribute at a glance + juice
+    const topY = cy - bh / 2;
+    const ap = this.t * 5 + e.id;
+    if (e.element === 'fire') {
+      g.fillStyle(0xffd24d, 0.9);
+      for (let i = -1; i <= 1; i++) {
+        const fl = 0.6 + 0.4 * Math.sin(ap + i);
+        g.fillCircle(cx + i * bw * 0.24, topY - 3 - fl * 6, 1.4 + fl); // rising embers
+      }
+    } else if (e.element === 'ice') {
+      g.fillStyle(0xffffff, 0.85);
+      for (let i = 0; i < 3; i++) {
+        const a = ap + i * 2.1;
+        const tw = 0.5 + 0.5 * Math.sin(a * 1.7);
+        g.fillCircle(cx + Math.cos(a) * bw * 0.42, topY - 1 + Math.sin(a) * bh * 0.18, 0.9 + tw * 1.3); // frost twinkle
+      }
+    } else if (e.element === 'storm') {
+      if (Math.sin(ap * 2) > 0.6) { // crackle on/off
+        g.lineStyle(1.5, 0xe6d8ff, 0.95);
+        const sx = cx + bw * 0.28;
+        g.lineBetween(sx, topY - 1, sx + 4, topY - 6);
+        g.lineBetween(sx + 4, topY - 6, sx - 1, topY - 9);
+        g.lineStyle(0, 0, 0);
+      }
+    } else if (e.element === 'holy') {
+      g.lineStyle(2, 0xffe9a8, 0.18 + 0.12 * Math.sin(ap)); // pulsing blessed ring
+      g.strokeCircle(cx, cy, bw * 0.7);
+      g.lineStyle(0, 0, 0);
+    }
 
     // hp bar above the slime, shown ONLY once it's taken damage (render-side max).
     if (!this.enemyMaxHp.has(e.id)) this.enemyMaxHp.set(e.id, e.hp);
