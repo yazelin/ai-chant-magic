@@ -6,6 +6,9 @@ export type SpellId =
   | 'thunder' | 'chain' | 'shield' | 'aegis' | 'heal' | 'holybolt'
   | 'chant1' | 'chant2' | 'mend' | 'repulse';
 export type ClassId = 'pyro' | 'cryo' | 'storm' | 'warden';
+// Slime enemy attribute. Phase 1: drives colour + look only. Phase 2 will give
+// each its signature behaviour (fire=死亡爆炸, ice=減速, storm=突進, holy=補血).
+export type EnemyElement = 'normal' | 'fire' | 'ice' | 'storm' | 'holy';
 export type GameStatus = 'lobby' | 'playing' | 'gameover';
 
 export interface Player {
@@ -32,6 +35,7 @@ export interface Player {
 export interface Enemy {
   id: number; pos: Vec2; hp: number; speed: number;
   slowUntil: number; radius: number; targetId: string | null;
+  element: EnemyElement;
   // Fully stopped until this sim time (frostnova/「冰結」). Sim-only — not in the
   // net snapshot; positions are server-authoritative, so the client renders the
   // freeze via the stalled positions (and the existing slowUntil blue tint).

@@ -35,7 +35,7 @@ describe('LocalSession', () => {
     // put an enemy straight ahead (to the right) within 爆裂 reach
     w.enemies.push({
       id: 9001, pos: { x: 220, y: 100 }, hp: 30, speed: 0,
-      slowUntil: 0, radius: 12, targetId: null,
+      slowUntil: 0, radius: 12, targetId: null, element: 'normal',
     });
     const startHp = w.enemies[0].hp;
     s.sendFace(0); // face +x

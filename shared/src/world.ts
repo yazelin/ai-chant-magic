@@ -1,4 +1,4 @@
-import { World, Command, Vec2, SpellId, Projectile, Enemy, Player, ClassId, TransientEffect } from './types';
+import { World, Command, Vec2, SpellId, Projectile, Enemy, EnemyElement, Player, ClassId, TransientEffect } from './types';
 import { CONFIG } from './config';
 import { SPELLS } from './spells';
 import { CLASSES, classSpellSet } from './classes';
@@ -678,6 +678,18 @@ function beginWave(world: World): void {
   world.spawnTimer = 0; // spawn first enemy immediately
 }
 
+// Slime attribute for a fresh spawn — new elements are introduced as the waves
+// climb (normal weighted heavier so it stays the staple). Phase 1: colour/look
+// only; phase 2 will branch behaviour on this.
+function pickElement(wave: number, rng: () => number): EnemyElement {
+  const pool: EnemyElement[] = ['normal', 'normal'];
+  if (wave >= 1) pool.push('fire');
+  if (wave >= 2) pool.push('ice');
+  if (wave >= 3) pool.push('storm');
+  if (wave >= 4) pool.push('holy');
+  return pool[Math.floor(rng() * pool.length) % pool.length];
+}
+
 function spawnEnemy(world: World, rng: () => number): void {
   const W = CONFIG.arenaWidth;
   const H = CONFIG.arenaHeight;
@@ -702,6 +714,7 @@ function spawnEnemy(world: World, rng: () => number): void {
     slowUntil: 0,
     radius: CONFIG.enemy.radius,
     targetId: null,
+    element: pickElement(world.wave, rng),
   });
 }
 

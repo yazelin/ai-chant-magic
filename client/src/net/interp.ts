@@ -14,6 +14,7 @@ import {
   World,
   Player,
   Enemy,
+  EnemyElement,
   Projectile,
   TransientEffect,
   ClassId,
@@ -46,6 +47,7 @@ export interface SnapshotEnemy {
   hp: number;
   slowUntil: number;
   radius: number;
+  element?: EnemyElement;
 }
 
 export interface SnapshotProjectile {
@@ -123,6 +125,7 @@ function toWorldEnemy(se: SnapshotEnemy, pos: Vec2): Enemy {
     slowUntil: se.slowUntil,
     radius: se.radius,
     targetId: null,
+    element: se.element ?? 'normal',
   };
 }
 
