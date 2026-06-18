@@ -301,7 +301,8 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
       if (w.effects.some((e) => e.kind === 'blast')) sawBlast = true;
     }
     expect(w.projectiles.length).toBe(0);
-    expect(w.enemies[0].hp).toBeLessThanOrEqual(200 - CONFIG.firestorm.explosionDamage);
+    // 1 charge → damage = baseDamage + perChargeDamage*1
+    expect(w.enemies[0].hp).toBeLessThanOrEqual(200 - (CONFIG.firestorm.baseDamage + CONFIG.firestorm.perChargeDamage));
     expect(sawBlast).toBe(true);
   });
 
@@ -324,9 +325,10 @@ describe('step — firestorm (fuse: explode on contact OR ttl expiry)', () => {
     }
     // A 'blast' effect EXISTS immediately after the detonation frame.
     expect(sawBlastImmediately).toBe(true);
-    // Both enemies took explosion damage from the contact detonation.
-    expect(w.enemies.find((e) => e.id === 1)!.hp).toBeLessThanOrEqual(200 - CONFIG.firestorm.explosionDamage);
-    expect(w.enemies.find((e) => e.id === 2)!.hp).toBeLessThanOrEqual(200 - CONFIG.firestorm.explosionDamage);
+    // Both enemies took explosion damage from the contact detonation (1 charge).
+    const fsDmg1 = CONFIG.firestorm.baseDamage + CONFIG.firestorm.perChargeDamage;
+    expect(w.enemies.find((e) => e.id === 1)!.hp).toBeLessThanOrEqual(200 - fsDmg1);
+    expect(w.enemies.find((e) => e.id === 2)!.hp).toBeLessThanOrEqual(200 - fsDmg1);
   });
 
   it('never damages allies with a firestorm explosion (no friendly fire)', () => {
