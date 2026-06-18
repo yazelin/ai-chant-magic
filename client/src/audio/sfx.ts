@@ -356,8 +356,8 @@ export function sfxSpell(spell: SpellId): void {
     switch (spell) {
       case 'fireball':                                  // 火球: airy whoosh
         sfxFireball(); break;
-      case 'firestorm':                                 // 爆裂: deeper charged whoosh
-        sfxFireball(); blip('sawtooth', 140, 60, 0.3, 0.25); break;
+      case 'firestorm':                                 // 爆裂: charged whoosh + bright rising blast
+        sfxFireball(); blip('sawtooth', 320, 880, 0.26, 0.5); blip('square', 660, 1320, 0.18, 0.3); break;
       case 'frost':                                     // 冰柱魔線: icy triple ping
         arp([1568, 1318, 1046], 0.05, 'triangle', 0.22); break;
       case 'frostnova':                                 // 絕對零度: deep descending freeze
@@ -376,10 +376,10 @@ export function sfxSpell(spell: SpellId): void {
         sfxHeal(); break;
       case 'mend':                                      // 精靈自癒: soft two-note (distinct from heal)
         arp([659, 988], 0.1, 'sine', 0.26); break;
-      case 'chant1':                                    // 黑暗詠唱: dark low blip
-        blip('sawtooth', 180, 120, 0.14, 0.3); break;
-      case 'chant2':                                    // 深淵詠唱: deeper blip
-        blip('sawtooth', 110, 70, 0.17, 0.32); break;
+      case 'chant1':                                    // 黑暗詠唱: rising dark charge (audible on small speakers)
+        blip('sawtooth', 300, 520, 0.2, 0.42); blip('triangle', 600, 1040, 0.2, 0.22); break;
+      case 'chant2':                                    // 深淵詠唱: deeper, heavier charge (still bright enough to hear)
+        blip('sawtooth', 230, 360, 0.26, 0.46); blip('triangle', 460, 720, 0.26, 0.24); break;
       case 'shield':                                    // (orphan) generic shield shimmer
         sfxShield(); break;
       default:
