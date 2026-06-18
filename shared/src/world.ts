@@ -583,8 +583,16 @@ function updateEnemies(world: World, dt: number): void {
       e.pos.x += move.x;
       e.pos.y += move.y;
     }
-    if (d <= e.radius + CONFIG.player.radius && world.time >= target.shieldUntil) {
-      target.hp -= CONFIG.contactDps * dt;
+    if (
+      d <= e.radius + CONFIG.player.radius &&
+      world.time >= target.shieldUntil &&
+      world.time >= (target.invulnUntil ?? 0)
+    ) {
+      // Discrete hit + i-frames: the first enemy to connect this window deals
+      // contactHit and grants invulnerability, so the rest of a swarm can't pile
+      // on in the same instant.
+      target.hp -= CONFIG.player.contactHit;
+      target.invulnUntil = world.time + CONFIG.player.invulnTime;
       if (target.hp <= 0) enterDowned(world, target);
     }
   }

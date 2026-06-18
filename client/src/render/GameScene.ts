@@ -109,6 +109,8 @@ export class GameScene extends Phaser.Scene {
   private prevEnemy = new Map<number, { hp: number; x: number; y: number }>();
   private prevSelfHp = -1;
   private enemyHitFlash = new Map<number, number>();
+  // Local player hurt cue: scene time until which to tint the self sprite red.
+  private hurtFlashUntil = 0;
   // Pyro pilot procedural anim state, keyed by player id.
   private playerAnim = new Map<string, PlayerAnimState>();
   // Pooled fireball/firestorm glow visuals, keyed by projectile id.
@@ -278,6 +280,7 @@ export class GameScene extends Phaser.Scene {
     this.prevEnemy.clear();
     this.enemyHitFlash.clear();
     this.prevSelfHp = -1;
+    this.hurtFlashUntil = 0;
     this.session.restart(this.selfClassId());
   }
 
@@ -578,7 +581,10 @@ export class GameScene extends Phaser.Scene {
     if (self) {
       if (this.prevSelfHp >= 0 && self.hp < this.prevSelfHp - 0.01) {
         sfxHurt();
-        this.cameras.main.flash(110, 200, 0, 0, false); // brief red sting
+        // Gentle, LOCAL hurt cue — a brief red tint on the player sprite (see
+        // drawPlayer), NOT a full-screen flash. With i-frames, hp only drops once
+        // per invuln window, so this pulses calmly instead of strobing.
+        this.hurtFlashUntil = this.t + 0.18;
       }
       this.prevSelfHp = self.hp;
     }
@@ -889,6 +895,9 @@ export class GameScene extends Phaser.Scene {
     const sprite = this.playerSpriteFor(pl.id, initialKey);
     sprite.setDepth(DEPTH_PLAYER);
     sprite.setAlpha(pl.downed ? 0.4 : 1);
+    // Local player hurt cue: brief soft-red multiply tint (no full-screen flash).
+    if (pl.id === this.session.getSelfId() && this.t < this.hurtFlashUntil) sprite.setTint(0xff6a6a);
+    else sprite.clearTint();
 
     if (pl.downed) {
       // downed: no anim/bob/cast. Stop any walk anim and show the idle/legacy

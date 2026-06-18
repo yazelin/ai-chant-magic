@@ -15,6 +15,10 @@ export interface Player {
   alive: boolean; downed: boolean;
   bleedoutAt: number; reviveProgress: number; respawnAtWave: number;
   shieldUntil: number;
+  // Brief invincibility after taking a contact hit (i-frames): no contact damage
+  // applies until this sim time. Stops swarms from melting you frame-by-frame.
+  // Sim-only (not serialized; the client reads hp from snapshots).
+  invulnUntil?: number;
   // Heal-over-time active until this sim time, regenerating healRate/sec.
   healUntil?: number;
   healRate?: number;

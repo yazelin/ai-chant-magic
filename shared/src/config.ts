@@ -4,8 +4,9 @@ export const CONFIG = {
   // spawn on a ring around the player (see wave.spawnRadius) so the big arena
   // doesn't hurt pacing.
   arenaWidth: 1920, arenaHeight: 1080,
-  player: { speed: 200, maxHp: 100, radius: 14 },
-  contactDps: 20,
+  // contactHit = damage per contact hit; invulnTime = i-frames after a hit (one
+  // hit per window no matter how many enemies touch you → survivable swarms).
+  player: { speed: 200, maxHp: 100, radius: 14, contactHit: 12, invulnTime: 0.7 },
   shield: { duration: 2.5 }, aegis: { duration: 3, radius: 160 },
   heal: { rate: 10, duration: 4, radius: 150, cooldown: 7 }, // HoT: rate/sec over duration
   revive: { radius: 70, time: 3, hp: 40 },        // ally channels over `time` s
