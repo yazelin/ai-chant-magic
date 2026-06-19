@@ -60,6 +60,7 @@ export class Room {
   world: World | null = null;
   tickCount = 0;
   hostId: string | null = null;
+  gameoverAt: number | null = null; // wall-clock ms when the game ended (for return-to-lobby)
 
   private inputs = new Map<string, BufferedInput>();
   private clock: () => number;
@@ -178,9 +179,23 @@ export class Room {
     }
     this.inputs.clear();
     step(this.world, commands, dt, rng);
-    if (this.world.status === 'gameover') this.status = 'gameover';
+    if (this.world.status === 'gameover') {
+      this.status = 'gameover';
+      if (this.gameoverAt === null) this.gameoverAt = this.clockNow();
+    }
     this.tickCount += 1;
     return toSnapshot(this.world);
+  }
+
+  // After a game ends, send everyone back to the room lobby (keep members + their
+  // chosen class; clear ready + world) so they can re-ready and play again.
+  returnToLobby(): void {
+    this.status = 'lobby';
+    this.world = null;
+    this.gameoverAt = null;
+    this.tickCount = 0;
+    this.inputs.clear();
+    for (const m of this.members) m.ready = false;
   }
 
   // Disconnect: mark connected=false on the lobby member AND (if a world exists)
