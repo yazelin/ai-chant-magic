@@ -283,7 +283,10 @@ export class Lobby {
         const k = SKILL_INFO[s];
         const phrase = chantFor(s, k.name); // custom chant or default name
         const ico = `<span class="skill-ico" style="color:${def.color}">${skillIconSvg(s)}</span>`;
-        return `<li class="skill" data-spell="${s}"><div class="chant-row"><span style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<span class="chant">「${escapeHtml(phrase)}」</span></span><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div></li>`;
+        // One compact line per skill (icon + chant phrase + edit) so all 3 + name
+        // + start buttons fit a short landscape phone without clipping. The full
+        // effect/stats live on the in-game skill bar.
+        return `<li class="skill" data-spell="${s}"><div class="chant-row"><span style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<span class="chant">「${escapeHtml(phrase)}」</span></span><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div></li>`;
       })
       .join('');
     host.innerHTML = `<div class="cs-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} · ${escapeHtml(def.displayName)}</div><ul class="skills">${skills}</ul>`;
