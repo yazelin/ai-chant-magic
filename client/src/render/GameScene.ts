@@ -39,6 +39,32 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
   holy: 0xffd24d, // gold
 };
 const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on top)
+// --- Level scene themes -----------------------------------------------------
+// A "world" = a swappable theme: a CSS sky (applied to #game-chrome) + a scene
+// draw mode. Adding a future world (Re:Zero / 學園都市 / 現代-貞德 / …, can be
+// more than four) = one entry here + flip ACTIVE_THEME. Art is intentionally
+// light — the point is the architecture, not the polish.
+interface SceneTheme {
+  sky: string; // CSS background applied to the play container
+  mode: 'grid' | 'dream';
+  border: number;
+  grid?: number; // grid mode: line/dot colour
+  blobColors?: number[]; // dream mode: goo blob palette
+  bubble?: number; // dream mode: drifting bubble colour
+}
+const THEMES: Record<string, SceneTheme> = {
+  // "developer's world" — the plain engineering grid (fine while iterating).
+  engineer: {
+    sky: 'radial-gradient(140% 120% at 50% 30%, #14142a 0%, #0b0b14 70%)',
+    mode: 'grid', border: 0x4a4a78, grid: 0x2a2a4a,
+  },
+  // Level 1 — slime / KonoSuba dreamscape.
+  slime: {
+    sky: 'radial-gradient(140% 120% at 50% 18%, #1b3a44 0%, #122230 42%, #0a0f1a 78%, #070710 100%)',
+    mode: 'dream', border: 0x3a6a60, blobColors: [0x2fae7a, 0x3a9d9d, 0x7a6ad0], bubble: 0xaff0d4,
+  },
+};
+const ACTIVE_THEME = 'slime'; // swap per level (e.g. 'engineer' while developing)
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
 // Walk sprites use 128px cells mostly filled by the character; a fixed scale
@@ -119,6 +145,9 @@ export class GameScene extends Phaser.Scene {
   private enemyHitFlash = new Map<number, number>();
   // Local player hurt cue: scene time until which to tint the self sprite red.
   private hurtFlashUntil = 0;
+  // Decorative scene elements (built once): ground goo blobs + drifting bubbles.
+  private scenery: { x: number; y: number; rx: number; ry: number; c: number; a: number }[] = [];
+  private bubbles: { x: number; y: number; r: number; phase: number; speed: number }[] = [];
   // Pyro pilot procedural anim state, keyed by player id.
   private playerAnim = new Map<string, PlayerAnimState>();
   // Pooled fireball/firestorm glow visuals, keyed by projectile id.
@@ -172,6 +201,12 @@ export class GameScene extends Phaser.Scene {
     this.aimGfx = this.add.graphics();
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
     this.makeVfxTextures();
+
+    // Apply the active level theme: sky (CSS on the play container) + scenery.
+    const theme = THEMES[ACTIVE_THEME];
+    const chrome = document.getElementById('game-chrome');
+    if (chrome) chrome.style.background = theme.sky;
+    if (theme.mode === 'dream') this.buildScenery(theme);
 
     // Define each walk animation once. Guard against double-create when the
     // scene restarts (anims live on the global AnimationManager).
@@ -346,10 +381,9 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     this.aimGfx.clear();
 
-    // World-fixed floor grid (under everything): as the camera follows the player
-    // it scrolls on screen, so movement reads even on the dark background; the
-    // border also shows where the arena ends.
-    this.drawFloor();
+    // World-fixed scene (under everything): scrolls as the camera follows the
+    // player, so movement reads; style depends on the active level theme.
+    this.drawScene();
 
     // Cast detection runs before drawing players so the caster snaps to the
     // cast pose on the same frame their spell first appears.
@@ -743,22 +777,62 @@ export class GameScene extends Phaser.Scene {
     return sprite;
   }
 
-  // World-fixed grid floor + arena border (drawn under everything). Faint lines
-  // so movement reads against the dark background; a brighter border marks the
-  // arena edge.
-  private drawFloor(): void {
+  // Build decorative scene elements once (dream themes): soft goo blobs on the
+  // ground + drifting bubbles. Math.random is fine here (one-off client decor).
+  private buildScenery(theme: SceneTheme): void {
+    const W = CONFIG.arenaWidth;
+    const H = CONFIG.arenaHeight;
+    const cols = theme.blobColors ?? [0x2fae7a];
+    for (let i = 0; i < 34; i++) {
+      const r = 22 + Math.random() * 110;
+      this.scenery.push({
+        x: Math.random() * W, y: Math.random() * H, rx: r, ry: r * (0.55 + Math.random() * 0.3),
+        c: cols[Math.floor(Math.random() * cols.length)], a: 0.04 + Math.random() * 0.06,
+      });
+    }
+    for (let i = 0; i < 18; i++) {
+      this.bubbles.push({
+        x: Math.random() * W, y: Math.random() * H, r: 4 + Math.random() * 11,
+        phase: Math.random() * Math.PI * 2, speed: 8 + Math.random() * 18,
+      });
+    }
+  }
+
+  // World-fixed scene (drawn under everything). Scrolls with the camera so motion
+  // reads. Two modes per the active theme: 'grid' (engineering floor) or 'dream'
+  // (goo blobs + drifting bubbles).
+  private drawScene(): void {
     const g = this.gfx;
     const aw = CONFIG.arenaWidth;
     const ah = CONFIG.arenaHeight;
-    const step = 80;
-    g.lineStyle(1, 0x2a2a4a, 0.55);
-    for (let x = step; x < aw; x += step) g.lineBetween(x, 0, x, ah);
-    for (let y = step; y < ah; y += step) g.lineBetween(0, y, aw, y);
-    // brighter dots at intersections for a touch more texture/parallax read
-    g.fillStyle(0x3a3a60, 0.6);
-    for (let x = step; x < aw; x += step) for (let y = step; y < ah; y += step) g.fillCircle(x, y, 1.3);
-    // arena border
-    g.lineStyle(3, 0x4a4a78, 0.85);
+    const theme = THEMES[ACTIVE_THEME];
+    if (theme.mode === 'grid') {
+      const step = 80;
+      g.lineStyle(1, theme.grid ?? 0x2a2a4a, 0.55);
+      for (let x = step; x < aw; x += step) g.lineBetween(x, 0, x, ah);
+      for (let y = step; y < ah; y += step) g.lineBetween(0, y, aw, y);
+      g.fillStyle(0x3a3a60, 0.6);
+      for (let x = step; x < aw; x += step) for (let y = step; y < ah; y += step) g.fillCircle(x, y, 1.3);
+    } else {
+      // soft goo blobs (scroll with the camera → motion + slime theme)
+      for (const s of this.scenery) {
+        g.fillStyle(s.c, s.a);
+        g.fillEllipse(s.x, s.y, s.rx * 2, s.ry * 2);
+      }
+      // drifting dream bubbles (animate upward, wrap)
+      const bub = theme.bubble ?? 0xaff0d4;
+      for (const b of this.bubbles) {
+        const y = (((b.y - this.t * b.speed) % ah) + ah) % ah;
+        const x = b.x + Math.sin(this.t * 0.7 + b.phase) * 7;
+        g.fillStyle(bub, 0.08);
+        g.fillCircle(x, y, b.r);
+        g.lineStyle(1, bub, 0.16);
+        g.strokeCircle(x, y, b.r);
+        g.lineStyle(0, 0, 0);
+      }
+    }
+    // arena edge
+    g.lineStyle(3, theme.border, 0.8);
     g.strokeRect(0, 0, aw, ah);
     g.lineStyle(0, 0, 0);
   }

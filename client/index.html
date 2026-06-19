@@ -204,7 +204,8 @@
          whole screen routes touch into the game (no dead zones outside a small
          canvas). Works the same on desktop and mobile. */
       #game-chrome { display: none; }
-      #game-chrome.playing { display: block; position: fixed; inset: 0; background: var(--bg); z-index: 50; }
+      /* Neutral base; GameScene applies the active level theme's sky (THEMES). */
+      #game-chrome.playing { display: block; position: fixed; inset: 0; z-index: 50; background: #0a0f1a; }
       #game-chrome.playing #game {
         position: absolute; inset: 0; z-index: 1;
         display: flex; align-items: center; justify-content: center;
