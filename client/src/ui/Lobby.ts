@@ -47,6 +47,22 @@ const CHAR_NAMES: Record<ClassId, string> = {
   warden: '貞德',
 };
 
+// Each character's source world — shown as a label + a themed card background so
+// the multi-world nature reads at a glance. (Art is a themed gradient for now;
+// per-world AI backdrops can come later.)
+const WORLD_NAME: Record<ClassId, string> = {
+  pyro: '為美好世界',
+  cryo: 'Re:Zero 異世界',
+  storm: '學園都市',
+  warden: '聖杯戰爭 · 現代',
+};
+const WORLD_BG: Record<ClassId, string> = {
+  pyro: 'radial-gradient(100% 70% at 50% 0%, rgba(255,170,60,0.18), transparent 60%), linear-gradient(165deg,#22301a,#12160c)',
+  cryo: 'radial-gradient(100% 70% at 50% 0%, rgba(120,200,255,0.18), transparent 60%), linear-gradient(165deg,#16273a,#0c1420)',
+  storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.20), transparent 60%), linear-gradient(165deg,#221a3a,#100c1e)',
+  warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.16), transparent 60%), linear-gradient(165deg,#2a2418,#14120c)',
+};
+
 const ERROR_TEXT: Record<ErrorCode, string> = {
   'not-found': '找不到該房間代碼',
   full: '房間已滿(上限 4 人)',
@@ -120,6 +136,11 @@ export class Lobby {
               : ''
           }
         </div>
+      </div>
+      <div class="social">
+        <a href="https://github.com/yazelin/ai-chant-magic" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>GitHub</a>
+        <a href="https://www.facebook.com/yaze.lin.gm" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg>Facebook</a>
+        <a class="coffee" href="https://buymeacoffee.com/yazelin" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><path d="M7 4v2M11 4v2M15 4v2"/></svg>請我喝咖啡</a>
       </div>
     `;
 
@@ -220,6 +241,7 @@ export class Lobby {
       card.className = 'char-card' + (id === this.classId ? ' selected' : '');
       card.style.color = def.color;
       card.style.gridArea = AREA[id];
+      card.style.background = WORLD_BG[id]; // themed per-character world backdrop
       const skills = def.spells
         .map((s) => {
           const k = SKILL_INFO[s];
@@ -238,6 +260,7 @@ export class Lobby {
         <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div><div class="fx"></div></div>
         <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
         <div class="crole">${escapeHtml(def.displayName)}</div>
+        <div class="cworld">◈ ${escapeHtml(WORLD_NAME[id])}</div>
         <div class="chant-hint">▸ 喊出招式名即可施法</div>
         <ul class="skills">${skills}</ul>
       `;

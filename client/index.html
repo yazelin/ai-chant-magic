@@ -118,8 +118,18 @@
         padding: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
         transition: all 0.12s;
       }
-      .char-card:hover { background: var(--panel-2); }
+      .char-card:hover { filter: brightness(1.15); } /* world bg is set inline per card */
       .char-card.selected { box-shadow: 0 0 0 1px currentColor, 0 0 20px -4px currentColor; }
+      .char-card .cworld { font-size: 11px; color: currentColor; opacity: 0.85; font-style: italic;
+        margin-bottom: 4px; letter-spacing: 0.5px; }
+      /* Home social bar (GitHub / Facebook / Buy Me a Coffee) */
+      .social { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+      .social a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px;
+        background: var(--panel); border: 1px solid var(--edge); color: var(--muted); text-decoration: none;
+        font-size: 13px; transition: all 0.12s; }
+      .social a:hover { color: var(--ink); border-color: var(--accent); background: var(--panel-2); }
+      .social a svg { width: 16px; height: 16px; }
+      .social a.coffee:hover { color: #ffd24d; border-color: #ffd24d; }
       .char-card .sprite-box { position: relative; width: 96px; height: 96px; }
       .char-card .walk-sprite { width: 96px; height: 96px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
       .char-card .fx {
