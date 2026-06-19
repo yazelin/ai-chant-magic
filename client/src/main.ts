@@ -11,6 +11,7 @@ import {
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
 import { SkillBar } from './ui/skillbar';
+import { WaveHud } from './render/wavehud';
 import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
@@ -55,6 +56,7 @@ function startGame(session: GameSession, classId: ClassId): void {
 
   const hud = new Hud();
   const skillbar = new SkillBar();
+  const wavehud = new WaveHud();
   const incantation = new IncantationOverlay();
   const music = new MusicEngine();
 
@@ -70,6 +72,7 @@ function startGame(session: GameSession, classId: ClassId): void {
     if (w) {
       hud.render(w, session.getSelfId());
       skillbar.update(w, session.getSelfId());
+      wavehud.update(w);
       // 惠惠 chant easter egg: drive the incantation overlay from the local
       // pyro's 爆裂 charge (0 / non-pyro → hidden).
       const self = w.players.find((p) => p.id === session.getSelfId());

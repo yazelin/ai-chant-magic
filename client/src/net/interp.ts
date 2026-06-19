@@ -75,6 +75,8 @@ export interface Snapshot {
   status: GameStatus;
   wave: number;
   score: number;
+  breakTimer?: number;
+  spawnQueue?: number;
   players: SnapshotPlayer[];
   enemies: SnapshotEnemy[];
   projectiles: SnapshotProjectile[];
@@ -189,10 +191,10 @@ function snapshotToWorld(s: Snapshot): World {
     nextEntityId: 0,
     wave: s.wave,
     score: s.score,
-    spawnQueue: 0,
+    spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
-    breakTimer: 0,
+    breakTimer: s.breakTimer ?? 0,
   };
 }
 
@@ -235,10 +237,10 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     nextEntityId: 0,
     wave: next.wave,
     score: next.score,
-    spawnQueue: 0,
+    spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
-    breakTimer: 0,
+    breakTimer: next.breakTimer ?? 0,
   };
 }
 

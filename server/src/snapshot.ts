@@ -69,6 +69,8 @@ export interface Snapshot {
   status: GameStatus;
   wave: number;
   score: number;
+  breakTimer: number; // >0 = countdown to next wave
+  spawnQueue: number; // enemies left to spawn this wave (for within-wave progress)
   players: SnapshotPlayer[];
   enemies: SnapshotEnemy[];
   projectiles: SnapshotProjectile[];
@@ -85,6 +87,8 @@ export function toSnapshot(world: World): Snapshot {
     status: world.status,
     wave: world.wave,
     score: world.score,
+    breakTimer: world.breakTimer,
+    spawnQueue: world.spawnQueue,
     players: world.players.map((p) => ({
       id: p.id,
       name: p.name,

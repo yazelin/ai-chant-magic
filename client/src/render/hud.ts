@@ -80,11 +80,13 @@ export class Hud {
       })
       .join(' <span style="opacity:.4">｜</span> ');
 
+    // Wave + score now live in the top WaveHud bar; keep only the game-over line
+    // here (plus the party panel below).
     const head =
       world.status === 'gameover'
-        ? `遊戲結束 — 撐到第 ${world.wave} 波,擊殺 ${world.score}(按 R 重來)`
-        : `第 ${world.wave} 波 ｜ 隊伍擊殺 ${world.score}`;
+        ? `遊戲結束 — 撐到第 ${world.wave} 波,擊殺 ${world.score}(按 R 重來) <span style="opacity:.4">｜</span> `
+        : '';
 
-    this.hud.innerHTML = `${esc(head)} <span style="opacity:.4">｜</span> ${party}`;
+    this.hud.innerHTML = `${head}${party}`;
   }
 }
