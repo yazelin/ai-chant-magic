@@ -12,6 +12,7 @@ import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
 import { SkillBar } from './ui/skillbar';
 import { WaveHud } from './render/wavehud';
+import { initPwaInstall, hidePwaInstall } from './pwaInstall';
 import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
@@ -29,6 +30,7 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
   // overlay on top without blocking touch.
   const chrome = document.getElementById('game-chrome');
   if (chrome) chrome.classList.add('playing');
+  hidePwaInstall(); // install affordance is home-only
   // Hide the lobby panel so it doesn't sit above the game.
   const lobbyEl = document.getElementById('lobby');
   if (lobbyEl) lobbyEl.style.display = 'none';
@@ -131,3 +133,4 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
 }
 
 new Lobby(startGame);
+initPwaInstall();
