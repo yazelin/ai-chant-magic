@@ -909,3 +909,32 @@ describe('step — slime elements (phase 2 behaviour)', () => {
     expect(w.enemies.find((e) => e.id === 1)!.pos.x - startX).toBeGreaterThan(90);
   });
 });
+
+describe('step — 史萊姆王 boss', () => {
+  it('spawns a boss on a boss wave (wave % every === 0)', () => {
+    const w = createSoloWorld('storm');
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02; // about to roll into the next wave
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05); // breakTimer → 0 → beginWave → boss wave
+    expect(w.wave).toBe(CONFIG.boss.every);
+    expect(w.enemies.some((e) => e.boss === true)).toBe(true);
+  });
+
+  it('boss summons minions on its interval', () => {
+    const w = createSoloWorld('storm');
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    expect(boss).toBeTruthy();
+    w.spawnQueue = 0; // isolate from the regular swarm drip
+    boss.nextSummonAt = w.time; // due immediately
+    const before = w.enemies.length;
+    step(w, [], 0.05);
+    expect(w.enemies.length).toBe(before + CONFIG.boss.summonCount);
+  });
+});

@@ -615,6 +615,8 @@ function updateEnemies(world: World, dt: number): void {
 
     // Holy slimes periodically heal nearby slimes (kept alive → 優先清).
     if (e.element === 'holy') holyHeal(world, e);
+    // 史萊姆王 periodically summons small slimes (kill it to stop the adds).
+    if (e.boss) bossSummon(world, e);
 
     if (
       d <= e.radius + CONFIG.player.radius &&
@@ -665,6 +667,23 @@ function stormMove(world: World, e: Enemy, toP: Vec2, d: number, dt: number): vo
     e.pos.x += move.x;
     e.pos.y += move.y;
   }
+}
+
+// 史萊姆王召喚:每 summonInterval 在自己周圍生 summonCount 隻小史萊姆 + 召喚光環。
+function bossSummon(world: World, e: Enemy): void {
+  const b = CONFIG.boss;
+  if (e.nextSummonAt === undefined) e.nextSummonAt = world.time + b.summonInterval;
+  if (world.time < e.nextSummonAt) return;
+  e.nextSummonAt = world.time + b.summonInterval;
+  for (let i = 0; i < b.summonCount; i++) {
+    const ang = (i / b.summonCount) * Math.PI * 2;
+    const r = e.radius + 24;
+    makeSlime(world, { x: e.pos.x + Math.cos(ang) * r, y: e.pos.y + Math.sin(ang) * r }, 'normal');
+  }
+  pushEffect(world, {
+    kind: 'aura', a: { x: e.pos.x, y: e.pos.y },
+    radius: e.radius * 1.6, ttl: 0.4, colorHint: '#ff3b6b',
+  });
 }
 
 // Holy slime heal pulse: every healInterval, top up nearby slimes (incl. itself)
@@ -760,13 +779,18 @@ function respawnDeadPlayers(world: World): void {
   });
 }
 
-function beginWave(world: World): void {
+function beginWave(world: World, rng: () => number): void {
   world.wave += 1;
   respawnDeadPlayers(world);
   const effective = effectivePlayerCount(world);
   const playerScale = Math.pow(Math.max(1, effective), CONFIG.wave.scaleExp);
   const base = CONFIG.wave.baseCount + (world.wave - 1) * CONFIG.wave.perWave;
   world.spawnQueue = Math.round(base * playerScale);
+  // Boss wave: spawn a 史萊姆王 + thin out the regular swarm so it stays the focus.
+  if (world.wave % CONFIG.boss.every === 0) {
+    spawnBoss(world, rng);
+    world.spawnQueue = Math.round(world.spawnQueue * CONFIG.boss.swarmMul);
+  }
   world.spawnCadence = Math.max(
     CONFIG.wave.minCadence,
     CONFIG.wave.baseCadence - (world.wave - 1) * CONFIG.wave.cadenceDecay
@@ -786,37 +810,53 @@ function pickElement(wave: number, rng: () => number): EnemyElement {
   return pool[Math.floor(rng() * pool.length) % pool.length];
 }
 
-function spawnEnemy(world: World, rng: () => number): void {
+// A point on the off-screen ring around a random living player (or arena centre).
+function ringSpawnPos(world: World, rng: () => number): Vec2 {
   const W = CONFIG.arenaWidth;
   const H = CONFIG.arenaHeight;
-  // Spawn on a ring around a random living player so enemies arrive from just
-  // off-screen regardless of how big the arena is (the arena is now larger than
-  // most screens). Falls back to the arena centre if nobody is up.
   const targets = world.players.filter((p) => p.alive && !p.downed);
   const c = targets.length
     ? targets[Math.floor(rng() * targets.length) % targets.length].pos
     : { x: W / 2, y: H / 2 };
   const ang = rng() * Math.PI * 2;
   const dist = CONFIG.wave.spawnRadius + rng() * CONFIG.wave.spawnRadiusJitter;
-  const pos = {
-    x: clamp(c.x + Math.cos(ang) * dist, 0, W),
-    y: clamp(c.y + Math.sin(ang) * dist, 0, H),
-  };
-  const element = pickElement(world.wave, rng);
+  return { x: clamp(c.x + Math.cos(ang) * dist, 0, W), y: clamp(c.y + Math.sin(ang) * dist, 0, H) };
+}
+
+// Push one standard slime of `element` at `pos` (shared by wave spawns + boss summons).
+function makeSlime(world: World, pos: Vec2, element: EnemyElement): void {
   let hp = CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave;
   let speed = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
   if (element === 'holy') hp *= CONFIG.slime.holy.hpMul; // 聖史萊姆是肉盾
   if (element === 'storm') speed *= CONFIG.slime.storm.speedMul; // 雷史萊姆又快
   world.enemies.push({
     id: world.nextEntityId++,
-    pos,
+    pos: { x: pos.x, y: pos.y },
+    hp, speed, slowUntil: 0, radius: CONFIG.enemy.radius, targetId: null,
+    element, maxHp: hp,
+  });
+}
+
+function spawnEnemy(world: World, rng: () => number): void {
+  makeSlime(world, ringSpawnPos(world, rng), pickElement(world.wave, rng));
+}
+
+// 史萊姆王:巨大、肉、慢、週期召喚。Element 'normal'(顏色由客端 boss 旗標決定)。
+function spawnBoss(world: World, rng: () => number): void {
+  const b = CONFIG.boss;
+  const hp = (CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave) * b.hpMul;
+  world.enemies.push({
+    id: world.nextEntityId++,
+    pos: ringSpawnPos(world, rng),
     hp,
-    speed,
+    speed: CONFIG.enemy.baseSpeed * b.speedMul,
     slowUntil: 0,
-    radius: CONFIG.enemy.radius,
+    radius: CONFIG.enemy.radius * b.radiusMul,
     targetId: null,
-    element,
+    element: 'normal',
     maxHp: hp,
+    boss: true,
+    nextSummonAt: world.time + b.summonInterval,
   });
 }
 
@@ -825,11 +865,11 @@ function updateWaves(world: World, dt: number, rng: () => number): void {
     world.breakTimer -= dt;
     if (world.breakTimer <= 0) {
       world.breakTimer = 0;
-      beginWave(world);
+      beginWave(world, rng);
     }
     return;
   }
-  if (world.wave === 0 && world.spawnQueue === 0) beginWave(world);
+  if (world.wave === 0 && world.spawnQueue === 0) beginWave(world, rng);
 
   if (world.spawnQueue > 0) {
     world.spawnTimer -= dt;
