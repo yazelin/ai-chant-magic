@@ -41,7 +41,10 @@ function startGame(session: GameSession, classId: ClassId): void {
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    transparent: true, // let the CSS dreamscape gradient show behind the world
+    // Opaque backbuffer (NOT transparent) — additive-blend VFX (fire glow, bursts)
+    // need it or they render their bounding box. The dreamscape sky is drawn
+    // in-scene by GameScene instead of via a transparent canvas + CSS gradient.
+    backgroundColor: '#0a0f1a',
     scale: { mode: Phaser.Scale.RESIZE },
     scene,
   });
