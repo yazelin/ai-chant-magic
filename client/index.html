@@ -210,17 +210,51 @@
         display: flex; align-items: center; justify-content: center;
       }
       #game-chrome.playing #game canvas { display: block; }
-      #game-chrome.playing > .row,
-      #game-chrome.playing > #hud {
-        position: absolute; left: 10px; right: 10px; z-index: 2;
-        pointer-events: none; text-shadow: 0 1px 3px #000;
-      }
-      #game-chrome.playing > .row { top: 8px; display: flex; gap: 12px; align-items: center; }
-      #game-chrome.playing > #hud { top: 96px; } /* below the centered wave/boss bar */
+      /* HUD zones — non-blocking glass overlays (touch passes through to canvas) */
+      #game-chrome.playing > #hud,
+      #game-chrome.playing > #mic-status,
+      #game-chrome.playing > #heard,
+      #game-chrome.playing > #fs-btn { position: absolute; z-index: 3; pointer-events: none; }
+      #game-chrome.playing > #hud { top: 78px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
+      #game-chrome.playing > #mic-status { left: 12px; bottom: 16px; }
+      #game-chrome.playing > #heard { left: 50%; bottom: 92px; transform: translateX(-50%); max-width: 86vw; }
+      #game-chrome.playing > #fs-btn { top: 10px; right: 10px; }
+      /* Player status panel (built by Hud) — glass card + class accent + HP bar */
+      .pstat { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px;
+        background: rgba(16,16,34,0.66); border: 1px solid var(--edge); border-left: 3px solid var(--accent);
+        border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.4); backdrop-filter: blur(3px); min-width: 168px; }
+      .pstat .pname { font-size: 12px; font-weight: 700; color: var(--ink); }
+      .pstat .prole { font-size: 11px; color: var(--muted); font-weight: 500; }
+      .pstat .phpbar { position: relative; height: 12px; border-radius: 6px; background: #25253f;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); overflow: hidden; margin-top: 3px; }
+      .pstat .phpbar > i { display: block; height: 100%; background: linear-gradient(#46d66a, #1f9e44); transition: width .15s; }
+      .pstat .phpbar > b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px #000; }
+      .pstat .pcol { width: 6px; align-self: stretch; }
+      .pstat .pbody { flex: 1; min-width: 0; }
+      .pstat .pcharge { margin-top: 3px; font-size: 11px; font-weight: 700; color: #ff8c1a; }
+      .pstat.dim { opacity: 0.55; }
+      .pstat .pcds { display: flex; gap: 3px; margin-top: 4px; }
+      /* Mic status pill (bottom-left) */
+      #mic-status .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+        background: rgba(16,16,34,0.66); border: 1px solid var(--edge); border-radius: 999px;
+        font-size: 12px; color: var(--muted); backdrop-filter: blur(3px); }
+      #mic-status .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: #777; }
+      #mic-status.listening .pill { color: #9be7a8; } #mic-status.listening .dot { background: #46d66a; box-shadow: 0 0 8px #46d66a; }
+      #mic-status.error .pill, #mic-status.denied .pill, #mic-status.unsupported .pill { color: #ff9a9a; }
+      #mic-status.error .dot, #mic-status.denied .dot, #mic-status.unsupported .dot { background: #ff5a5a; }
+      #mic-status .note { display: none; margin-top: 5px; max-width: 280px; font-size: 11px; line-height: 1.5;
+        color: var(--ink); background: rgba(40,16,24,0.9); border: 1px solid #6a3340; border-radius: 8px; padding: 6px 9px; }
+      #mic-status.denied .note, #mic-status.unsupported .note { display: block; }
+      /* Heard toast (bottom-center) */
+      #heard:empty { display: none; }
+      #heard { font-size: 13px; color: var(--ink); background: rgba(16,16,34,0.72); border: 1px solid var(--edge);
+        border-radius: 999px; padding: 5px 14px; text-align: center; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; backdrop-filter: blur(3px); box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
       #fs-btn {
-        pointer-events: auto; margin-left: auto; cursor: pointer;
-        background: var(--panel-2); color: var(--ink); border: 1px solid var(--edge);
-        border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px;
+        pointer-events: auto; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; background: rgba(16,16,34,0.66); color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 9px; backdrop-filter: blur(3px);
       }
       #fs-btn:hover { background: var(--panel); }
       /* Portrait phones: nudge to rotate (landscape shows the full battlefield). */
@@ -234,20 +268,16 @@
         }
         #rotate-hint small { color: var(--muted); font-size: 15px; font-weight: 400; }
       }
-      #class-picker { display: none; }
     </style>
   </head>
   <body>
     <div id="app">
       <div id="game-chrome">
-        <div class="row">
-          <strong>真。AI。咏唱魔法</strong>
-          <span id="mic-status">麥克風:未啟動</span>
-          <button id="fs-btn" type="button">全螢幕</button>
-        </div>
-        <div id="class-picker" class="row"></div>
-        <div id="hud" class="row"></div>
         <div id="game"></div>
+        <div id="hud"></div>
+        <button id="fs-btn" type="button" title="全螢幕" aria-label="全螢幕"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <div id="mic-status"></div>
+        <div id="heard"></div>
         <div id="rotate-hint"><div>請將手機橫放<br /><small>橫向才能看到完整戰場</small></div></div>
       </div>
       <div id="lobby"></div>
