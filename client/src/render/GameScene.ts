@@ -140,6 +140,13 @@ export class GameScene extends Phaser.Scene {
   private joyOrigin = { x: 0, y: 0 };
   private joyCur = { x: 0, y: 0 };
   private touchMove: Vec2 = { x: 0, y: 0 };
+  // Touch RIGHT aim stick (right-half drag → facing direction, twin-stick style).
+  // touchFacing holds the last aimed angle (persists after release); null = no
+  // touch aim yet → fall back to the mouse (desktop).
+  private aimPointerId: number | null = null;
+  private aimOrigin = { x: 0, y: 0 };
+  private aimCur = { x: 0, y: 0 };
+  private touchFacing: number | null = null;
 
   // GameScene is session-agnostic: it renders whatever World the injected
   // GameSession exposes (LocalSession runs the sim locally; NetSession returns
@@ -194,27 +201,33 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keyup', (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase()));
 
     // INPUT — mouse drives aim directly; touch splits the screen into a left
-    // virtual joystick (move) + right aim zone. Casting stays voice-only on
-    // every platform (no touch-to-cast). Allow up to 3 pointers for 2 fingers.
+    // virtual joystick (move) + a right aim STICK (drag direction = facing,
+    // twin-stick style). Casting stays voice-only (no touch-to-cast). Allow up
+    // to 3 pointers for 2 fingers.
     this.input.addPointer(2);
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!p.wasTouch) { this.mouse = { x: p.x, y: p.y }; return; }
       if (p.id === this.joyPointerId) {
         this.joyCur = { x: p.x, y: p.y };
         this.touchMove = touchMoveDir(this.joyOrigin, this.joyCur);
-      } else if (p.x >= this.scale.width / 2) {
-        this.mouse = { x: p.x, y: p.y }; // aim toward the finger
+      } else if (p.id === this.aimPointerId) {
+        this.aimCur = { x: p.x, y: p.y };
+        const dx = this.aimCur.x - this.aimOrigin.x;
+        const dy = this.aimCur.y - this.aimOrigin.y;
+        if (Math.hypot(dx, dy) > 6) this.touchFacing = Math.atan2(dy, dx); // direction = facing
       }
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!p.wasTouch) return;
       if (p.x < this.scale.width / 2) {
-        this.joyPointerId = p.id; // left half: anchor the joystick here
+        this.joyPointerId = p.id; // left half: anchor the move joystick
         this.joyOrigin = { x: p.x, y: p.y };
         this.joyCur = { x: p.x, y: p.y };
         this.touchMove = { x: 0, y: 0 };
       } else {
-        this.mouse = { x: p.x, y: p.y };
+        this.aimPointerId = p.id; // right half: anchor the aim stick
+        this.aimOrigin = { x: p.x, y: p.y };
+        this.aimCur = { x: p.x, y: p.y };
       }
     });
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
@@ -222,6 +235,7 @@ export class GameScene extends Phaser.Scene {
         this.joyPointerId = null;
         this.touchMove = { x: 0, y: 0 };
       }
+      if (p.id === this.aimPointerId) this.aimPointerId = null; // keep last aimed dir
     });
 
     // Audio needs a user gesture to start; resume the SFX context on the first
@@ -289,6 +303,9 @@ export class GameScene extends Phaser.Scene {
     this.enemyHitFlash.clear();
     this.prevSelfHp = -1;
     this.hurtFlashUntil = 0;
+    this.aimPointerId = null;
+    this.joyPointerId = null;
+    this.touchMove = { x: 0, y: 0 };
     this.session.restart(this.selfClassId());
   }
 
@@ -307,9 +324,13 @@ export class GameScene extends Phaser.Scene {
     const self = this.self();
     if (self) {
       this.followCamera(self);
-      // Aim is in SCREEN space; convert through the camera to world space.
-      const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
-      this.session.sendFace(facingFromMouse(self.pos, aim));
+      // Facing: touch aim stick (direction) wins; else mouse position (desktop).
+      if (this.touchFacing !== null) {
+        this.session.sendFace(this.touchFacing);
+      } else {
+        const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
+        this.session.sendFace(facingFromMouse(self.pos, aim));
+      }
       // Touch joystick wins when active; otherwise keyboard.
       const active = this.touchMove.x !== 0 || this.touchMove.y !== 0;
       this.session.sendMove(active ? this.touchMove : moveDirFromKeys(this.keys));
@@ -449,11 +470,19 @@ export class GameScene extends Phaser.Scene {
     const self = this.self();
     if (!self || !self.connected || self.downed) return;
     const g = this.aimGfx;
-    // this.mouse is screen-space; reticle is drawn on the world-space aimGfx, so
-    // convert through the camera (zoom 1 → screen size preserved).
-    const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
-    const mx = aim.x;
-    const my = aim.y;
+    // Touch: reticle sits in front of the player along the aim-stick direction.
+    // Mouse: reticle pinned to the cursor (converted screen→world via camera).
+    let mx: number;
+    let my: number;
+    if (this.touchFacing !== null) {
+      const r = 120; // how far in front the reticle floats
+      mx = self.pos.x + Math.cos(this.touchFacing) * r;
+      my = self.pos.y + Math.sin(this.touchFacing) * r;
+    } else {
+      const aim = this.cameras.main.getWorldPoint(this.mouse.x, this.mouse.y);
+      mx = aim.x;
+      my = aim.y;
+    }
     const ringR = 9;
     // warm outer glow
     g.fillStyle(0xff8c28, 0.1);
@@ -490,33 +519,35 @@ export class GameScene extends Phaser.Scene {
     cam.setScroll(sx, sy);
   }
 
-  // Touch virtual joystick — base ring at the anchor + a knob clamped to a max
-  // radius in the drag direction. Only drawn while a finger holds the left half.
+  // Touch sticks — base ring at the anchor + a knob clamped to a max radius in
+  // the drag direction. Left (white) = move, right (warm) = aim. Only drawn
+  // while the matching finger is down.
   private drawTouchJoystick(): void {
-    if (this.joyPointerId === null) return;
+    if (this.joyPointerId !== null) this.drawStick(this.joyOrigin, this.joyCur, 0xffffff);
+    if (this.aimPointerId !== null) this.drawStick(this.aimOrigin, this.aimCur, 0xffc878);
+  }
+
+  private drawStick(originScreen: { x: number; y: number }, curScreen: { x: number; y: number }, color: number): void {
     const g = this.aimGfx;
     const baseR = 46;
-    // Joystick anchor/knob are screen-space; draw on world-space aimGfx via the
-    // camera (zoom 1 → on-screen radius unchanged).
+    // anchors/knobs are screen-space; draw on world-space aimGfx via the camera
+    // (zoom 1 → on-screen radius unchanged).
     const cam = this.cameras.main;
-    const o = cam.getWorldPoint(this.joyOrigin.x, this.joyOrigin.y);
-    const c = cam.getWorldPoint(this.joyCur.x, this.joyCur.y);
+    const o = cam.getWorldPoint(originScreen.x, originScreen.y);
+    const c = cam.getWorldPoint(curScreen.x, curScreen.y);
     const ox = o.x;
     const oy = o.y;
-    g.fillStyle(0xffffff, 0.06);
+    g.fillStyle(color, 0.06);
     g.fillCircle(ox, oy, baseR);
-    g.lineStyle(2, 0xffffff, 0.35);
+    g.lineStyle(2, color, 0.35);
     g.strokeCircle(ox, oy, baseR);
-    // knob: clamp the raw drag to baseR
     const dx = c.x - ox;
     const dy = c.y - oy;
     const l = Math.hypot(dx, dy) || 1;
     const k = Math.min(l, baseR);
-    const kx = ox + (dx / l) * k;
-    const ky = oy + (dy / l) * k;
     g.lineStyle(0, 0, 0);
-    g.fillStyle(0xffffff, 0.5);
-    g.fillCircle(kx, ky, 18);
+    g.fillStyle(color, 0.5);
+    g.fillCircle(ox + (dx / l) * k, oy + (dy / l) * k, 18);
   }
 
   // CAST DETECTION + impact reactions. For every NEW projectile or effect id
