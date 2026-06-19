@@ -58,13 +58,19 @@ interface PeerLeftMsg {
   type: 'peerLeft';
   id: string;
 }
+interface ChatBroadcastMsg {
+  type: 'chat';
+  from: string;
+  text: string;
+}
 type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
   | StartedMsg
   | SnapshotMsg
   | ErrorMsg
-  | PeerLeftMsg;
+  | PeerLeftMsg
+  | ChatBroadcastMsg;
 
 export interface NetCallbacks {
   onJoined?: (m: JoinedMsg) => void;
@@ -73,6 +79,7 @@ export interface NetCallbacks {
   onSnapshot?: (snap: Snapshot, tick: number) => void;
   onError?: (code: ErrorCode, msg: string) => void;
   onPeerLeft?: (id: string) => void;
+  onChat?: (from: string, text: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
 }
@@ -166,6 +173,9 @@ export class NetClient {
       case 'peerLeft':
         this.cb.onPeerLeft?.(m.id);
         break;
+      case 'chat':
+        this.cb.onChat?.(m.from, m.text);
+        break;
     }
   }
 
@@ -197,6 +207,11 @@ export class NetClient {
   // lobby to everyone (including us), so the member list reflects the change.
   setClass(classId: ClassId): void {
     this.send({ type: 'setClass', classId });
+  }
+
+  // Send a room chat line; the server stamps the sender and relays to everyone.
+  sendChat(text: string): void {
+    this.send({ type: 'chat', text });
   }
 
   start(): void {

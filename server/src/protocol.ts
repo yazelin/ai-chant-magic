@@ -72,6 +72,12 @@ export interface LeaveMsg {
   type: 'leave';
 }
 
+// Room chat (lobby + in-game). Server stamps the sender + relays to the room.
+export interface ChatMsg {
+  type: 'chat';
+  text: string;
+}
+
 export type ClientMsg =
   | CreateMsg
   | JoinMsg
@@ -80,7 +86,8 @@ export type ClientMsg =
   | SetClassMsg
   | StartMsg
   | InputMsg
-  | LeaveMsg;
+  | LeaveMsg
+  | ChatMsg;
 
 // ---------------------------------------------------------------------------
 // Server -> Client
@@ -128,13 +135,21 @@ export interface PeerLeftMsg {
   id: string;
 }
 
+// A chat line relayed to everyone in the room (server stamps `from`).
+export interface ChatBroadcastMsg {
+  type: 'chat';
+  from: string;
+  text: string;
+}
+
 export type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
   | StartedMsg
   | SnapshotMsg
   | ErrorMsg
-  | PeerLeftMsg;
+  | PeerLeftMsg
+  | ChatBroadcastMsg;
 
 // ---------------------------------------------------------------------------
 // Parsing helper (used by the thin ws wiring in index.ts / B2)
@@ -149,6 +164,7 @@ const CLIENT_MSG_TYPES: ReadonlySet<string> = new Set([
   'start',
   'input',
   'leave',
+  'chat',
 ]);
 
 export function parseClientMsg(raw: string): ClientMsg | null {

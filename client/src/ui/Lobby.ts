@@ -87,6 +87,8 @@ export class Lobby {
   private roomCode = '';
   private isHost = false;
   private selfReady = false;
+  private chatLog: { from: string; text: string }[] = []; // room chat history
+  private chatVoice: WebSpeechVoiceInput | null = null; // one-shot dictation for chat
   // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
   private voice: WebSpeechVoiceInput | null = null;
   private practicing = false;
@@ -336,6 +338,7 @@ export class Lobby {
         onPeerLeft: () => {
           /* lobby list refresh arrives via onLobby */
         },
+        onChat: (from, text) => this.pushChat(from, text),
         onClose: () => this.handleDisconnect(),
       },
       url,
@@ -370,6 +373,7 @@ export class Lobby {
         onPeerLeft: () => {
           /* refresh via onLobby */
         },
+        onChat: (from, text) => this.pushChat(from, text),
         onClose: () => this.handleDisconnect(),
       },
       url,
@@ -445,6 +449,14 @@ export class Lobby {
       <div class="room-grid">${slots.join('')}</div>
       <div class="room-bar">
         <div class="picker"><span class="picker-label">選你的角色</span>${chips}</div>
+        <div class="chat">
+          <div class="chat-log" id="chat-log">${this.chatLogHtml()}</div>
+          <div class="chat-row">
+            <input id="chat-input" type="text" maxlength="200" placeholder="跟隊友討論選哪隻…(Enter 送出)" />
+            <button id="chat-voice" type="button" title="語音輸入" aria-label="語音輸入"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <button id="chat-send" type="button">送出</button>
+          </div>
+        </div>
         <div class="practice">
           <button id="btn-mic">開始詠唱練習</button>
           <div class="mic-state" id="mic-state">等待時開麥克風,對它喊任一招式名練習</div>
@@ -493,8 +505,55 @@ export class Lobby {
         this.renderRoom();
       });
     });
+    // Room chat: type or dictate, Enter/送出 to send (server relays back to all).
+    const chatInput = this.root.querySelector<HTMLInputElement>('#chat-input');
+    const sendChat = () => {
+      const t = chatInput?.value.trim();
+      if (!t) return;
+      this.client?.sendChat(t);
+      if (chatInput) chatInput.value = '';
+    };
+    this.root.querySelector('#chat-send')?.addEventListener('click', sendChat);
+    chatInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
+    });
+    this.root.querySelector('#chat-voice')?.addEventListener('click', () => this.dictateChat());
+    const log = this.root.querySelector('#chat-log');
+    if (log) log.scrollTop = log.scrollHeight;
+
     // Keep the chant-practice mic so a waiting player can warm up.
     this.wirePractice();
+  }
+
+  private chatLogHtml(): string {
+    return this.chatLog
+      .map((c) => `<div class="chat-line"><b>${escapeHtml(c.from)}</b> ${escapeHtml(c.text)}</div>`)
+      .join('');
+  }
+
+  // Incoming chat (server-relayed, incl. our own echo) → buffer + append live.
+  private pushChat(from: string, text: string): void {
+    this.chatLog.push({ from, text });
+    if (this.chatLog.length > 80) this.chatLog.shift();
+    const log = this.root.querySelector('#chat-log');
+    if (!log) return;
+    const line = document.createElement('div');
+    line.className = 'chat-line';
+    line.innerHTML = `<b>${escapeHtml(from)}</b> ${escapeHtml(text)}`;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // One-shot voice dictation into the chat input (frees the practice mic first).
+  private dictateChat(): void {
+    this.stopPractice();
+    const input = this.root.querySelector<HTMLInputElement>('#chat-input');
+    if (!this.chatVoice) this.chatVoice = new WebSpeechVoiceInput('zh-TW');
+    this.chatVoice.onTranscript((text) => {
+      if (input) { input.value = text; input.focus(); }
+      this.chatVoice?.stop();
+    });
+    this.chatVoice.start();
   }
 
   // One room seat: a joined player's chosen character (sprite + name + role +
