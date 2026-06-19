@@ -116,6 +116,7 @@ export class Lobby {
           <div class="name-row">
             <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
             <button id="btn-reroll" title="隨機換一個名字">換一個</button>
+            <button id="btn-practice-open" class="practice-open" title="開麥克風練習詠唱">練習</button>
           </div>
           <div class="btns">
             <button id="btn-create" class="primary">建立房間</button>
@@ -129,17 +130,9 @@ export class Lobby {
               ? `<div class="hint">此頁面為 HTTPS 但未設定伺服器。請以 <code>?server=wss://…</code> 指定伺服器,或直接「單機」遊玩。</div>`
               : ''
           }
-          <details class="practice">
-            <summary>詠唱練習</summary>
-            <div class="practice-body">
-              <button id="btn-mic">開始詠唱練習</button>
-              <div class="mic-state" id="mic-state">開麥克風,對它喊任一招式名</div>
-              <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
-              <div class="hit" id="hit"></div>
-            </div>
-          </details>
         </div>
       </div>
+      ${this.practiceModalHtml()}
       <div class="foot">
       <div class="social">
         <a href="https://github.com/yazelin/ai-chant-magic" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>GitHub</a>
@@ -168,14 +161,50 @@ export class Lobby {
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
   }
 
+  // Practice lives in a FLOATING modal (position:fixed) — on a fixed no-scroll
+  // page an inline/expanding panel gets clipped off short phones, so it must
+  // overlay the viewport instead. Shared markup for home + room.
+  private practiceModalHtml(): string {
+    return `
+      <div id="practice-modal" class="practice-modal" hidden>
+        <div class="pm-card">
+          <button id="pm-close" class="pm-close" type="button" aria-label="關閉">×</button>
+          <div class="pm-title">詠唱練習</div>
+          <div class="pm-sub">開麥克風,對它喊任一招式名,看會不會命中</div>
+          <button id="btn-mic">開始詠唱練習</button>
+          <div class="mic-state" id="mic-state">準備中…</div>
+          <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
+          <div class="hit" id="hit"></div>
+        </div>
+      </div>`;
+  }
+
   // --- Chant practice: mic → live transcript → highlight the matched skill ---
   private wirePractice(): void {
     const btn = this.root.querySelector<HTMLButtonElement>('#btn-mic');
-    if (!btn) return;
-    btn.addEventListener('click', () => this.togglePractice());
-    // reflect current state if the setup screen re-rendered mid-practice
-    btn.textContent = this.practicing ? '停止練習' : '開始詠唱練習';
-    btn.classList.toggle('primary', !this.practicing);
+    if (btn) {
+      btn.addEventListener('click', () => this.togglePractice());
+      // reflect current state if the screen re-rendered mid-practice
+      btn.textContent = this.practicing ? '停止練習' : '開始詠唱練習';
+      btn.classList.toggle('primary', !this.practicing);
+    }
+    // Open/close the practice modal. Opening also starts the mic (this click is
+    // the required user gesture); closing stops it.
+    const modal = this.root.querySelector<HTMLElement>('#practice-modal');
+    const open = this.root.querySelector<HTMLButtonElement>('#btn-practice-open');
+    const close = this.root.querySelector<HTMLButtonElement>('#pm-close');
+    if (modal && open) {
+      open.addEventListener('click', () => {
+        modal.hidden = false;
+        if (!this.practicing) this.togglePractice();
+      });
+      const shut = () => {
+        modal.hidden = true;
+        if (this.practicing) this.togglePractice();
+      };
+      close?.addEventListener('click', shut);
+      modal.addEventListener('click', (e) => { if (e.target === modal) shut(); });
+    }
   }
 
   private togglePractice(): void {
@@ -485,26 +514,19 @@ export class Lobby {
             <button id="chat-send" type="button">送出</button>
           </div>
         </div>
-        <details class="practice">
-          <summary>詠唱練習</summary>
-          <div class="practice-body">
-            <button id="btn-mic">開始詠唱練習</button>
-            <div class="mic-state" id="mic-state">等待時開麥克風,對它喊任一招式名練習</div>
-            <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
-            <div class="hit" id="hit"></div>
-          </div>
-        </details>
         <div class="btns">
           ${
             this.isHost
               ? `<button id="btn-start" class="primary">開始(${this.members.length} 人)</button>`
               : `<button id="btn-ready">${this.selfReady ? '取消準備' : '準備'}</button>`
           }
+          <button id="btn-practice-open" class="practice-open" title="開麥克風練習詠唱">練習</button>
           <button id="btn-leave">離開房間</button>
         </div>
         <div class="error" id="lobby-error"></div>
       </div>
       </div>
+      ${this.practiceModalHtml()}
     `;
 
     if (this.isHost) {
