@@ -170,7 +170,8 @@ export class Lobby {
         <div class="pm-card">
           <button id="pm-close" class="pm-close" type="button" aria-label="關閉">×</button>
           <div class="pm-title">詠唱練習</div>
-          <div class="pm-sub">開麥克風,對它喊任一招式名,看會不會命中</div>
+          <div class="pm-sub">開麥克風,喊出下面任一個詠唱詞,看會不會命中</div>
+          <div class="pm-skills" id="pm-skills"></div>
           <button id="btn-mic">開始詠唱練習</button>
           <div class="mic-state" id="mic-state">準備中…</div>
           <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
@@ -195,6 +196,7 @@ export class Lobby {
     const close = this.root.querySelector<HTMLButtonElement>('#pm-close');
     if (modal && open) {
       open.addEventListener('click', () => {
+        this.fillPracticeSkills(); // show the CURRENT character's chants to shout
         modal.hidden = false;
         if (!this.practicing) this.togglePractice();
       });
@@ -205,6 +207,23 @@ export class Lobby {
       close?.addEventListener('click', shut);
       modal.addEventListener('click', (e) => { if (e.target === modal) shut(); });
     }
+  }
+
+  // Populate the practice modal with the CURRENT character's chant phrases so the
+  // player knows exactly what to shout (the modal overlays the skill list).
+  private fillPracticeSkills(): void {
+    const host = this.root.querySelector<HTMLElement>('#pm-skills');
+    if (!host) return;
+    const id = this.classId;
+    const def = CLASSES[id];
+    const chips = def.spells
+      .map((s) => {
+        const phrase = chantFor(s, SKILL_INFO[s].name);
+        const ico = `<span class="pm-chip-ico" style="color:${def.color}">${skillIconSvg(s)}</span>`;
+        return `<span class="pm-chip">${ico}「${escapeHtml(phrase)}」</span>`;
+      })
+      .join('');
+    host.innerHTML = `<div class="pm-skills-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} 的招式</div><div class="pm-chips">${chips}</div>`;
   }
 
   private togglePractice(): void {
