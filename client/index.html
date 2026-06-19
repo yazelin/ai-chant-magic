@@ -90,8 +90,8 @@
       .class-card .spells { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
       .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0; }
       .btns button {
-        flex: 1 1 auto; min-width: 130px; background: var(--panel); color: var(--ink);
-        border: 1px solid var(--edge); border-radius: 8px; padding: 11px 14px; font-size: 14px;
+        flex: 1 1 auto; min-width: 92px; background: var(--panel); color: var(--ink);
+        border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; font-size: 14px;
         cursor: pointer; font-family: inherit;
       }
       .btns button:hover { background: var(--panel-2); }
@@ -109,14 +109,15 @@
       }
       .members .ready { color: #6fe39a; }
       .members .waiting { color: var(--muted); }
-      #lobby .error { color: #ff8d8d; font-size: 13px; margin-top: 12px; min-height: 18px; }
+      #lobby .error { color: #ff8d8d; font-size: 13px; margin-top: 0; min-height: 0; }
+      #lobby .error:empty { display: none; }
       #lobby .hint { color: #ffd24d; font-size: 13px; margin-top: 12px; }
 
       /* --- Home showcase: 4 character cards in the corners + center panel - */
       .showcase {
         flex: 1; min-height: 0;
         display: grid; gap: 10px; align-items: stretch;
-        grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 1fr 1fr;
+        grid-template-columns: 0.9fr 1.5fr 0.9fr; grid-template-rows: 1fr 1fr;
         grid-template-areas: "a center b" "c center d";
       }
       .char-card {
@@ -148,7 +149,7 @@
       .room-body { flex: 1; min-height: 0; display: flex; gap: 12px; }
       .room-grid { flex: 1; min-height: 0; display: grid; gap: 8px;
         grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-      @media (max-width: 760px) {
+      @media (orientation: portrait) {
         .room-body { flex-direction: column; }
         .room-bar { width: 100% !important; flex: 0 0 auto !important; }
       }
@@ -241,14 +242,20 @@
       .char-card .skill .edit-chant:hover { color: var(--ink); border-color: var(--accent); }
       .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
       .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
-      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center;
+      /* `safe center` centers the column when it fits but top-aligns when it would
+         overflow — so the skills (top) are NEVER clipped off-screen on short phones. */
+      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: safe center;
         gap: 8px; min-height: 0; overflow: hidden; }
       /* Selected character's 3 skills + chant editors, shown in the center. */
-      .center-skills { display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+      /* flex:0 0 auto — keep the skills at their content height; never let the
+         flex column shrink this block to nothing on short screens (the bug that
+         hid all skills). If the panel overflows, `safe center` clips the optional
+         practice at the bottom instead. */
+      .center-skills { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
       .center-skills .cs-head { font-size: 13px; font-weight: 700; text-align: center; letter-spacing: 0.5px; }
       .center-skills .skills { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
       .center-skills .skill { background: #0d0d1c; border: 1px solid var(--edge); border-left: 3px solid currentColor;
-        border-radius: 8px; padding: 5px 9px; text-align: left; }
+        border-radius: 8px; padding: 3px 9px; text-align: left; }
       .center-skills .chant-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
       .center-skills .chant { font-size: 14px; font-weight: 700; color: var(--ink);
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -293,7 +300,11 @@
       @keyframes walk5 { to { background-position-x: -480px; } }
       @keyframes walk6 { to { background-position-x: -576px; } }
       @keyframes walk8 { to { background-position-x: -768px; } }
-      @media (max-width: 680px) {
+      /* Reflow only in true PORTRAIT. The app is landscape-locked, so small
+         landscape phones (e.g. 640x360) must keep the corner-card layout — a
+         width<=680 breakpoint wrongly fired the portrait reflow and collapsed
+         the center panel, hiding the skills. */
+      @media (orientation: portrait) {
         #lobby h1 { font-size: 18px; margin-bottom: 2px; }
         #lobby .sub { margin-bottom: 10px; font-size: 12px; }
         /* Action first: name + start buttons at the top (reachable), then a
