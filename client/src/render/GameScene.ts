@@ -346,6 +346,11 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     this.aimGfx.clear();
 
+    // World-fixed floor grid (under everything): as the camera follows the player
+    // it scrolls on screen, so movement reads even on the dark background; the
+    // border also shows where the arena ends.
+    this.drawFloor();
+
     // Cast detection runs before drawing players so the caster snaps to the
     // cast pose on the same frame their spell first appears.
     this.detectCasts(w);
@@ -736,6 +741,26 @@ export class GameScene extends Phaser.Scene {
       this.playerSprites.set(id, sprite);
     }
     return sprite;
+  }
+
+  // World-fixed grid floor + arena border (drawn under everything). Faint lines
+  // so movement reads against the dark background; a brighter border marks the
+  // arena edge.
+  private drawFloor(): void {
+    const g = this.gfx;
+    const aw = CONFIG.arenaWidth;
+    const ah = CONFIG.arenaHeight;
+    const step = 80;
+    g.lineStyle(1, 0x2a2a4a, 0.55);
+    for (let x = step; x < aw; x += step) g.lineBetween(x, 0, x, ah);
+    for (let y = step; y < ah; y += step) g.lineBetween(0, y, aw, y);
+    // brighter dots at intersections for a touch more texture/parallax read
+    g.fillStyle(0x3a3a60, 0.6);
+    for (let x = step; x < aw; x += step) for (let y = step; y < ah; y += step) g.fillCircle(x, y, 1.3);
+    // arena border
+    g.lineStyle(3, 0x4a4a78, 0.85);
+    g.strokeRect(0, 0, aw, ah);
+    g.lineStyle(0, 0, 0);
   }
 
   // --- effects: neon lines (beam/chain) + glow circles (nova/blast/aura) ------
