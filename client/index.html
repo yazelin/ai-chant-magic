@@ -54,20 +54,25 @@
         --accent: #b06cff;
       }
       * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif; }
-      #app { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px; }
+      /* The whole app is ONE fixed screen — never scrolls (you play with voice +
+         thumbs, no spare hand to scroll). Lobby + room + game each fill the
+         viewport exactly. Landscape-locked (manifest) so this matches desktop. */
+      html, body { height: 100%; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, sans-serif;
+        overflow: hidden; overscroll-behavior: none; }
+      #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
       #game { line-height: 0; }
       .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
 
-      /* --- Lobby (dark arcane) ------------------------------------------- */
+      /* --- Lobby (dark arcane) — fills the viewport, never scrolls -------- */
       #lobby {
-        width: 100%; max-width: 980px; margin: 24px auto;
+        flex: 1; min-height: 0; width: 100%; max-width: 1100px; margin: 0 auto;
         background: radial-gradient(120% 120% at 50% 0%, #15152c 0%, #0b0b14 80%);
-        border: 1px solid var(--edge); border-radius: 14px; padding: 24px;
-        box-shadow: 0 0 40px rgba(120, 80, 220, 0.15);
+        padding: 10px 18px; overflow: hidden;
+        display: flex; flex-direction: column; gap: 6px;
       }
-      #lobby h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: 1px; }
-      #lobby .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+      #lobby h1 { margin: 0; font-size: 20px; letter-spacing: 1px; flex: 0 0 auto; }
+      #lobby .sub { color: var(--muted); font-size: 12px; margin: 0; flex: 0 0 auto; }
       #lobby label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
       #lobby input[type='text'] {
         width: 100%; background: #0d0d1c; color: var(--ink);
@@ -83,7 +88,7 @@
       .class-card .glyph { font-size: 26px; line-height: 1; margin-bottom: 6px; }
       .class-card .cname { font-size: 15px; font-weight: 600; }
       .class-card .spells { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
-      .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+      .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0; }
       .btns button {
         flex: 1 1 auto; min-width: 130px; background: var(--panel); color: var(--ink);
         border: 1px solid var(--edge); border-radius: 8px; padding: 11px 14px; font-size: 14px;
@@ -109,34 +114,46 @@
 
       /* --- Home showcase: 4 character cards in the corners + center panel - */
       .showcase {
-        display: grid; gap: 14px; align-items: stretch;
-        grid-template-columns: 1fr 1.15fr 1fr;
+        flex: 1; min-height: 0;
+        display: grid; gap: 10px; align-items: stretch;
+        grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 1fr 1fr;
         grid-template-areas: "a center b" "c center d";
       }
       .char-card {
         background: var(--panel); border: 2px solid var(--edge); border-radius: 12px;
-        padding: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
-        transition: all 0.12s;
+        padding: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; min-height: 0; overflow: hidden; transition: all 0.12s;
       }
+      /* Compact identity cards: sprite + name + world only. The selected
+         character's skills + chant editors render in the center panel. */
+      .char-card .skills, .char-card .chant-hint, .char-card .crole { display: none; }
       .char-card:hover { filter: brightness(1.15); } /* world bg is set inline per card */
       .char-card.selected { box-shadow: 0 0 0 1px currentColor, 0 0 20px -4px currentColor; }
       .char-card .cworld { font-size: 11px; color: currentColor; opacity: 0.85; font-style: italic;
         margin-bottom: 4px; letter-spacing: 0.5px; }
-      /* Home social bar (GitHub / Facebook / Buy Me a Coffee) */
-      .social { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
-      .social a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px;
+      /* Home footer: social bar (GitHub / Facebook / Buy Me a Coffee) + disclaimer,
+         one compact non-scrolling strip at the bottom. */
+      .foot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+      .social { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+      .social a { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px;
         background: var(--panel); border: 1px solid var(--edge); color: var(--muted); text-decoration: none;
-        font-size: 13px; transition: all 0.12s; }
+        font-size: 12px; transition: all 0.12s; }
       .social a:hover { color: var(--ink); border-color: var(--accent); background: var(--panel-2); }
-      .social a svg { width: 16px; height: 16px; }
+      .social a svg { width: 15px; height: 15px; }
       .social a.coffee:hover { color: #ffd24d; border-color: #ffd24d; }
-      .disclaimer { max-width: 640px; margin: 14px auto 0; font-size: 11px; line-height: 1.6;
+      .disclaimer { max-width: 860px; margin: 0 auto; font-size: 10px; line-height: 1.35;
         color: #676b80; text-align: center; }
       /* --- Multiplayer room: 4 player seats + self picker ----------------- */
-      .room-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 16px; }
-      @media (max-width: 760px) { .room-grid { grid-template-columns: 1fr 1fr; } }
-      .pslot { border: 2px solid var(--edge); border-radius: 12px; padding: 10px; display: flex;
-        flex-direction: column; align-items: center; gap: 2px; min-height: 210px; }
+      /* Landscape: seats fill the left, the controls bar sits on the right. */
+      .room-body { flex: 1; min-height: 0; display: flex; gap: 12px; }
+      .room-grid { flex: 1; min-height: 0; display: grid; gap: 8px;
+        grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+      @media (max-width: 760px) {
+        .room-body { flex-direction: column; }
+        .room-bar { width: 100% !important; flex: 0 0 auto !important; }
+      }
+      .pslot { border: 2px solid var(--edge); border-radius: 12px; padding: 8px; display: flex;
+        flex-direction: column; align-items: center; gap: 2px; min-height: 0; overflow: hidden; }
       .pslot.self { box-shadow: 0 0 0 1px currentColor, 0 0 18px -6px currentColor; }
       .pslot.empty { color: var(--muted); border-style: dashed; justify-content: center;
         background: rgba(255,255,255,0.02); font-size: 13px; gap: 6px; }
@@ -155,8 +172,9 @@
       .pslot .crole { font-size: 10px; color: var(--muted); text-align: center; }
       .pslot-skills { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; width: 100%; }
       .ps-skill { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink); }
-      .room-bar { max-width: 560px; margin: 0 auto; }
-      .picker { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+      .room-bar { flex: 0 0 320px; width: 320px; display: flex; flex-direction: column; gap: 6px;
+        justify-content: center; }
+      .picker { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 0; }
       .picker-label { color: var(--muted); font-size: 13px; }
       .picker .chip { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--edge);
         background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
@@ -164,8 +182,8 @@
       .picker .chip:hover { background: var(--panel-2); }
       .code-inline { color: var(--accent); letter-spacing: 2px; font-size: 1.1em; }
       /* Room chat */
-      .chat { max-width: 560px; margin: 0 auto 12px; }
-      .chat-log { height: 96px; overflow-y: auto; background: rgba(0,0,0,0.25); border: 1px solid var(--edge);
+      .chat { max-width: 560px; margin: 0 auto; width: 100%; }
+      .chat-log { height: 64px; overflow-y: auto; background: rgba(0,0,0,0.25); border: 1px solid var(--edge);
         border-radius: 10px; padding: 6px 10px; font-size: 12px; text-align: left;
         display: flex; flex-direction: column; gap: 2px; }
       .chat-log:empty::before { content: '房間聊天 · 討論要選哪隻'; color: var(--muted); }
@@ -179,8 +197,9 @@
         display: flex; align-items: center; }
       .chat-row button:hover { background: var(--panel); border-color: var(--accent); }
       #chat-send { background: var(--accent); color: #1a1030; border-color: var(--accent); font-weight: 700; }
-      .char-card .sprite-box { position: relative; width: 96px; height: 96px; }
-      .char-card .walk-sprite { width: 96px; height: 96px; image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
+      .char-card .sprite-box { position: relative; width: 78px; height: 78px; overflow: hidden; }
+      .char-card .walk-sprite { width: 96px; height: 96px; transform: scale(0.81); transform-origin: top left;
+        image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
       .char-card .fx {
         position: absolute; inset: -18px; border-radius: 50%; pointer-events: none; opacity: 0;
         background: radial-gradient(circle, currentColor 0%, transparent 62%);
@@ -222,7 +241,24 @@
       .char-card .skill .edit-chant:hover { color: var(--ink); border-color: var(--accent); }
       .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
       .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
-      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: center;
+        gap: 8px; min-height: 0; overflow: hidden; }
+      /* Selected character's 3 skills + chant editors, shown in the center. */
+      .center-skills { display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+      .center-skills .cs-head { font-size: 13px; font-weight: 700; text-align: center; letter-spacing: 0.5px; }
+      .center-skills .skills { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+      .center-skills .skill { background: #0d0d1c; border: 1px solid var(--edge); border-left: 3px solid currentColor;
+        border-radius: 8px; padding: 5px 9px; text-align: left; }
+      .center-skills .chant-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+      .center-skills .chant { font-size: 14px; font-weight: 700; color: var(--ink);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .center-skills .skill-ico { display: inline-flex; width: 18px; height: 18px; flex: 0 0 auto; }
+      .center-skills .skill-ico svg { width: 18px; height: 18px; }
+      .center-skills .edit-chant { flex: 0 0 auto; background: transparent; color: var(--muted);
+        border: 1px solid var(--edge); border-radius: 6px; padding: 1px 7px; font-size: 11px; cursor: pointer; font-family: inherit; }
+      .center-skills .edit-chant:hover { color: var(--ink); border-color: var(--accent); }
+      .center-skills .se { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .center-skills .skill.hit { animation: skill-hit 0.9s ease-out; }
       .name-row { display: flex; gap: 8px; }
       .name-row input { flex: 1 1 auto; }
       .name-row #btn-reroll {
@@ -230,10 +266,14 @@
         border-radius: 8px; padding: 0 12px; font-size: 13px; cursor: pointer; font-family: inherit; white-space: nowrap;
       }
       .name-row #btn-reroll:hover { background: var(--panel-2); }
-      .practice {
-        background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px;
-        padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px;
-      }
+      /* Warm-up practice — collapsible so it never eats the fixed screen height. */
+      details.practice { background: #0d0d1c; border: 1px dashed var(--accent); border-radius: 10px; flex: 0 0 auto; }
+      details.practice > summary { cursor: pointer; padding: 7px 12px; font-size: 12px; color: var(--accent);
+        list-style: none; text-align: center; }
+      details.practice > summary::-webkit-details-marker { display: none; }
+      details.practice > summary::before { content: '▸ '; }
+      details.practice[open] > summary::before { content: '▾ '; }
+      .practice-body { padding: 0 12px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
       .practice #btn-mic {
         background: var(--panel); color: var(--ink); border: 1px solid var(--accent);
         border-radius: 8px; padding: 9px 16px; font-size: 14px; cursor: pointer; font-family: inherit;

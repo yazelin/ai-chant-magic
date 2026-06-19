@@ -1,5 +1,5 @@
 import { ClassId, CLASSES, SpellId, matchSpell } from '@acm/shared';
-import { SKILL_INFO, castType } from './skillInfo';
+import { SKILL_INFO } from './skillInfo';
 import { skillIconSvg } from './skillIcons';
 import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
@@ -108,23 +108,14 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>真。AI。咏唱魔法</h1>
-      <div class="sub">語音咏唱 · 2–4 人連線 co-op · 暗黑秘術 · 點角色卡選擇職業</div>
+      <div class="sub">語音咏唱 · 2–4 人連線 co-op · 點四角的角色卡選擇,中央查看技能</div>
       <div class="showcase">
         <div id="lobby-showcase" style="display:contents"></div>
         <div class="center-panel">
-          <label for="lobby-name">召喚師名稱</label>
+          <div id="center-skills" class="center-skills"></div>
           <div class="name-row">
             <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
             <button id="btn-reroll" title="隨機換一個名字">換一個</button>
-          </div>
-          <div class="practice">
-            <button id="btn-mic">開始詠唱練習</button>
-            <div class="mic-state" id="mic-state">點上方按鈕開麥克風,對著它喊任一招式名</div>
-            <div class="heard-wrap">
-              <div class="heard-label">聽到</div>
-              <div class="heard" id="heard">—</div>
-            </div>
-            <div class="hit" id="hit"></div>
           </div>
           <div class="btns">
             <button id="btn-create" class="primary">建立房間</button>
@@ -138,14 +129,25 @@ export class Lobby {
               ? `<div class="hint">此頁面為 HTTPS 但未設定伺服器。請以 <code>?server=wss://…</code> 指定伺服器,或直接「單機」遊玩。</div>`
               : ''
           }
+          <details class="practice">
+            <summary>詠唱練習</summary>
+            <div class="practice-body">
+              <button id="btn-mic">開始詠唱練習</button>
+              <div class="mic-state" id="mic-state">開麥克風,對它喊任一招式名</div>
+              <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
+              <div class="hit" id="hit"></div>
+            </div>
+          </details>
         </div>
       </div>
+      <div class="foot">
       <div class="social">
         <a href="https://github.com/yazelin/ai-chant-magic" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>GitHub</a>
         <a href="https://www.facebook.com/yaze.lin.gm" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg>Facebook</a>
         <a class="coffee" href="https://buymeacoffee.com/yazelin" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><path d="M7 4v2M11 4v2M15 4v2"/></svg>支持開發者</a>
       </div>
-      <div class="disclaimer">非官方同人二創 · 非商業作品。惠惠 / 愛蜜莉雅 / 御坂美琴 / 貞德 等角色及其原作世界版權均屬各原作者與發行商所有,本作與其無任何關聯;如版權方有疑慮,聯絡即下架。</div>
+      <div class="disclaimer" title="非官方同人二創 · 非商業作品。惠惠 / 愛蜜莉雅 / 御坂美琴 / 貞德 等角色及其原作世界版權均屬各原作者與發行商所有,本作與其無任何關聯;如版權方有疑慮,聯絡即下架。">非官方同人二創 · 非商業作品。角色及原作世界版權均屬各原作者與發行商;如版權方有疑慮聯絡即下架。</div>
+      </div>
     `;
 
     const nameEl = this.root.querySelector<HTMLInputElement>('#lobby-name')!;
@@ -205,20 +207,23 @@ export class Lobby {
   private flashHit(id: SpellId): void {
     const hit = this.root.querySelector('#hit');
     if (hit) hit.textContent = `命中 「${SKILL_INFO[id].name}」!`;
-    const els = this.root.querySelectorAll<HTMLElement>(`.skill[data-spell="${id}"]`);
-    els.forEach((e) => {
-      e.classList.add('hit');
-      // play a spell burst on that character's card sprite
-      const fx = e.closest('.char-card')?.querySelector<HTMLElement>('.fx');
-      if (fx) {
-        fx.classList.remove('go');
-        void fx.offsetWidth; // reflow so the animation restarts
-        fx.classList.add('go');
-      }
-    });
+    // Burst on the owning character's card sprite (cards no longer carry skills,
+    // so find the card by the class that owns this spell).
+    const owner = CLASS_ORDER.find((c) => CLASSES[c].spells.includes(id));
+    const fx = owner
+      ? this.root.querySelector<HTMLElement>(`.char-card[data-cls="${owner}"] .fx`)
+      : null;
+    if (fx) {
+      fx.classList.remove('go');
+      void fx.offsetWidth; // reflow so the animation restarts
+      fx.classList.add('go');
+    }
+    // Highlight the center skill row when it's the selected character's spell.
+    const rows = this.root.querySelectorAll<HTMLElement>(`#center-skills .skill[data-spell="${id}"]`);
+    rows.forEach((e) => e.classList.add('hit'));
     if (this.hitTimer) clearTimeout(this.hitTimer);
     this.hitTimer = setTimeout(() => {
-      els.forEach((e) => e.classList.remove('hit'));
+      rows.forEach((e) => e.classList.remove('hit'));
       const h = this.root.querySelector('#hit');
       if (h) h.textContent = '';
     }, 900);
@@ -229,12 +234,11 @@ export class Lobby {
     if (this.voice) this.voice.stop();
   }
 
-  // Home showcase: one animated card per class in the four corners. The card
-  // walks (CSS sprite animation over the walk sheet), shows the class name, and
-  // lists its 3 skills with effect + live numbers (from SKILL_INFO). Clicking a
-  // card selects that class for the game we start.
-  private renderShowcase(hostSel = '#lobby-showcase', inRoom = false): void {
-    const host = this.root.querySelector(hostSel);
+  // Home showcase: one compact animated card per class in the four corners
+  // (walking sprite + name + source world). Clicking a card selects that class;
+  // its 3 skills and chant editors render in the center panel.
+  private renderShowcase(): void {
+    const host = this.root.querySelector('#lobby-showcase');
     if (!host) return;
     host.innerHTML = '';
     const AREA: Record<ClassId, string> = { pyro: 'a', cryo: 'b', storm: 'c', warden: 'd' };
@@ -243,18 +247,10 @@ export class Lobby {
       const sw = SHEET_WALKERS[id];
       const card = document.createElement('div');
       card.className = 'char-card' + (id === this.classId ? ' selected' : '');
+      card.dataset.cls = id;
       card.style.color = def.color;
       card.style.gridArea = AREA[id];
       card.style.background = WORLD_BG[id]; // themed per-character world backdrop
-      const skills = def.spells
-        .map((s) => {
-          const k = SKILL_INFO[s];
-          const phrase = chantFor(s, k.name); // custom chant or default name
-          const tip = `<div class="tip"><div class="tip-name">「${escapeHtml(phrase)}」</div><div class="tip-cast">施法:${escapeHtml(castType(s))}</div><div class="tip-detail">${escapeHtml(k.detail)}</div><div class="tip-stats">${escapeHtml(k.stats)}</div></div>`;
-          const ico = `<span class="skill-ico" style="color:${def.color};display:inline-block;width:20px;height:20px;flex:0 0 auto">${skillIconSvg(s)}</span>`;
-          return `<li class="skill" data-spell="${s}"><div class="chant-row"><div style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<div class="chant">「${escapeHtml(phrase)}」</div></div><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div><div class="ss">${escapeHtml(k.stats)}</div>${tip}</li>`;
-        })
-        .join('');
       let sprite = '';
       if (sw) {
         const dur = (sw.frames / 9).toFixed(2); // ≈9fps, close to in-game 10
@@ -263,31 +259,36 @@ export class Lobby {
       card.innerHTML = `
         <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div><div class="fx"></div></div>
         <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
-        <div class="crole">${escapeHtml(def.displayName)}</div>
         <div class="cworld">◈ ${escapeHtml(WORLD_NAME[id])}</div>
-        <div class="chant-hint">▸ 喊出招式名即可施法</div>
-        <ul class="skills">${skills}</ul>
       `;
       card.addEventListener('click', () => {
-        if (inRoom) {
-          if (id === this.classId) return;
-          this.classId = id;
-          this.client?.setClass(id);
-          const selfId = this.client?.selfId;
-          if (selfId) {
-            const self = this.members.find((m) => m.id === selfId);
-            if (self) self.classId = id;
-          }
-          this.renderRoom(); // re-renders the room (incl. its showcase + member list)
-        } else {
-          this.classId = id;
-          this.renderShowcase();
-        }
+        if (id === this.classId) return;
+        this.classId = id;
+        this.renderShowcase();
       });
       host.appendChild(card);
     }
-    // per-skill "改" buttons: edit the chant phrase (stopPropagation so the card
-    // doesn't also get selected). Saved to localStorage; applies to practice + game.
+    this.renderCenterSkills();
+  }
+
+  // The selected character's 3 skills + chant editors, in the center panel.
+  private renderCenterSkills(): void {
+    const host = this.root.querySelector<HTMLElement>('#center-skills');
+    if (!host) return;
+    const id = this.classId;
+    const def = CLASSES[id];
+    host.style.color = def.color;
+    const skills = def.spells
+      .map((s) => {
+        const k = SKILL_INFO[s];
+        const phrase = chantFor(s, k.name); // custom chant or default name
+        const ico = `<span class="skill-ico" style="color:${def.color}">${skillIconSvg(s)}</span>`;
+        return `<li class="skill" data-spell="${s}"><div class="chant-row"><span style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<span class="chant">「${escapeHtml(phrase)}」</span></span><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div><div class="se">${escapeHtml(k.effect)}</div></li>`;
+      })
+      .join('');
+    host.innerHTML = `<div class="cs-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} · ${escapeHtml(def.displayName)}</div><ul class="skills">${skills}</ul>`;
+    // per-skill "改" buttons: edit the chant phrase. Saved to localStorage;
+    // applies to practice + game. stopPropagation so the click stays in-panel.
     host.querySelectorAll<HTMLButtonElement>('.edit-chant').forEach((b) => {
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -296,7 +297,7 @@ export class Lobby {
         const next = window.prompt(`設定「${SKILL_INFO[sid].name}」的詠唱詞(留空=還原預設):`, cur);
         if (next === null) return; // cancelled
         setChant(sid, next);
-        this.renderShowcase(hostSel, inRoom);
+        this.renderCenterSkills();
       });
     });
   }
@@ -469,6 +470,7 @@ export class Lobby {
     this.root.innerHTML = `
       <h1>房間大廳</h1>
       <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)</div>
+      <div class="room-body">
       <div class="room-grid">${slots.join('')}</div>
       <div class="room-bar">
         <div class="picker"><span class="picker-label">選你的角色</span>${chips}</div>
@@ -480,12 +482,15 @@ export class Lobby {
             <button id="chat-send" type="button">送出</button>
           </div>
         </div>
-        <div class="practice">
-          <button id="btn-mic">開始詠唱練習</button>
-          <div class="mic-state" id="mic-state">等待時開麥克風,對它喊任一招式名練習</div>
-          <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
-          <div class="hit" id="hit"></div>
-        </div>
+        <details class="practice">
+          <summary>詠唱練習</summary>
+          <div class="practice-body">
+            <button id="btn-mic">開始詠唱練習</button>
+            <div class="mic-state" id="mic-state">等待時開麥克風,對它喊任一招式名練習</div>
+            <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
+            <div class="hit" id="hit"></div>
+          </div>
+        </details>
         <div class="btns">
           ${
             this.isHost
@@ -495,6 +500,7 @@ export class Lobby {
           <button id="btn-leave">離開房間</button>
         </div>
         <div class="error" id="lobby-error"></div>
+      </div>
       </div>
     `;
 
