@@ -45,7 +45,8 @@ const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on 
 // more than four) = one entry here + flip ACTIVE_THEME. Art is intentionally
 // light — the point is the architecture, not the polish.
 interface SceneTheme {
-  sky: string; // CSS background applied to the play container
+  skyTop: number; // in-scene vertical sky gradient (top → bottom)
+  skyBottom: number;
   mode: 'grid' | 'dream';
   border: number;
   grid?: number; // grid mode: line/dot colour
@@ -54,14 +55,11 @@ interface SceneTheme {
 }
 const THEMES: Record<string, SceneTheme> = {
   // "developer's world" — the plain engineering grid (fine while iterating).
-  engineer: {
-    sky: 'radial-gradient(140% 120% at 50% 30%, #14142a 0%, #0b0b14 70%)',
-    mode: 'grid', border: 0x4a4a78, grid: 0x2a2a4a,
-  },
+  engineer: { skyTop: 0x14142a, skyBottom: 0x0a0a12, mode: 'grid', border: 0x4a4a78, grid: 0x2a2a4a },
   // Level 1 — slime / KonoSuba dreamscape.
   slime: {
-    sky: 'radial-gradient(140% 120% at 50% 18%, #1b3a44 0%, #122230 42%, #0a0f1a 78%, #070710 100%)',
-    mode: 'dream', border: 0x3a6a60, blobColors: [0x2fae7a, 0x3a9d9d, 0x7a6ad0], bubble: 0xaff0d4,
+    skyTop: 0x1b3a44, skyBottom: 0x080d16, mode: 'dream',
+    border: 0x3a6a60, blobColors: [0x2fae7a, 0x3a9d9d, 0x7a6ad0], bubble: 0xaff0d4,
   },
 };
 const ACTIVE_THEME = 'slime'; // swap per level (e.g. 'engineer' while developing)
@@ -125,6 +123,8 @@ interface FireVfx {
 export class GameScene extends Phaser.Scene {
   private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
+  // Screen-fixed sky gradient (behind everything; the level theme's backdrop).
+  private skyGfx!: Phaser.GameObjects.Graphics;
   // Dedicated overlay for aim indicators (per-player chevron + local cursor
   // reticle), kept above the player sprites so it never gets occluded.
   private aimGfx!: Phaser.GameObjects.Graphics;
@@ -202,10 +202,14 @@ export class GameScene extends Phaser.Scene {
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
     this.makeVfxTextures();
 
-    // Apply the active level theme: sky (CSS on the play container) + scenery.
+    // Active level theme: an in-scene sky gradient (fixed to screen, behind all)
+    // + scenery. Drawn in-engine (not a CSS layer) so the canvas stays opaque and
+    // additive-blend VFX composite correctly.
     const theme = THEMES[ACTIVE_THEME];
-    const chrome = document.getElementById('game-chrome');
-    if (chrome) chrome.style.background = theme.sky;
+    this.skyGfx = this.add.graphics();
+    this.skyGfx.setScrollFactor(0).setDepth(-1000);
+    this.drawSky();
+    this.scale.on('resize', () => this.drawSky());
     if (theme.mode === 'dream') this.buildScenery(theme);
 
     // Define each walk animation once. Guard against double-create when the
@@ -801,6 +805,15 @@ export class GameScene extends Phaser.Scene {
   // World-fixed scene (drawn under everything). Scrolls with the camera so motion
   // reads. Two modes per the active theme: 'grid' (engineering floor) or 'dream'
   // (goo blobs + drifting bubbles).
+  // Screen-fixed vertical sky gradient for the active theme (opaque backdrop).
+  private drawSky(): void {
+    if (!this.skyGfx) return;
+    const t = THEMES[ACTIVE_THEME];
+    this.skyGfx.clear();
+    this.skyGfx.fillGradientStyle(t.skyTop, t.skyTop, t.skyBottom, t.skyBottom, 1);
+    this.skyGfx.fillRect(0, 0, this.scale.width, this.scale.height);
+  }
+
   private drawScene(): void {
     const g = this.gfx;
     const aw = CONFIG.arenaWidth;
