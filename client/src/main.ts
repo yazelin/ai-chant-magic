@@ -41,7 +41,7 @@ function startGame(session: GameSession, classId: ClassId): void {
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    backgroundColor: '#0b0b14',
+    transparent: true, // let the CSS dreamscape gradient show behind the world
     scale: { mode: Phaser.Scale.RESIZE },
     scene,
   });
