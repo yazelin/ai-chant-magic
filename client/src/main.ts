@@ -38,15 +38,26 @@ function startGame(session: GameSession, classId: ClassId): void {
   // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
   // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
   // turns the fixed 960x640 world into a screen-filling, player-centered view.
-  // Mobile fullscreen comes from installing as a PWA (display: standalone) —
-  // the Fullscreen API only scopes the canvas and hid the DOM overlays, so it's
-  // gone; desktop can use native browser fullscreen (F11).
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     backgroundColor: '#0b0b14',
     scale: { mode: Phaser.Scale.RESIZE },
     scene,
+  });
+
+  // Fullscreen button: request fullscreen on the WHOLE chrome container (canvas +
+  // all DOM overlays), NOT the canvas — so the HUD/skill bar/etc. stay visible.
+  // (The best mobile fullscreen is still installing as a PWA; iOS Safari doesn't
+  // support element fullscreen, so the button is a no-op there.)
+  const fsBtn = document.getElementById('fs-btn');
+  fsBtn?.addEventListener('click', () => {
+    const el = chrome as (HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }) | null;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+    } else if (el) {
+      void (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.())?.catch?.(() => {});
+    }
   });
 
   const hud = new Hud();
