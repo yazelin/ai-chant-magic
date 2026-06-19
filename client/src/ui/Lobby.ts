@@ -94,7 +94,7 @@ export class Lobby {
   private practicing = false;
   private hitTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private onStart: (session: GameSession, classId: ClassId) => void) {
+  constructor(private onStart: (session: GameSession, classId: ClassId, solo: boolean) => void) {
     this.root = document.getElementById('lobby')!;
     this.name = randomName(); // a fun default; player can edit or re-roll
     this.renderSetup();
@@ -308,7 +308,7 @@ export class Lobby {
   private startSolo(): void {
     const session = new LocalSession(this.classId);
     this.hide();
-    this.onStart(session, this.classId);
+    this.onStart(session, this.classId, true);
   }
 
   // --- Net: create / quickJoin ---------------------------------------------
@@ -386,12 +386,15 @@ export class Lobby {
   private beginNetGame(client: NetClient): void {
     const session = new NetSession(client);
     this.hide();
-    this.onStart(session, this.classId);
+    this.onStart(session, this.classId, false);
   }
 
   private handleNetError(code: ErrorCode): void {
-    // A lobby/room error: drop back to setup with a clear message; solo stays
-    // available (spec §10).
+    // A 'bad-message' while already in a room is non-fatal (e.g. an older server
+    // that doesn't understand 'chat') — ignore it instead of kicking the player
+    // out of the room.
+    if (code === 'bad-message' && this.roomCode) return;
+    // Otherwise a real lobby/room error: drop back to setup; solo stays available.
     this.teardownClient();
     this.roomCode = '';
     this.renderSetup(ERROR_TEXT[code] ?? '發生未知錯誤');
