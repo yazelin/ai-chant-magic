@@ -2,8 +2,16 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" href="data:," /> <!-- no favicon asset; suppress the /favicon.ico 404 -->
+
+    <!-- PWA: installs as a standalone web app → natural fullscreen on mobile -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="咏唱魔法" />
 
     <title>真。AI。咏唱魔法 — 用聲音施法的俯視角生存遊戲</title>
     <meta
@@ -235,7 +243,6 @@
         <div class="row">
           <strong>真。AI。咏唱魔法</strong>
           <span id="mic-status">麥克風:未啟動</span>
-          <button id="fs-btn" type="button">全螢幕</button>
         </div>
         <div id="class-picker" class="row"></div>
         <div id="hud" class="row"></div>
@@ -245,5 +252,11 @@
       <div id="lobby"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // Register the service worker so the game is installable as a standalone PWA.
+      if ('serviceWorker' in navigator) {
+        addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      }
+    </script>
   </body>
 </html>

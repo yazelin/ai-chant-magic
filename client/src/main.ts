@@ -35,23 +35,18 @@ function startGame(session: GameSession, classId: ClassId): void {
 
   const scene = new GameScene(session);
 
-  const game = new Phaser.Game({
+  // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
+  // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
+  // turns the fixed 960x640 world into a screen-filling, player-centered view.
+  // Mobile fullscreen comes from installing as a PWA (display: standalone) —
+  // the Fullscreen API only scopes the canvas and hid the DOM overlays, so it's
+  // gone; desktop can use native browser fullscreen (F11).
+  new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     backgroundColor: '#0b0b14',
-    // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
-    // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
-    // turns the fixed 960x640 world into a screen-filling, player-centered view.
     scale: { mode: Phaser.Scale.RESIZE },
     scene,
-  });
-
-  // Fullscreen toggle (needs a user gesture → button click). Maximizes play
-  // area and hides browser chrome, especially helpful on phones.
-  const fsBtn = document.getElementById('fs-btn');
-  fsBtn?.addEventListener('click', () => {
-    if (game.scale.isFullscreen) game.scale.stopFullscreen();
-    else game.scale.startFullscreen();
   });
 
   const hud = new Hud();
