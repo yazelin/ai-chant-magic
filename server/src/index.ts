@@ -247,6 +247,15 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         });
         break;
       }
+      case 'chat': {
+        const { room, playerId } = session;
+        if (!room || !playerId) return;
+        const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 200) : '';
+        if (!text) return;
+        const me = lobbyViews(room).find((p) => p.id === playerId);
+        broadcast(room, { type: 'chat', from: me?.name ?? '???', text });
+        break;
+      }
       case 'leave': {
         const { room, playerId } = session;
         if (room && playerId) {
