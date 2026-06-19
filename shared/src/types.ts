@@ -44,6 +44,7 @@ export interface Enemy {
   telegraphUntil?: number; dashUntil?: number;     // storm dash wind-up / lunge windows
   nextDashAt?: number; dashDir?: Vec2;             // storm dash schedule + locked direction
   nextHealAt?: number;                             // holy heal-pulse schedule
+  boss?: boolean; nextSummonAt?: number;           // 史萊姆王:旗標 + 召喚小史萊姆排程
   // Fully stopped until this sim time (frostnova/「冰結」). Sim-only — not in the
   // net snapshot; positions are server-authoritative, so the client renders the
   // freeze via the stalled positions (and the existing slowUntil blue tint).

@@ -34,6 +34,9 @@ export const CONFIG = {
     storm: { speedMul: 1.35, dashInterval: 2.6, telegraph: 0.4, dashSpeed: 430, dashTime: 0.3 }, // 快+突進(先蓄力telegraph)
     holy:  { hpMul: 2.2, healRadius: 130, healAmount: 8, healInterval: 1.5 },         // 肉+幫周圍史萊姆回血
   },
+  // 史萊姆王(王怪):每 every 波出一隻,巨大/肉/慢,週期召喚小史萊姆;
+  // 打掉它才能止住增援。swarmMul 縮減該波一般史萊姆量,讓 boss 當主角。
+  boss: { every: 5, hpMul: 14, radiusMul: 2.6, speedMul: 0.55, summonInterval: 3.5, summonCount: 3, swarmMul: 0.5 },
   wave: { baseCount: 6, perWave: 3, baseCadence: 1.2, cadenceDecay: 0.05, minCadence: 0.4, breakTime: 2, scaleExp: 1.4,
           spawnRadius: 680, spawnRadiusJitter: 240 }, // enemies appear this far from a player (just off-screen)
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },

@@ -38,6 +38,7 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
   storm: 0xb06cff, // purple
   holy: 0xffd24d, // gold
 };
+const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on top)
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
 // Walk sprites use 128px cells mostly filled by the character; a fixed scale
@@ -825,7 +826,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.gfx;
     const slowed = w.time < e.slowUntil || w.time < (e.frozenUntil ?? 0);
     const flashing = (this.enemyHitFlash.get(e.id) ?? 0) > this.t;
-    let color = SLIME_COLOR[e.element] ?? SLIME_COLOR.normal;
+    let color = e.boss ? BOSS_COLOR : SLIME_COLOR[e.element] ?? SLIME_COLOR.normal;
     if (flashing) color = 0xffffff;
     else if (slowed) color = 0x9fd8ff;
 
@@ -886,10 +887,26 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(0, 0, 0);
     }
 
-    // hp bar above the slime, shown ONLY once it's taken damage (render-side max).
+    // 史萊姆王 gold crown on top
+    if (e.boss) {
+      const cyTop = cy - bh / 2;
+      const cw = bw * 0.62;
+      const cl = cx - cw / 2;
+      g.fillStyle(0xffd24d, 1);
+      g.fillRect(cl, cyTop - bh * 0.12, cw, bh * 0.13); // band
+      const spikes = 3;
+      for (let i = 0; i < spikes; i++) {
+        const sx = cl + (cw * (i + 0.5)) / spikes;
+        const half = cw / (spikes * 2);
+        g.fillTriangle(sx - half, cyTop - bh * 0.1, sx + half, cyTop - bh * 0.1, sx, cyTop - bh * 0.34);
+      }
+    }
+
+    // hp bar above the slime: bosses always show it; normal slimes only once damaged.
     if (!this.enemyMaxHp.has(e.id)) this.enemyMaxHp.set(e.id, e.hp);
     const max = this.enemyMaxHp.get(e.id)!;
-    if (e.hp < max - 0.01) this.drawBar(cx, cy - bh / 2 - 8, e.hp / max, 20);
+    if (e.boss) this.drawBar(cx, cy - bh / 2 - bh * 0.42, e.hp / max, 46);
+    else if (e.hp < max - 0.01) this.drawBar(cx, cy - bh / 2 - 8, e.hp / max, 20);
   }
 
   // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------

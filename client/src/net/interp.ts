@@ -48,6 +48,7 @@ export interface SnapshotEnemy {
   slowUntil: number;
   radius: number;
   element?: EnemyElement;
+  boss?: boolean;
 }
 
 export interface SnapshotProjectile {
@@ -126,6 +127,7 @@ function toWorldEnemy(se: SnapshotEnemy, pos: Vec2): Enemy {
     radius: se.radius,
     targetId: null,
     element: se.element ?? 'normal',
+    boss: se.boss,
   };
 }
 

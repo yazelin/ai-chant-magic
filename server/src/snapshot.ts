@@ -42,6 +42,7 @@ export interface SnapshotEnemy {
   slowUntil: number;
   radius: number;
   element: EnemyElement;
+  boss?: boolean;
 }
 
 export interface SnapshotProjectile {
@@ -106,6 +107,7 @@ export function toSnapshot(world: World): Snapshot {
       slowUntil: e.slowUntil,
       radius: e.radius,
       element: e.element,
+      boss: e.boss,
     })),
     projectiles: world.projectiles.map((pr) => ({
       id: pr.id,
