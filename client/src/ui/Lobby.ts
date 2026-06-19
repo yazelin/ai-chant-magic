@@ -422,45 +422,44 @@ export class Lobby {
   }
 
   private renderRoom(): void {
-    const memberItems = this.members
-      .map((p) => {
-        const cls = CLASSES[p.classId]?.displayName ?? p.classId;
-        const state = p.ready
-          ? '<span class="ready">已準備</span>'
-          : '<span class="waiting">等待中</span>';
-        const self = this.client && p.id === this.client.selfId ? '(你)' : '';
-        return `<li><span>${escapeHtml(p.name)}${self} · ${cls}</span>${state}</li>`;
-      })
-      .join('');
+    const selfId = this.client?.selfId;
+    // Four PLAYER seats: filled by joined members (live), the rest "waiting".
+    const slots: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = this.members[i];
+      slots.push(
+        m
+          ? this.playerSlot(m, i === 0, m.id === selfId)
+          : '<div class="pslot empty"><div class="empty-mark">＋</div>等待玩家加入…</div>'
+      );
+    }
+    // The local player picks only THEIR own character (compact chips).
+    const chips = CLASS_ORDER.map(
+      (id) =>
+        `<button class="chip${id === this.classId ? ' on' : ''}" data-pick="${id}" style="--cc:${CLASSES[id].color}">${escapeHtml(CHAR_NAMES[id])}</button>`
+    ).join('');
 
     this.root.innerHTML = `
       <h1>房間大廳</h1>
-      <div class="sub">點角色卡換職業 · 開麥克風先練幾招</div>
-      <div class="showcase">
-        <div id="room-showcase" style="display:contents"></div>
-        <div class="center-panel">
-          <div class="code-banner">
-            <div class="sub">把這組代碼給隊友</div>
-            <div class="code">${escapeHtml(this.roomCode)}</div>
-          </div>
-          <label>成員(${this.members.length}/4)</label>
-          <ul class="members">${memberItems}</ul>
-          <div class="practice">
-            <button id="btn-mic">開始詠唱練習</button>
-            <div class="mic-state" id="mic-state">開麥克風,對它喊任一招式名練習</div>
-            <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
-            <div class="hit" id="hit"></div>
-          </div>
-          <div class="btns">
-            ${
-              this.isHost
-                ? `<button id="btn-start" class="primary">開始</button>`
-                : `<button id="btn-ready">${this.selfReady ? '取消準備' : '準備'}</button>`
-            }
-            <button id="btn-leave">離開房間</button>
-          </div>
-          <div class="error" id="lobby-error"></div>
+      <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)</div>
+      <div class="room-grid">${slots.join('')}</div>
+      <div class="room-bar">
+        <div class="picker"><span class="picker-label">選你的角色</span>${chips}</div>
+        <div class="practice">
+          <button id="btn-mic">開始詠唱練習</button>
+          <div class="mic-state" id="mic-state">等待時開麥克風,對它喊任一招式名練習</div>
+          <div class="heard-wrap"><div class="heard-label">聽到</div><div class="heard" id="heard">—</div></div>
+          <div class="hit" id="hit"></div>
         </div>
+        <div class="btns">
+          ${
+            this.isHost
+              ? `<button id="btn-start" class="primary">開始(${this.members.length} 人)</button>`
+              : `<button id="btn-ready">${this.selfReady ? '取消準備' : '準備'}</button>`
+          }
+          <button id="btn-leave">離開房間</button>
+        </div>
+        <div class="error" id="lobby-error"></div>
       </div>
     `;
 
@@ -482,10 +481,50 @@ export class Lobby {
       this.renderSetup();
     });
 
-    // Same anime character cards as the home, but picking one tells the server
-    // (setClass). Plus the same chant-practice mic, so you can warm up in the room.
-    this.renderShowcase('#room-showcase', true);
+    // Self character picker (chips) → tell the server (setClass), update own seat.
+    this.root.querySelectorAll<HTMLButtonElement>('.picker .chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.pick as ClassId;
+        if (id === this.classId) return;
+        this.classId = id;
+        this.client?.setClass(id);
+        const self = selfId ? this.members.find((m) => m.id === selfId) : undefined;
+        if (self) self.classId = id;
+        this.renderRoom();
+      });
+    });
+    // Keep the chant-practice mic so a waiting player can warm up.
     this.wirePractice();
+  }
+
+  // One room seat: a joined player's chosen character (sprite + name + role +
+  // world + skills) + their player name and host/ready badge.
+  private playerSlot(m: LobbyPlayerView, isHostMember: boolean, isSelf: boolean): string {
+    const def = CLASSES[m.classId];
+    const sw = SHEET_WALKERS[m.classId];
+    let sprite = '';
+    if (sw) {
+      const dur = (sw.frames / 9).toFixed(2);
+      sprite = `background-image:url(${sw.url});background-size:${sw.frames * 96}px 96px;animation:walk${sw.frames} ${dur}s steps(${sw.frames}) infinite`;
+    }
+    const skills = def.spells
+      .map(
+        (s) =>
+          `<span class="ps-skill"><span class="skill-ico" style="color:${def.color};width:16px;height:16px;display:inline-block">${skillIconSvg(s)}</span>${escapeHtml(chantFor(s, SKILL_INFO[s].name))}</span>`
+      )
+      .join('');
+    const badge = isHostMember
+      ? '<span class="badge host">房主</span>'
+      : m.ready
+        ? '<span class="badge ready">已準備</span>'
+        : '<span class="badge wait">等待中</span>';
+    return `<div class="pslot${isSelf ? ' self' : ''}" style="background:${WORLD_BG[m.classId]};color:${def.color}">
+      <div class="pslot-top"><span class="pslot-name">${escapeHtml(m.name)}${isSelf ? ' (你)' : ''}</span>${badge}</div>
+      <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div></div>
+      <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[m.classId])}</div>
+      <div class="crole">${escapeHtml(def.displayName)} · ${escapeHtml(WORLD_NAME[m.classId])}</div>
+      <div class="pslot-skills">${skills}</div>
+    </div>`;
   }
 
   private hide(): void {
