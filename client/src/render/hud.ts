@@ -37,8 +37,12 @@ export class Hud {
   private heard: HTMLElement;
   private gameover: HTMLElement;
   private heardTimer: ReturnType<typeof setTimeout> | null = null;
+  private goShown = false;
 
-  constructor() {
+  constructor(
+    private solo = false,
+    private onRestart: () => void = () => {},
+  ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
     this.heard = document.getElementById('heard')!;
@@ -72,9 +76,19 @@ export class Hud {
   }
 
   render(world: World, selfId: string | null = null): void {
-    this.gameover.style.display = world.status === 'gameover' ? 'block' : 'none';
-    if (world.status === 'gameover') {
-      this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin-top:6px">撐到第 ${world.wave} 波 · 擊殺 ${world.score}　|　按 R 重來</div>`;
+    // Game-over banner — built once on the status flip (so its 重來 button keeps
+    // a live click handler instead of being recreated every tick).
+    if (world.status === 'gameover' && !this.goShown) {
+      this.goShown = true;
+      this.gameover.style.display = 'block';
+      const hint = this.solo
+        ? '<button id="go-restart" style="pointer-events:auto;cursor:pointer;margin-top:12px;background:var(--accent);color:#1a1030;border:none;border-radius:10px;padding:9px 22px;font:800 16px system-ui;">重來</button>'
+        : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等所有人都倒下…回到房間</div>';
+      this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}`;
+      this.gameover.querySelector('#go-restart')?.addEventListener('click', () => this.onRestart());
+    } else if (world.status !== 'gameover' && this.goShown) {
+      this.goShown = false;
+      this.gameover.style.display = 'none';
     }
     // Player status panels — self first.
     const players = world.players
