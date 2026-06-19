@@ -252,7 +252,24 @@
       @keyframes walk6 { to { background-position-x: -576px; } }
       @keyframes walk8 { to { background-position-x: -768px; } }
       @media (max-width: 680px) {
-        .showcase { grid-template-columns: 1fr 1fr; grid-template-areas: "a b" "c d" "center center"; }
+        #lobby h1 { font-size: 18px; margin-bottom: 2px; }
+        #lobby .sub { margin-bottom: 10px; font-size: 12px; }
+        /* Action first: name + start buttons at the top (reachable), then a
+           compact 2x2 character grid; practice warm-up sits last. */
+        .showcase { grid-template-columns: 1fr 1fr; grid-template-areas: "center center" "a b" "c d"; gap: 10px; }
+        .center-panel .name-row { order: 1; }
+        .center-panel .btns { order: 2; margin-top: 8px; }
+        .center-panel .error { order: 3; }
+        .center-panel .code-banner { order: 3; }
+        .center-panel .practice { order: 4; margin-top: 6px; }
+        .btns { margin-top: 6px; }
+        .btns button { flex: 1 1 42%; }
+        /* compact cards: character + world only (full skills are in the room/practice) */
+        .char-card { padding: 8px; }
+        .char-card .skills,
+        .char-card .chant-hint { display: none; }
+        .char-card .cworld { margin-bottom: 0; }
+        .social { margin-top: 12px; }
       }
 
       /* --- In-game chrome (hidden until a session starts) ----------------- */
