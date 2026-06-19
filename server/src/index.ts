@@ -42,6 +42,7 @@ const DEFAULT_PORT = Number(process.env.PORT) || 8787;
 const HOST = '0.0.0.0';
 const TICK_MS = 50;
 const TICK_DT = TICK_MS / 1000;
+const GAMEOVER_RETURN_MS = 4500; // pause on the game-over screen before returning to the room lobby
 
 // Handle returned by startServer: the bound port (after `listening` resolves),
 // the underlying http/ws objects and registry (for assertions/inspection), and
@@ -323,11 +324,19 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           broadcast(room, { type: 'snapshot', tick: room.tickCount, world: snap });
         }
       }
-      // Reap finished or abandoned rooms so the loop does not churn on them
-      // forever. A gameover room has already broadcast its final snapshot on the
-      // tick that ended it; an empty room has no one left to notify.
-      if (room.status === 'gameover' || room.isEmpty) {
+      // Empty (everyone disconnected) → reap. A finished game with players still
+      // connected → after a short pause (they see the game-over banner), send the
+      // room back to its lobby so they can re-ready and play again.
+      if (room.isEmpty) {
         registry.remove(room.code);
+      } else if (
+        room.status === 'gameover' &&
+        room.gameoverAt !== null &&
+        Date.now() - room.gameoverAt > GAMEOVER_RETURN_MS
+      ) {
+        room.returnToLobby();
+        broadcast(room, { type: 'returnToLobby' });
+        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
       }
     }
   }, TICK_MS);

@@ -89,6 +89,7 @@ export class Lobby {
   private selfReady = false;
   private chatLog: { from: string; text: string }[] = []; // room chat history
   private chatVoice: WebSpeechVoiceInput | null = null; // one-shot dictation for chat
+  private returnFn: (() => void) | null = null; // main.ts game teardown (net return-to-lobby)
   // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
   private voice: WebSpeechVoiceInput | null = null;
   private practicing = false;
@@ -340,6 +341,7 @@ export class Lobby {
           /* lobby list refresh arrives via onLobby */
         },
         onChat: (from, text) => this.pushChat(from, text),
+        onReturnToLobby: () => this.returnFromGame(),
         onClose: () => this.handleDisconnect(),
       },
       url,
@@ -375,6 +377,7 @@ export class Lobby {
           /* refresh via onLobby */
         },
         onChat: (from, text) => this.pushChat(from, text),
+        onReturnToLobby: () => this.returnFromGame(),
         onClose: () => this.handleDisconnect(),
       },
       url,
@@ -388,6 +391,22 @@ export class Lobby {
     const session = new NetSession(client);
     this.hide();
     this.onStart(session, this.classId, false);
+  }
+
+  // main.ts registers how to tear the running game down (Phaser / loop / overlays).
+  setReturn(fn: () => void): void {
+    this.returnFn = fn;
+  }
+
+  // Server sent everyone back to the room (all died). Tear down the game and
+  // re-show the room — the ws connection + room membership are kept alive.
+  private returnFromGame(): void {
+    this.returnFn?.();
+    this.returnFn = null;
+    this.selfReady = false;
+    this.root.style.display = '';
+    if (this.roomCode) this.renderRoom();
+    else this.renderSetup();
   }
 
   private handleNetError(code: ErrorCode): void {

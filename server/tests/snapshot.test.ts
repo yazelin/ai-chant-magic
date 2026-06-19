@@ -63,7 +63,7 @@ describe('toSnapshot', () => {
     const w = pyroSolo();
     w.enemies.push({
       id: 5, pos: { x: 10, y: 20 }, hp: 30, speed: 60,
-      slowUntil: 4.5, radius: 12, targetId: 'p1',
+      slowUntil: 4.5, radius: 12, targetId: 'p1', element: 'normal',
     });
     const se = toSnapshot(w).enemies[0];
     expect(se.id).toBe(5);

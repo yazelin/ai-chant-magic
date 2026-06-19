@@ -295,7 +295,7 @@ describe('two-client ws integration smoke (B3)', () => {
   );
 
   it(
-    'reaps a finished (gameover) room from the registry on the tick loop',
+    'returns a finished (gameover) room to its lobby on the tick loop (play again)',
     async () => {
       const a = await connect();
       const joinedPromise = waitFor(a, 'joined');
@@ -308,14 +308,22 @@ describe('two-client ws integration smoke (B3)', () => {
       await started;
       await waitFor(a, 'snapshot'); // tick loop is running
 
-      // Force the room's world into gameover (the player is gone for the sim).
+      // Force the room into a finished state, back-dating gameoverAt past the
+      // return-to-lobby delay so the next tick fires it (no real-time wait).
       const room = handle.registry.get(code)!;
       expect(room).toBeTruthy();
+      const returned = waitFor(a, 'returnToLobby');
       room.status = 'gameover';
+      room.gameoverAt = Date.now() - 60_000;
 
-      // The next tick(s) of the 50ms loop must reap the finished room.
-      await waitUntil(() => handle.registry.get(code) === undefined);
-      expect(handle.registry.get(code)).toBeUndefined();
+      // The connected player is sent back to the room lobby — the room is KEPT
+      // (not reaped), world cleared, ready reset, so they can play again together.
+      await returned;
+      await waitUntil(() => room.status === 'lobby');
+      expect(handle.registry.get(code)).toBeTruthy();
+      expect(room.status).toBe('lobby');
+      expect(room.world).toBeNull();
+      expect(room.members[0].ready).toBe(false);
     },
     10000
   );

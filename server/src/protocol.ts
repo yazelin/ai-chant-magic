@@ -142,6 +142,11 @@ export interface ChatBroadcastMsg {
   text: string;
 }
 
+// Sent when a finished game returns the room to its lobby (play again together).
+export interface ReturnToLobbyMsg {
+  type: 'returnToLobby';
+}
+
 export type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -149,7 +154,8 @@ export type ServerMsg =
   | SnapshotMsg
   | ErrorMsg
   | PeerLeftMsg
-  | ChatBroadcastMsg;
+  | ChatBroadcastMsg
+  | ReturnToLobbyMsg;
 
 // ---------------------------------------------------------------------------
 // Parsing helper (used by the thin ws wiring in index.ts / B2)

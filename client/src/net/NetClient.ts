@@ -63,6 +63,9 @@ interface ChatBroadcastMsg {
   from: string;
   text: string;
 }
+interface ReturnToLobbyMsg {
+  type: 'returnToLobby';
+}
 type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -70,7 +73,8 @@ type ServerMsg =
   | SnapshotMsg
   | ErrorMsg
   | PeerLeftMsg
-  | ChatBroadcastMsg;
+  | ChatBroadcastMsg
+  | ReturnToLobbyMsg;
 
 export interface NetCallbacks {
   onJoined?: (m: JoinedMsg) => void;
@@ -80,6 +84,7 @@ export interface NetCallbacks {
   onError?: (code: ErrorCode, msg: string) => void;
   onPeerLeft?: (id: string) => void;
   onChat?: (from: string, text: string) => void;
+  onReturnToLobby?: () => void;
   onOpen?: () => void;
   onClose?: () => void;
 }
@@ -175,6 +180,9 @@ export class NetClient {
         break;
       case 'chat':
         this.cb.onChat?.(m.from, m.text);
+        break;
+      case 'returnToLobby':
+        this.cb.onReturnToLobby?.();
         break;
     }
   }

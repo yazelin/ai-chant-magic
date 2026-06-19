@@ -40,7 +40,7 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
   // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
   // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
   // turns the fixed 960x640 world into a screen-filling, player-centered view.
-  new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     // Opaque backbuffer (NOT transparent) — additive-blend VFX (fire glow, bursts)
@@ -79,7 +79,7 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
   // hit/hurt/kill SFX live in GameScene off per-frame hp deltas.
   let prevWave = -1;
   let prevStatus = '';
-  setInterval(() => {
+  const loopId = setInterval(() => {
     const w = session.getWorld();
     if (w) {
       hud.render(w, session.getSelfId());
@@ -130,7 +130,23 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
     },
     { once: true },
   );
+
+  // Net play: when the server sends everyone back to the room lobby (all died),
+  // tear the game down cleanly (loop / music / mic / Phaser / overlay DOM) and
+  // hand control back to the Lobby's room view — same room, ws kept alive.
+  if (!solo) {
+    lobby.setReturn(() => {
+      clearInterval(loopId);
+      music.stop();
+      voice.stop();
+      game.destroy(true);
+      chrome?.classList.remove('playing');
+      ['skillbar', 'wavehud', 'gameover', 'incantation'].forEach((id) =>
+        document.getElementById(id)?.remove(),
+      );
+    });
+  }
 }
 
-new Lobby(startGame);
+const lobby = new Lobby(startGame);
 initPwaInstall();
