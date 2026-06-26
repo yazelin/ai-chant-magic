@@ -4,10 +4,10 @@
 單機可玩,也支援 **2-4 人連線 co-op**(權威伺服器)。四位動漫風魔法少女各有專屬技能:
 **惠惠**(炎術士)、**愛蜜莉雅**(冰精靈)、**御坂美琴**(電擊使)、**貞德**(守護者)。
 
-**▶ 線上即玩:https://yazelin.github.io/ai-chant-magic/** (單機免伺服器)
+**▶ 線上即玩:https://yazelin.github.io/ai-chant-magic/**(可單機,也可直接開房 2-4 人連線;連線伺服器已部署在 Render 免費方案,閒置會休眠、首次連線需等幾秒冷啟動)
 
 - 首頁就是**詠唱練習場**:四角色卡列出技能效果/數值(hover 看詳細),開麥克風對著它練喊;每招**詠唱詞可自訂**(改了練習 + 遊戲都生效)
-- 客戶端純前端(GitHub Pages),連線需要一台 Node WebSocket 伺服器(本機或 Render)
+- 客戶端純前端(GitHub Pages),多人連線靠一台 Node WebSocket 伺服器 —— 已部署在 Render(本機開發則連 `localhost`)
 - 語音用瀏覽器內建 Web Speech API —— **請用 Google Chrome 或 Edge**(Linux 的 snap 版 Chromium 沒有語音後端;遊戲會誠實提示;沒麥克風可按 1/2/3)
 
 ## 快速開始(本機,含兩分頁連線試玩)
@@ -55,9 +55,9 @@ npm run dev          # 同時起 server(ws://localhost:8787)與 client(Vite)
 ## 連線部署
 
 - **客戶端 → GitHub Pages**:`.github/workflows/deploy.yml` 會 build `client` workspace 並部署 `client/dist`。
-- **伺服器 → Render**(或任何 Node 主機):用 `render.yaml` Blueprint 部署。伺服器綁 `PORT`、`/healthz` 探活。
-- 部署好伺服器後,讓線上客戶端連它:網址加 `?server=wss://<your-service>.onrender.com`,或在 build 時設 `VITE_SERVER_URL`。
-- 線上(HTTPS)客戶端必須連 **wss://**(混合內容限制);沒設定伺服器時 lobby 會提示並提供單機。
+- **伺服器 → Render**(或任何 Node 主機):用 `render.yaml` Blueprint 部署。伺服器綁 `PORT`、`/healthz` 探活。(Render 免費方案閒置 15 分鐘會休眠,首次連線冷啟動約 15–25 秒;醒著之後就順了。)
+- 部署好伺服器後,讓線上客戶端連它:網址加 `?server=wss://<your-service>.onrender.com`,或在 build 時設 `VITE_SERVER_URL`。**本 repo 的 `deploy.yml` 已設 `VITE_SERVER_URL`,Pages build 預設就連這台 Render**,玩家不必加任何參數。
+- 線上(HTTPS)客戶端必須連 **wss://**(混合內容限制)。若沒設定伺服器(例如本機 http 開發、或 Render 休眠中),lobby 會提示並退回單機。
 
 ## 開發指令
 
