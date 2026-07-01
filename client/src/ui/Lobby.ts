@@ -7,6 +7,7 @@ import { WebSpeechVoiceInput } from '../voice/recognizer';
 import { GameSession } from '../session/GameSession';
 import { LocalSession } from '../session/LocalSession';
 import { NetSession } from '../session/NetSession';
+import { SpectatorSession } from '../session/SpectatorSession';
 import {
   NetClient,
   LobbyPlayerView,
@@ -84,6 +85,9 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   // exhaustive over ErrorCode. Hud.ts handles the real user-facing surfacing.
   'not-victory': '無盡模式只能在通關畫面開啟',
   'not-endless': '目前不在無盡模式中',
+  // Only ever fires if a spectator's client somehow sends a mutating message
+  // (defense in depth — the spectator UI never wires up controls that would).
+  'spectator-readonly': '觀戰者無法操作遊戲',
 };
 
 // Lobby owns the dark-arcane DOM over the canvas area, the class pick, and the
@@ -100,6 +104,7 @@ export class Lobby {
   private members: LobbyPlayerView[] = [];
   private roomCode = '';
   private isHost = false;
+  private isSpectating = false;
   private selfReady = false;
   private chatLog: { from: string; text: string }[] = []; // room chat history
   private chatVoice: WebSpeechVoiceInput | null = null; // one-shot dictation for chat
@@ -110,16 +115,27 @@ export class Lobby {
   private hitTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    private onStart: (session: GameSession, classId: ClassId, solo: boolean, isHost: boolean) => void,
+    private onStart: (
+      session: GameSession,
+      classId: ClassId,
+      solo: boolean,
+      isHost: boolean,
+      spectator?: boolean,
+    ) => void,
   ) {
     this.root = document.getElementById('lobby')!;
     this.name = randomName(); // a fun default; player can edit or re-roll
     // A friend clicking an invite link (?join=CODE) drops straight into the
     // room with zero clicks — no code to type or read aloud. They can still
     // change name/class once inside (the room view's picker already supports
-    // that), so defaults here are fine.
-    const inviteCode = new URLSearchParams(window.location.search).get('join');
-    if (inviteCode && inviteCode.trim()) {
+    // that), so defaults here are fine. ?watch=CODE is the same idea for a 5th
+    // friend who just wants to spectate (no player slot needed, no waiting).
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('join');
+    const watchCode = params.get('watch');
+    if (watchCode && watchCode.trim()) {
+      this.doSpectate(watchCode.trim().toUpperCase());
+    } else if (inviteCode && inviteCode.trim()) {
       this.doJoinByCode(inviteCode.trim().toUpperCase());
     } else {
       this.renderSetup();
@@ -129,6 +145,7 @@ export class Lobby {
   // --- Setup screen: name + class pick + action buttons ---------------------
   private renderSetup(errorMsg?: string): void {
     this.teardownClient();
+    this.isSpectating = false;
     const showSetupHint = needsServerSetup();
 
     this.root.innerHTML = `
@@ -493,8 +510,18 @@ export class Lobby {
   // an HTTPS-hosted page's explicit ws server still carries over to whoever
   // clicks it), copies it, and flashes the button label to confirm.
   private async copyInviteLink(btn: HTMLButtonElement): Promise<void> {
+    return this.copyRoomLink(btn, 'join');
+  }
+
+  // A ?watch=CODE link — for a 5th+ friend who just wants to spectate instead
+  // of waiting for a player slot.
+  private async copyWatchLink(btn: HTMLButtonElement): Promise<void> {
+    return this.copyRoomLink(btn, 'watch');
+  }
+
+  private async copyRoomLink(btn: HTMLButtonElement, param: 'join' | 'watch'): Promise<void> {
     const url = new URL(window.location.href);
-    url.searchParams.set('join', this.roomCode);
+    url.searchParams.set(param, this.roomCode);
     const link = url.toString();
     const original = btn.textContent;
     try {
@@ -516,6 +543,72 @@ export class Lobby {
     this.onStart(session, this.classId, false, this.isHost);
   }
 
+  // --- Spectate: read-only observer, never a player slot ---------------------
+  private doSpectate(roomCode: string): void {
+    const url = resolveServerUrl();
+    const client = new NetClient(
+      {
+        onOpen: () => client.spectate(this.effectiveName(), roomCode),
+        onSpectating: (m) => {
+          this.client = client;
+          this.roomCode = m.roomCode;
+          this.members = m.players;
+          this.isSpectating = true;
+          if (m.status === 'lobby') this.renderSpectateWaiting();
+          else this.beginSpectateGame(client);
+        },
+        onLobby: (players) => {
+          this.members = players;
+          if (this.roomCode) this.renderSpectateWaiting();
+        },
+        onStarted: () => this.beginSpectateGame(client),
+        onError: (code) => this.handleNetError(code),
+        onPeerLeft: () => {
+          /* refresh via onLobby */
+        },
+        onChat: (from, text) => this.pushChat(from, text),
+        onReturnToLobby: () => this.returnFromGame(),
+        onClose: () => this.handleDisconnect(),
+      },
+      url,
+    );
+    this.client = client;
+    this.showConnecting();
+    client.connect();
+  }
+
+  // The game hasn't started yet — nothing to watch, just show who's in the
+  // room so the spectator knows they're in the right place.
+  private renderSpectateWaiting(): void {
+    const slots: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = this.members[i];
+      slots.push(
+        m ? this.playerSlot(m, i === 0, false) : '<div class="pslot empty"><div class="empty-mark">＋</div>等待玩家加入…</div>',
+      );
+    }
+    this.root.innerHTML = `
+      <h1>觀戰中</h1>
+      <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 等待房主開始遊戲…(${this.members.length}/4)</div>
+      <div class="room-grid">${slots.join('')}</div>
+      <div class="btns"><button id="btn-leave">離開觀戰</button></div>
+    `;
+    this.root.querySelector('#btn-leave')!.addEventListener('click', () => {
+      this.client?.leave();
+      this.teardownClient();
+      this.roomCode = '';
+      this.renderSetup();
+    });
+  }
+
+  private beginSpectateGame(client: NetClient): void {
+    const session = new SpectatorSession(client);
+    this.hide();
+    // classId is never read for a spectator (see main.ts); isHost is always
+    // false (a spectator never gets host-only buttons).
+    this.onStart(session, this.classId, false, false, true);
+  }
+
   // main.ts registers how to tear the running game down (Phaser / loop / overlays).
   setReturn(fn: () => void): void {
     this.returnFn = fn;
@@ -528,7 +621,8 @@ export class Lobby {
     this.returnFn = null;
     this.selfReady = false;
     this.root.style.display = '';
-    if (this.roomCode) this.renderRoom();
+    if (this.isSpectating) this.renderSpectateWaiting();
+    else if (this.roomCode) this.renderRoom();
     else this.renderSetup();
   }
 
@@ -593,6 +687,7 @@ export class Lobby {
       <h1>房間大廳</h1>
       <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)
         · <button id="btn-copy-invite" class="link-btn" type="button">複製邀請連結</button>
+        · <button id="btn-copy-watch" class="link-btn" type="button">複製旁觀連結</button>
       </div>
       <div class="room-body">
       <div class="room-grid">${slots.join('')}</div>
@@ -623,6 +718,9 @@ export class Lobby {
 
     this.root.querySelector('#btn-copy-invite')!.addEventListener('click', (e) => {
       this.copyInviteLink(e.currentTarget as HTMLButtonElement);
+    });
+    this.root.querySelector('#btn-copy-watch')!.addEventListener('click', (e) => {
+      this.copyWatchLink(e.currentTarget as HTMLButtonElement);
     });
 
     if (this.isHost) {

@@ -22,7 +22,13 @@ import { MusicEngine } from './audio/music';
 // (connected, already `started`) and hands us a GameSession + the self class id.
 // Both modes drive the same GameScene; voice casting and the 1/2/3 test keys
 // work identically (they all route through session.sendCast).
-function startGame(session: GameSession, classId: ClassId, solo = false, isHost = false): void {
+function startGame(
+  session: GameSession,
+  classId: ClassId,
+  solo = false,
+  isHost = false,
+  spectator = false,
+): void {
   // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
   // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
   // leaving the canvas at 0x0 — must set an explicit display.
@@ -34,6 +40,10 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
   // Hide the lobby panel so it doesn't sit above the game.
   const lobbyEl = document.getElementById('lobby');
   if (lobbyEl) lobbyEl.style.display = 'none';
+  // A spectator has no local player to cast for — no skill bar, no charge
+  // overlay, no mic pill, no voice recognizer (see below).
+  const micEl = document.getElementById('mic-status');
+  if (micEl) micEl.style.display = spectator ? 'none' : '';
 
   const scene = new GameScene(session);
 
@@ -76,9 +86,11 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
     isHost,
     () => session.endEndless(),
   );
-  const skillbar = new SkillBar();
+  // A spectator has no local player, so a skill bar / chant-charge overlay
+  // would just show nothing useful — skip creating them entirely.
+  const skillbar = spectator ? null : new SkillBar();
   const wavehud = new WaveHud();
-  const incantation = new IncantationOverlay();
+  const incantation = spectator ? null : new IncantationOverlay();
   const music = new MusicEngine();
 
   // HUD refresh loop (decoupled from Phaser so game-over text updates even when
@@ -92,13 +104,13 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
     const w = session.getWorld();
     if (w) {
       hud.render(w, session.getSelfId());
-      skillbar.update(w, session.getSelfId());
+      skillbar?.update(w, session.getSelfId());
       wavehud.update(w);
       // 惠惠 chant easter egg: drive the incantation overlay from the local
       // pyro's 爆裂 charge (0 / non-pyro → hidden).
       const self = w.players.find((p) => p.id === session.getSelfId());
       const charge = self?.classId === 'pyro' ? self.pyroCharge ?? 0 : 0;
-      incantation.update(charge, Date.now());
+      incantation?.update(charge, Date.now());
       // New-wave fanfare (skip the very first observation = game start).
       if (prevWave >= 0 && w.wave > prevWave && w.status === 'playing') sfxWave();
       prevWave = w.wave;
@@ -114,16 +126,21 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
     }
   }, 100);
 
-  // Restart (solo only; NetSession.restart is a no-op).
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'r') scene.restart();
-  });
+  // Restart (solo only; NetSession/SpectatorSession.restart is a no-op) — skip
+  // wiring the key at all for a spectator, since there's nothing to restart.
+  if (!spectator) {
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'r') scene.restart();
+    });
+  }
 
-  // Voice → spell casting (restricted to the chosen class's loadout).
+  // Voice → spell casting (restricted to the chosen class's loadout). A
+  // spectator has no class/spells of their own, so skip the recognizer
+  // entirely rather than requesting a mic permission for nothing.
   const allowed = classSpellSet(classId);
-  const voice = new WebSpeechVoiceInput('zh-TW');
-  voice.onStatusChange((s, message) => hud.setMicStatus(s, message));
-  voice.onTranscript((text) => {
+  const voice = spectator ? null : new WebSpeechVoiceInput('zh-TW');
+  voice?.onStatusChange((s, message) => hud.setMicStatus(s, message));
+  voice?.onTranscript((text) => {
     const spell = matchSpell(text, { allowed, extra: chantsAsExtra() });
     hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
     if (spell) session.sendCast(spell);
@@ -136,7 +153,7 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
     'click',
     () => {
       initAudio();
-      voice.start();
+      voice?.start();
     },
     { once: true },
   );
@@ -148,7 +165,7 @@ function startGame(session: GameSession, classId: ClassId, solo = false, isHost 
     lobby.setReturn(() => {
       clearInterval(loopId);
       music.stop();
-      voice.stop();
+      voice?.stop();
       game.destroy(true);
       chrome?.classList.remove('playing');
       ['skillbar', 'wavehud', 'gameover', 'victory', 'level-clear-toast', 'endless-quit', 'incantation'].forEach(
