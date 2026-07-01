@@ -460,4 +460,53 @@ describe('two-client ws integration smoke (B3)', () => {
     },
     10000
   );
+
+  it(
+    'broadcasts levelCleared identically to every connected client on the same tick (no divergence)',
+    async () => {
+      // Regression guard for the level-clear roadmap's biggest named risk: a
+      // co-op room's clients seeing different level state. The server has a
+      // single authoritative World and broadcasts ONE snapshot object to every
+      // socket per tick (see index.ts's tick loop), so divergence should be
+      // structurally impossible — this test locks that guarantee in.
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const b = await connect();
+      const joinedB = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'warden', roomCode: code });
+      await joinedB;
+
+      const startedA = waitFor(a, 'started');
+      const startedB = waitFor(b, 'started');
+      sendMsg(a, { type: 'start' });
+      await Promise.all([startedA, startedB]);
+      await Promise.all([waitFor(a, 'snapshot'), waitFor(b, 'snapshot')]);
+
+      // Force the level-1 boss dead without grinding 5 real waves: inject a
+      // zero-hp boss enemy directly into the authoritative world. The next
+      // natural tick's removeDeadEnemies() picks it up (same path a real kill
+      // takes) and sets levelCleared — this is the sim's own logic, not test-only.
+      const room = handle.registry.get(code)!;
+      room.world!.enemies.push({
+        id: 99999, pos: { x: 0, y: 0 }, hp: 0, speed: 0,
+        slowUntil: 0, radius: 10, targetId: null, element: 'normal', boss: true,
+      });
+
+      const clearedA = waitForMatch(a, 'snapshot', (m) => m.world.levelCleared === true);
+      const clearedB = waitForMatch(b, 'snapshot', (m) => m.world.levelCleared === true);
+      const [snapA, snapB] = await Promise.all([clearedA, clearedB]);
+
+      expect(snapA.world.levelCleared).toBe(true);
+      expect(snapB.world.levelCleared).toBe(true);
+      // Same tick, same wave, same world time — one broadcast, not two divergent
+      // per-client views.
+      expect(snapA.tick).toBe(snapB.tick);
+      expect(snapA.world.wave).toBe(snapB.world.wave);
+      expect(snapA.world.time).toBe(snapB.world.time);
+    },
+    10000
+  );
 });

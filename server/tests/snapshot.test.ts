@@ -25,6 +25,12 @@ describe('toSnapshot', () => {
     expect(toSnapshot(w).levelId).toBe(1);
   });
 
+  it('carries levelCleared (whether this level\'s boss is down)', () => {
+    const w = pyroSolo();
+    w.levelCleared = true;
+    expect(toSnapshot(w).levelCleared).toBe(true);
+  });
+
   it('serializes player gameplay fields including class/downed/revive/shield', () => {
     const w = pyroSolo();
     const p = w.players[0];

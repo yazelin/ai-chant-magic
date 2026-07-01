@@ -36,8 +36,11 @@ export class Hud {
   private mic: HTMLElement;
   private heard: HTMLElement;
   private gameover: HTMLElement;
+  private levelClear: HTMLElement;
   private heardTimer: ReturnType<typeof setTimeout> | null = null;
+  private levelClearTimer: ReturnType<typeof setTimeout> | null = null;
   private goShown = false;
+  private levelClearShown = false;
 
   constructor(
     private solo = false,
@@ -54,6 +57,15 @@ export class Hud {
       'text-align:center;font:800 22px system-ui,sans-serif;color:#fff;text-shadow:0 2px 8px #000;' +
       'background:rgba(16,16,34,0.82);border:1px solid var(--accent);border-radius:14px;padding:18px 28px;';
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.gameover);
+    // Level-clear toast (boss down): non-blocking, top-centre, auto-fades. Text
+    // only for now — a scene transition/new level is future work (see roadmap).
+    this.levelClear = document.createElement('div');
+    this.levelClear.id = 'level-clear-toast';
+    this.levelClear.style.cssText =
+      'position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:6;pointer-events:none;display:none;' +
+      'text-align:center;font:800 20px system-ui,sans-serif;color:#ffd24d;text-shadow:0 2px 8px #000;' +
+      'background:rgba(16,16,34,0.82);border:1px solid #ffd24d;border-radius:14px;padding:12px 24px;';
+    (document.getElementById('game-chrome') ?? document.body).appendChild(this.levelClear);
   }
 
   setMicStatus(s: VoiceStatus, message?: string): void {
@@ -89,6 +101,18 @@ export class Hud {
     } else if (world.status !== 'gameover' && this.goShown) {
       this.goShown = false;
       this.gameover.style.display = 'none';
+    }
+    // Level-clear toast — fires once on the levelCleared flip, auto-fades, resets
+    // on restart (a fresh world has levelCleared back to false).
+    if (world.levelCleared && !this.levelClearShown) {
+      this.levelClearShown = true;
+      this.levelClear.textContent = '史萊姆王 討伐!世界已淨化';
+      this.levelClear.style.display = 'block';
+      if (this.levelClearTimer) clearTimeout(this.levelClearTimer);
+      this.levelClearTimer = setTimeout(() => { this.levelClear.style.display = 'none'; }, 4000);
+    } else if (!world.levelCleared && this.levelClearShown) {
+      this.levelClearShown = false;
+      this.levelClear.style.display = 'none';
     }
     // Player status panels — self first.
     const players = world.players
