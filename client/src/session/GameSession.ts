@@ -18,4 +18,10 @@ export interface GameSession {
   // Restart the run. Meaningful for solo (rebuild a fresh world for the class);
   // a no-op for net play (the server owns lifecycle).
   restart(classId: ClassId): void;
+  // Continue past the campaign instead of ending — only meaningful from a
+  // 'victory' world. Solo mutates the world directly; net play sends the
+  // enterEndless message and waits for the server's own snapshot to reflect it.
+  enterEndless(): void;
+  // End an in-progress endless run on demand (same effect as a party wipe).
+  endEndless(): void;
 }

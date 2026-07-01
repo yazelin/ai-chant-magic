@@ -6,6 +6,8 @@ import {
   ClassId,
   createSoloWorld,
   step,
+  enterEndlessMode,
+  endEndlessMode,
 } from '@acm/shared';
 import { GameSession } from './GameSession';
 
@@ -76,6 +78,16 @@ export class LocalSession implements GameSession {
     this.latestMove = { x: 0, y: 0 };
     this.latestFace = 0;
     this.queuedCasts = [];
+    this.worldCb(this.world);
+  }
+
+  enterEndless(): void {
+    enterEndlessMode(this.world);
+    this.worldCb(this.world);
+  }
+
+  endEndless(): void {
+    endEndlessMode(this.world);
     this.worldCb(this.world);
   }
 }

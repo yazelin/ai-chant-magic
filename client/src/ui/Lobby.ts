@@ -78,6 +78,11 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   'bad-message': '訊息格式錯誤',
   'not-in-room': '你不在任何房間中',
   'not-host': '只有房主可以開始遊戲',
+  // These two only ever fire from the in-game victory screen (enterEndless/
+  // endEndless), never from the lobby — kept here only so this map stays
+  // exhaustive over ErrorCode. Hud.ts handles the real user-facing surfacing.
+  'not-victory': '無盡模式只能在通關畫面開啟',
+  'not-endless': '目前不在無盡模式中',
 };
 
 // Lobby owns the dark-arcane DOM over the canvas area, the class pick, and the
