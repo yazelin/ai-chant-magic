@@ -47,21 +47,28 @@ const CHAR_NAMES: Record<ClassId, string> = {
   warden: '貞德',
 };
 
-// Each character's source world — shown as a label + a themed card background so
-// the multi-world nature reads at a glance. (Art is a themed gradient for now;
-// per-world AI backdrops can come later.)
+// Each character's source world — shown as a label + a themed image backdrop so
+// the multi-world nature reads at a glance. The old gradients remain as
+// translucent overlays to keep text/sprites readable on top of the artwork.
 const WORLD_NAME: Record<ClassId, string> = {
   pyro: '為美好世界',
   cryo: 'Re:Zero 異世界',
   storm: '學園都市',
   warden: '聖杯戰爭 · 現代',
 };
-const WORLD_BG: Record<ClassId, string> = {
-  pyro: 'radial-gradient(100% 70% at 50% 0%, rgba(255,170,60,0.18), transparent 60%), linear-gradient(165deg,#22301a,#12160c)',
-  cryo: 'radial-gradient(100% 70% at 50% 0%, rgba(120,200,255,0.18), transparent 60%), linear-gradient(165deg,#16273a,#0c1420)',
-  storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.20), transparent 60%), linear-gradient(165deg,#221a3a,#100c1e)',
-  warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.16), transparent 60%), linear-gradient(165deg,#2a2418,#14120c)',
+const WORLD_BG_IMAGE: Record<ClassId, string> = {
+  pyro: new URL('../assets/lobby-bg-pyro.png', import.meta.url).href,
+  cryo: new URL('../assets/lobby-bg-cryo.png', import.meta.url).href,
+  storm: new URL('../assets/lobby-bg-storm.png', import.meta.url).href,
+  warden: new URL('../assets/lobby-bg-warden.png', import.meta.url).href,
 };
+const WORLD_BG_OVERLAY: Record<ClassId, string> = {
+  pyro: 'radial-gradient(100% 70% at 50% 0%, rgba(255,170,60,0.32), transparent 60%), linear-gradient(165deg,rgba(34,48,26,0.58),rgba(18,22,12,0.72))',
+  cryo: 'radial-gradient(100% 70% at 50% 0%, rgba(120,200,255,0.32), transparent 60%), linear-gradient(165deg,rgba(22,39,58,0.56),rgba(12,20,32,0.74))',
+  storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.34), transparent 60%), linear-gradient(165deg,rgba(34,26,58,0.56),rgba(16,12,30,0.74))',
+  warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.30), transparent 60%), linear-gradient(165deg,rgba(42,36,24,0.58),rgba(20,18,12,0.74))',
+};
+const worldBackground = (id: ClassId): string => `${WORLD_BG_OVERLAY[id]}, url("${WORLD_BG_IMAGE[id]}")`;
 
 const ERROR_TEXT: Record<ErrorCode, string> = {
   'not-found': '找不到該房間代碼',
@@ -82,6 +89,7 @@ export class Lobby {
   private root: HTMLElement;
   private name = '';
   private classId: ClassId = 'pyro';
+  private selectedSkill: SpellId | null = null;
   private client: NetClient | null = null;
   private members: LobbyPlayerView[] = [];
   private roomCode = '';
@@ -298,7 +306,10 @@ export class Lobby {
       card.dataset.cls = id;
       card.style.color = def.color;
       card.style.gridArea = AREA[id];
-      card.style.background = WORLD_BG[id]; // themed per-character world backdrop
+      card.style.backgroundImage = worldBackground(id);
+      card.style.backgroundSize = 'cover, cover, cover';
+      card.style.backgroundPosition = 'center, center, center';
+      card.style.backgroundRepeat = 'no-repeat';
       let sprite = '';
       if (sw) {
         const dur = (sw.frames / 9).toFixed(2); // ≈9fps, close to in-game 10
@@ -312,6 +323,7 @@ export class Lobby {
       card.addEventListener('click', () => {
         if (id === this.classId) return;
         this.classId = id;
+        this.selectedSkill = CLASSES[id].spells[0];
         this.renderShowcase();
       });
       host.appendChild(card);
@@ -325,6 +337,10 @@ export class Lobby {
     if (!host) return;
     const id = this.classId;
     const def = CLASSES[id];
+    const selected = this.selectedSkill && def.spells.includes(this.selectedSkill)
+      ? this.selectedSkill
+      : def.spells[0];
+    this.selectedSkill = selected;
     host.style.color = def.color;
     const skills = def.spells
       .map((s) => {
@@ -334,10 +350,17 @@ export class Lobby {
         // One compact line per skill (icon + chant phrase + edit) so all 3 + name
         // + start buttons fit a short landscape phone without clipping. The full
         // effect/stats live on the in-game skill bar.
-        return `<li class="skill" data-spell="${s}"><div class="chant-row"><span style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<span class="chant">「${escapeHtml(phrase)}」</span></span><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div></li>`;
+        return `<li class="skill${s === selected ? ' selected' : ''}" data-spell="${s}" title="查看技能說明"><div class="chant-row"><span style="display:flex;align-items:center;gap:6px;min-width:0">${ico}<span class="chant">「${escapeHtml(phrase)}」</span></span><button class="edit-chant" data-edit="${s}" title="改詠唱詞">改</button></div></li>`;
       })
       .join('');
-    host.innerHTML = `<div class="cs-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} · ${escapeHtml(def.displayName)}</div><ul class="skills">${skills}</ul>`;
+    const info = SKILL_INFO[selected];
+    host.innerHTML = `<div class="cs-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} · ${escapeHtml(def.displayName)}</div><ul class="skills">${skills}</ul><div class="skill-detail"><div class="sd-title" style="color:${def.color}">${escapeHtml(info.name)}</div><div class="sd-effect">${escapeHtml(info.effect)}</div><div class="sd-stats">${escapeHtml(info.stats)}</div><div class="sd-body">${escapeHtml(info.detail)}</div></div>`;
+    host.querySelectorAll<HTMLElement>('.skill').forEach((row) => {
+      row.addEventListener('click', () => {
+        this.selectedSkill = row.dataset.spell as SpellId;
+        this.renderCenterSkills();
+      });
+    });
     // per-skill "改" buttons: edit the chant phrase. Saved to localStorage;
     // applies to practice + game. stopPropagation so the click stays in-panel.
     host.querySelectorAll<HTMLButtonElement>('.edit-chant').forEach((b) => {
@@ -650,7 +673,7 @@ export class Lobby {
       : m.ready
         ? '<span class="badge ready">已準備</span>'
         : '<span class="badge wait">等待中</span>';
-    return `<div class="pslot${isSelf ? ' self' : ''}" style="background:${WORLD_BG[m.classId]};color:${def.color}">
+    return `<div class="pslot${isSelf ? ' self' : ''}" style="background-image:${worldBackground(m.classId)};background-size:cover,cover,cover;background-position:center,center,center;background-repeat:no-repeat;color:${def.color}">
       <div class="pslot-top"><span class="pslot-name">${escapeHtml(m.name)}${isSelf ? ' (你)' : ''}</span>${badge}</div>
       <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div></div>
       <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[m.classId])}</div>
