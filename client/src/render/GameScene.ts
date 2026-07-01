@@ -707,11 +707,23 @@ export class GameScene extends Phaser.Scene {
     let eliteKilled = false;
     for (const [id, prev] of this.prevEnemy) {
       if (!liveIds.has(id)) {
-        this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal);
+        if (prev.elite) {
+          // A demoted boss going down reads as a bigger deal than a slime pop:
+          // a larger burst, a delayed second gold burst, a light shake/flash
+          // (lighter than firestorm's big blast so it doesn't upstage a real
+          // ultimate), and its own floating score callout.
+          this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal, 34);
+          this.time.delayedCall(110, () => this.spawnDeathBurst(prev.x, prev.y, 0xffd24d, 22));
+          this.cameras.main.shake(160, 0.006);
+          this.cameras.main.flash(140, 255, 210, 90, false);
+          this.spawnEliteKillText(prev.x, prev.y - ENEMY_SPRITE_H / 2 - 10);
+          eliteKilled = true;
+        } else {
+          this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal);
+        }
         this.prevEnemy.delete(id);
         this.enemyHitFlash.delete(id);
         killed = true;
-        if (prev.elite) eliteKilled = true;
       }
     }
     // An elite kill gets its own heavier chime instead of stacking with the
@@ -756,7 +768,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Ember pop where a slime died, tinted by its element, then self-destruct.
-  private spawnDeathBurst(x: number, y: number, color: number): void {
+  private spawnDeathBurst(x: number, y: number, color: number, count = 14): void {
     const burst = this.add.particles(x, y, 'spark', {
       lifespan: 380,
       speed: { min: 50, max: 190 },
@@ -768,8 +780,33 @@ export class GameScene extends Phaser.Scene {
       emitting: false,
     });
     burst.setDepth(DEPTH_VFX);
-    burst.explode(14);
+    burst.explode(count);
     this.time.delayedCall(440, () => burst.destroy());
+  }
+
+  // Bigger/slower than a regular damage number — an elite kill is a bigger deal
+  // than a slime popping, but stops short of the level-clear fanfare (there's
+  // no level to clear in endless mode).
+  private spawnEliteKillText(x: number, y: number): void {
+    const txt = this.add
+      .text(x, y, `菁英擊破 +${CONFIG.elite.scoreBonus}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffd24d',
+        stroke: '#000000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH_PLAYER + 5);
+    this.tweens.add({
+      targets: txt,
+      y: y - 50,
+      alpha: 0,
+      duration: 900,
+      ease: 'Cubic.easeOut',
+      onComplete: () => txt.destroy(),
+    });
   }
 
   // One-shot blast impact. A normal fireball gets a snappy ember burst + brief

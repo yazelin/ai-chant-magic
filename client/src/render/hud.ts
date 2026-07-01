@@ -142,7 +142,9 @@ export class Hud {
       'position:fixed;top:8px;right:8px;z-index:61;display:none;pointer-events:auto;cursor:pointer;' +
       'background:rgba(16,16,34,0.82);color:#c7cbdb;border:1px solid #666;border-radius:8px;' +
       'padding:5px 10px;font:700 12px system-ui;';
-    this.endlessQuit.addEventListener('click', () => this.onEndEndless());
+    this.endlessQuit.addEventListener('click', () => {
+      if (window.confirm('確定要結束這輪無盡模式嗎?')) this.onEndEndless();
+    });
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.endlessQuit);
   }
 
