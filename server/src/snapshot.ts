@@ -43,6 +43,7 @@ export interface SnapshotEnemy {
   radius: number;
   element: EnemyElement;
   boss?: boolean;
+  elite?: boolean; // endless-mode-only: a demoted boss mixed into the swarm
 }
 
 export interface SnapshotProjectile {
@@ -71,6 +72,8 @@ export interface Snapshot {
   score: number;
   levelId: number;
   levelCleared: boolean;
+  endless: boolean;
+  endlessKillBase: number; // "this run's kills" on the client = score - endlessKillBase
   breakTimer: number; // >0 = countdown to next wave
   spawnQueue: number; // enemies left to spawn this wave (for within-wave progress)
   players: SnapshotPlayer[];
@@ -91,6 +94,8 @@ export function toSnapshot(world: World): Snapshot {
     score: world.score,
     levelId: world.levelId,
     levelCleared: world.levelCleared,
+    endless: world.endless,
+    endlessKillBase: world.endlessKillBase,
     breakTimer: world.breakTimer,
     spawnQueue: world.spawnQueue,
     players: world.players.map((p) => ({
@@ -116,6 +121,7 @@ export function toSnapshot(world: World): Snapshot {
       radius: e.radius,
       element: e.element,
       boss: e.boss,
+      elite: e.elite,
     })),
     projectiles: world.projectiles.map((pr) => ({
       id: pr.id,

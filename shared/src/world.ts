@@ -23,6 +23,67 @@ const LEVEL_ENEMY: Array<EnemyElement | 'wraith' | 'mixed'> = ['mixed', 'wraith'
 const BOSS_ELEMENT: EnemyElement[] = ['normal', 'ice', 'storm', 'holy'];
 
 // ---------------------------------------------------------------------------
+// Endless-mode formulas (see CONFIG.endless). Every one of these is a no-op
+// (falls back to the exact campaign formula) when world.endless is false, so
+// the campaign path is byte-for-byte unchanged.
+// ---------------------------------------------------------------------------
+
+// Enemy hp for the current wave. Campaign: unbounded linear growth (only ever
+// runs to wave 20). Endless: identical up to hpCapWave, then the slope is cut
+// to hpSlopeAfterCap so "what wave did you reach" stays meaningful for a very
+// long run without the number becoming absurd.
+export function enemyStatWaveHp(world: World): number {
+  const base = CONFIG.enemy.baseHp;
+  if (!world.endless) return base + (world.wave - 1) * CONFIG.enemy.hpPerWave;
+  const e = CONFIG.endless;
+  const cappedWave = Math.min(world.wave, e.hpCapWave);
+  const extra = Math.max(0, world.wave - e.hpCapWave);
+  return base + (cappedWave - 1) * CONFIG.enemy.hpPerWave + extra * CONFIG.enemy.hpPerWave * e.hpSlopeAfterCap;
+}
+
+// Enemy walk speed for the current wave. Endless hard-caps at a fraction of
+// the player's own speed — the campaign's unbounded linear formula would let
+// enemies catch up to (and eventually outrun) the player around wave 36.
+export function enemyStatWaveSpeed(world: World): number {
+  const linear = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
+  if (!world.endless) return linear;
+  return Math.min(linear, CONFIG.player.speed * CONFIG.endless.speedCapFrac);
+}
+
+// Share of endless-mode regular spawns that should be the wraith (世界2's
+// blink-mover), ramping from 0 at wraithShareStartWave to wraithShareMax at
+// wraithShareMaxWave and holding there. pickElement covers everything else.
+export function endlessWraithShare(wave: number): number {
+  const e = CONFIG.endless;
+  if (wave < e.wraithShareStartWave) return 0;
+  const t = (wave - e.wraithShareStartWave) / (e.wraithShareMaxWave - e.wraithShareStartWave);
+  return Math.min(e.wraithShareMax, Math.max(0, t * e.wraithShareMax));
+}
+
+// Per-wave spawn budget / concurrent-enemy cap, scaled by party size. These
+// clamp the campaign's own base*playerScale formula (which was only ever
+// validated to wave 20) so a long endless run can never queue or field an
+// unbounded number of enemies — a real risk: at wave 50 in a 4-player room the
+// unclamped formula produces >1000 queued enemies in a single wave.
+export function endlessMaxQueue(playerCount: number): number {
+  const e = CONFIG.endless;
+  return e.maxQueueBase + e.maxQueuePerExtra * (playerCount - 1);
+}
+export function endlessMaxAlive(playerCount: number): number {
+  const e = CONFIG.endless;
+  return e.maxAliveBase + e.maxAlivePerExtra * (playerCount - 1);
+}
+
+// The elite-mob cadence tightens as the run goes on: every-5-waves early,
+// every-4 from wave 20, every-3 from wave 50. `wave` is the wave an elite
+// trigger just fired on; the return value is the gap to the next trigger.
+export function nextEliteInterval(wave: number): number {
+  if (wave < 20) return 5;
+  if (wave < 50) return 4;
+  return 3;
+}
+
+// ---------------------------------------------------------------------------
 // World construction
 // ---------------------------------------------------------------------------
 
@@ -90,11 +151,47 @@ export function createWorld(seeds: PlayerSeed[]): World {
     spawnTimer: 0,
     spawnCadence: CONFIG.wave.baseCadence,
     breakTimer: 0,
+    endless: false,
+    endlessKillBase: 0,
+    nextEliteWave: 0,
+    eliteWavesSoFar: 0,
+    eliteQueue: 0,
   };
 }
 
 export function createSoloWorld(classId: ClassId = 'pyro'): World {
   return createWorld([{ id: 'local', name: 'You', classId }]);
+}
+
+// Unlocked only from a 'victory' world: the same World continues instead of
+// ending, with an infinite, ever-escalating wave loop (see updateWaves/
+// spawnEndlessEnemy/spawnElite). Player hp/pos/cooldowns/score are left alone
+// — only the battle/wave transients reset, exactly like a campaign level
+// transition (this is deliberately the same shape of reset). The single
+// source of truth for both LocalSession and Room, so solo and networked play
+// can never diverge on what "entering endless mode" means.
+export function enterEndlessMode(world: World): void {
+  world.enemies = [];
+  world.projectiles = [];
+  world.effects = [];
+  world.wave = 0;
+  world.spawnQueue = 0;
+  world.spawnTimer = 0;
+  world.breakTimer = 0;
+  world.levelCleared = false;
+  world.transitionTimer = 0;
+  world.endless = true;
+  world.endlessKillBase = world.score;
+  world.nextEliteWave = 5;
+  world.eliteWavesSoFar = 0;
+  world.eliteQueue = 0;
+  world.status = 'playing';
+}
+
+// Ends an endless run the same way a campaign wipe does — reuses the existing
+// gameover screen/return-to-lobby flow rather than a bespoke ending state.
+export function endEndlessMode(world: World): void {
+  world.status = 'gameover';
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +248,7 @@ export function step(
 
   movePlayers(world, moveDirs, dt);
   updateWaves(world, dt, rng);
-  updateEnemies(world, dt);
+  updateEnemies(world, dt, rng);
   updateRevives(world, dt);
   updateRegen(world, dt);
   updateProjectiles(world, dt);
@@ -532,16 +629,22 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
 
 function removeDeadEnemies(world: World): void {
   const survivors: Enemy[] = [];
+  let eliteBonus = 0;
   for (const e of world.enemies) {
     if (e.hp > 0) { survivors.push(e); continue; }
     if (e.element === 'fire') fireDeathExplosion(world, e); // 火史萊姆死亡小爆炸
-    if (e.boss) {
+    // world.endless guard is a defensive second layer — an elite must never
+    // set boss:true in the first place (see spawnElite), so this should never
+    // actually trigger in endless mode, but it stops an endless run's demoted
+    // "boss" (if that ever changes) from silently re-triggering levelCleared.
+    if (e.boss && !world.endless) {
       // 王死 = 這關過了,停止繼續刷怪,倒數轉場(見 updateWaves)。
       world.levelCleared = true;
       world.transitionTimer = CONFIG.transition.delay;
     }
+    if (e.elite) eliteBonus += CONFIG.elite.scoreBonus - 1; // +1 per kill already counted below
   }
-  world.score += world.enemies.length - survivors.length;
+  world.score += world.enemies.length - survivors.length + eliteBonus;
   world.enemies = survivors;
 }
 
@@ -630,7 +733,7 @@ function updateRegen(world: World, dt: number): void {
   }
 }
 
-function updateEnemies(world: World, dt: number): void {
+function updateEnemies(world: World, dt: number, rng: () => number): void {
   for (const e of world.enemies) {
     const target = nearestAlivePlayer(world, e.pos);
     e.targetId = target ? target.id : null;
@@ -640,10 +743,12 @@ function updateEnemies(world: World, dt: number): void {
     const frozen = world.time < (e.frozenUntil ?? 0);
 
     // Movement: storm slimes dash (telegraph → lunge), wraiths blink, others
-    // walk toward target.
+    // walk toward target. Elites always walk (never inherit a signature
+    // movement quirk) so they read as "the big slow tank", same as a campaign
+    // boss — storm-dash is explicitly excluded here for that reason.
     if (!frozen) {
       if (e.wraith) updateWraith(world, e, toP, d);
-      else if (e.element === 'storm') stormMove(world, e, toP, d, dt);
+      else if (e.element === 'storm' && !e.elite) stormMove(world, e, toP, d, dt);
       else {
         const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
         if (d > 1) {
@@ -656,8 +761,8 @@ function updateEnemies(world: World, dt: number): void {
 
     // Holy slimes periodically heal nearby slimes (kept alive → 優先清).
     if (e.element === 'holy') holyHeal(world, e);
-    // 史萊姆王 periodically summons small slimes (kill it to stop the adds).
-    if (e.boss) bossSummon(world, e);
+    // 王/菁英 periodically summons small adds (kill it to stop the adds).
+    if (e.boss || e.elite) bossSummon(world, e, rng);
 
     if (
       d <= e.radius + CONFIG.player.radius &&
@@ -724,11 +829,13 @@ function updateWraith(world: World, e: Enemy, toP: Vec2, d: number): void {
   e.pos.y += (toP.y / d) * jump;
 }
 
-// 王召喚:每 summonInterval 在自己周圍生 summonCount 隻小怪 + 召喚光環,種類跟該
-// 世界的一般敵人一致(見 LEVEL_ENEMY)。level 0 沒有 rng 可用,固定召喚一般史萊姆
-// (跟過去行為一致,不是真隨機混色)。
-function bossSummon(world: World, e: Enemy): void {
-  const b = CONFIG.boss;
+// 王/菁英召喚:每 summonInterval 在自己周圍生 summonCount 隻小怪 + 召喚光環。
+// campaign 王沿用該世界的一般敵人種類(LEVEL_ENEMY),level 0 沒有 rng 可用,
+// 固定召喚一般史萊姆(跟過去行為一致,不是真隨機混色)。菁英召喚改走無盡模式
+// 的環境元素混合(wraithShare+pickElement),不綁定 LEVEL_ENEMY——那是 campaign
+// per-level 單一種類查表,無盡模式不適用。
+function bossSummon(world: World, e: Enemy, rng: () => number): void {
+  const b = e.elite ? CONFIG.elite : CONFIG.boss;
   if (e.nextSummonAt === undefined) e.nextSummonAt = world.time + b.summonInterval;
   if (world.time < e.nextSummonAt) return;
   e.nextSummonAt = world.time + b.summonInterval;
@@ -737,7 +844,8 @@ function bossSummon(world: World, e: Enemy): void {
     const ang = (i / b.summonCount) * Math.PI * 2;
     const r = e.radius + 24;
     const pos = { x: e.pos.x + Math.cos(ang) * r, y: e.pos.y + Math.sin(ang) * r };
-    if (kind === 'wraith') makeWraith(world, pos);
+    if (e.elite) spawnEndlessEnemy(world, pos, rng);
+    else if (kind === 'wraith') makeWraith(world, pos);
     else if (kind === 'mixed') makeSlime(world, pos, 'normal');
     else makeSlime(world, pos, kind);
   }
@@ -843,12 +951,22 @@ function respawnDeadPlayers(world: World): void {
 function beginWave(world: World, rng: () => number): void {
   world.wave += 1;
   respawnDeadPlayers(world);
-  const effective = effectivePlayerCount(world);
-  const playerScale = Math.pow(Math.max(1, effective), CONFIG.wave.scaleExp);
+  const effective = Math.max(1, effectivePlayerCount(world));
+  const playerScale = Math.pow(effective, CONFIG.wave.scaleExp);
   const base = CONFIG.wave.baseCount + (world.wave - 1) * CONFIG.wave.perWave;
   world.spawnQueue = Math.round(base * playerScale);
-  // Boss wave: spawn a 史萊姆王 + thin out the regular swarm so it stays the focus.
-  if (world.wave % CONFIG.boss.every === 0) {
+  if (world.endless) {
+    // No campaign boss wave here — endless has its own elite-mob cadence
+    // (below), stacked on top of the swarm rather than replacing part of it.
+    world.spawnQueue = Math.min(world.spawnQueue, endlessMaxQueue(effective));
+    if (world.wave === world.nextEliteWave) {
+      world.eliteWavesSoFar += 1;
+      world.eliteQueue = Math.min(3, 1 + Math.floor((world.eliteWavesSoFar - 1) / 4));
+      world.nextEliteWave = world.wave + nextEliteInterval(world.wave);
+    }
+  } else if (world.wave % CONFIG.boss.every === 0) {
+    // Campaign boss wave: spawn the level's boss + thin out the regular swarm
+    // so it stays the focus.
     spawnBoss(world, rng);
     world.spawnQueue = Math.round(world.spawnQueue * CONFIG.boss.swarmMul);
   }
@@ -884,10 +1002,12 @@ function ringSpawnPos(world: World, rng: () => number): Vec2 {
   return { x: clamp(c.x + Math.cos(ang) * dist, 0, W), y: clamp(c.y + Math.sin(ang) * dist, 0, H) };
 }
 
-// Push one standard slime of `element` at `pos` (shared by wave spawns + boss summons).
+// Push one standard slime of `element` at `pos` (shared by wave spawns + boss
+// summons). hp/speed go through enemyStatWaveHp/enemyStatWaveSpeed so an
+// endless-mode run automatically gets the soft-capped/hard-capped stats.
 function makeSlime(world: World, pos: Vec2, element: EnemyElement): void {
-  let hp = CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave;
-  let speed = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
+  let hp = enemyStatWaveHp(world);
+  let speed = enemyStatWaveSpeed(world);
   if (element === 'holy') hp *= CONFIG.slime.holy.hpMul; // 聖史萊姆是肉盾
   if (element === 'storm') speed *= CONFIG.slime.storm.speedMul; // 雷史萊姆又快
   world.enemies.push({
@@ -902,8 +1022,8 @@ function makeSlime(world: World, pos: Vec2, element: EnemyElement): void {
 // wave) but ice element + the blink movement in updateWraith. `speed` is set
 // for parity with Enemy's shape but unused (a wraith doesn't walk).
 function makeWraith(world: World, pos: Vec2): void {
-  const hp = CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave;
-  const speed = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
+  const hp = enemyStatWaveHp(world);
+  const speed = enemyStatWaveSpeed(world);
   world.enemies.push({
     id: world.nextEntityId++,
     pos: { x: pos.x, y: pos.y },
@@ -914,22 +1034,31 @@ function makeWraith(world: World, pos: Vec2): void {
 
 function spawnEnemy(world: World, rng: () => number): void {
   const pos = ringSpawnPos(world, rng);
+  if (world.endless) { spawnEndlessEnemy(world, pos, rng); return; }
   const kind = LEVEL_ENEMY[world.levelId] ?? 'mixed';
   if (kind === 'wraith') makeWraith(world, pos);
   else if (kind === 'mixed') makeSlime(world, pos, pickElement(world.wave, rng));
   else makeSlime(world, pos, kind);
 }
 
+// Endless-mode regular spawn: 100% reuses pickElement's campaign element mix,
+// plus a growing share of wraiths (see endlessWraithShare) — not tied to any
+// single LEVEL_ENEMY kind, since endless mixes every world's enemy together.
+function spawnEndlessEnemy(world: World, pos: Vec2, rng: () => number): void {
+  if (rng() < endlessWraithShare(world.wave)) makeWraith(world, pos);
+  else makeSlime(world, pos, pickElement(world.wave, rng));
+}
+
 // 世界王:巨大、肉、慢、週期召喚(見 BOSS_ELEMENT/bossSummon)。永遠走路移動,
 // 不套用該世界雜兵的招牌移動方式(閃現/突進等),讀起來一貫是「緩慢大坦克」。
 function spawnBoss(world: World, rng: () => number): void {
   const b = CONFIG.boss;
-  const hp = (CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave) * b.hpMul;
+  const hp = enemyStatWaveHp(world) * b.hpMul;
   world.enemies.push({
     id: world.nextEntityId++,
     pos: ringSpawnPos(world, rng),
     hp,
-    speed: CONFIG.enemy.baseSpeed * b.speedMul,
+    speed: enemyStatWaveSpeed(world) * b.speedMul,
     slowUntil: 0,
     radius: CONFIG.enemy.radius * b.radiusMul,
     targetId: null,
@@ -937,6 +1066,33 @@ function spawnBoss(world: World, rng: () => number): void {
     maxHp: hp,
     boss: true,
     nextSummonAt: world.time + b.summonInterval,
+  });
+}
+
+// Endless-mode-only: a former campaign boss demoted to an "elite" mob mixed
+// into the swarm. Independent multipliers (CONFIG.elite, deliberately lighter
+// than CONFIG.boss) computed straight from enemyStatWaveHp/Speed — NOT routed
+// through makeSlime, so a holy-flavoured elite doesn't also pick up the
+// per-element hp/speed multiplier (that would stack unevenly across the 4
+// identities). Rotates through BOSS_ELEMENT by eliteWavesSoFar so it cycles
+// slime-king → wraith-queen → thunder-king → grail-queen identities; `elite`
+// (not `boss`) means killing it can never set world.levelCleared.
+function spawnElite(world: World, pos: Vec2): void {
+  const e = CONFIG.elite;
+  const idx = ((world.eliteWavesSoFar - 1) % BOSS_ELEMENT.length + BOSS_ELEMENT.length) % BOSS_ELEMENT.length;
+  const hp = enemyStatWaveHp(world) * e.hpMul;
+  world.enemies.push({
+    id: world.nextEntityId++,
+    pos: { x: pos.x, y: pos.y },
+    hp,
+    speed: enemyStatWaveSpeed(world) * e.speedMul,
+    slowUntil: 0,
+    radius: CONFIG.enemy.radius * e.radiusMul,
+    targetId: null,
+    element: BOSS_ELEMENT[idx],
+    maxHp: hp,
+    elite: true,
+    nextSummonAt: world.time + e.summonInterval,
   });
 }
 
@@ -973,16 +1129,28 @@ function updateWaves(world: World, dt: number, rng: () => number): void {
   }
   if (world.wave === 0 && world.spawnQueue === 0) beginWave(world, rng);
 
-  if (world.spawnQueue > 0) {
+  if (world.spawnQueue > 0 || world.eliteQueue > 0) {
     world.spawnTimer -= dt;
     if (world.spawnTimer <= 0) {
-      spawnEnemy(world, rng);
-      world.spawnQueue -= 1;
+      // Consume this cadence window either way; the alive-cap check below only
+      // skips the actual spawn (retried next window), never drops the queue.
       world.spawnTimer = world.spawnCadence;
+      const aliveOk = !world.endless
+        || world.enemies.length < endlessMaxAlive(Math.max(1, effectivePlayerCount(world)));
+      if (aliveOk) {
+        // Elites spawn first within a wave (players still have full hp/cooldowns).
+        if (world.eliteQueue > 0) {
+          spawnElite(world, ringSpawnPos(world, rng));
+          world.eliteQueue -= 1;
+        } else {
+          spawnEnemy(world, rng);
+          world.spawnQueue -= 1;
+        }
+      }
     }
   }
 
-  if (world.spawnQueue === 0 && world.enemies.length === 0) {
+  if (world.spawnQueue === 0 && world.eliteQueue === 0 && world.enemies.length === 0) {
     world.breakTimer = CONFIG.wave.breakTime;
   }
 }
