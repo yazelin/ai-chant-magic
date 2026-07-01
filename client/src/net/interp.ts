@@ -49,6 +49,7 @@ export interface SnapshotEnemy {
   radius: number;
   element?: EnemyElement;
   boss?: boolean;
+  elite?: boolean;
 }
 
 export interface SnapshotProjectile {
@@ -77,6 +78,8 @@ export interface Snapshot {
   score: number;
   levelId: number;
   levelCleared: boolean;
+  endless: boolean;
+  endlessKillBase: number;
   breakTimer?: number;
   spawnQueue?: number;
   players: SnapshotPlayer[];
@@ -132,6 +135,7 @@ function toWorldEnemy(se: SnapshotEnemy, pos: Vec2): Enemy {
     targetId: null,
     element: se.element ?? 'normal',
     boss: se.boss,
+    elite: se.elite,
   };
 }
 
@@ -178,6 +182,9 @@ export function emptyWorld(): World {
     levelId: 0,
     levelCleared: false,
     transitionTimer: 0, // sim-only countdown; the wire snapshot doesn't carry it
+    endless: false,
+    endlessKillBase: 0,
+    nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0, // sim-only; the client never reads these
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -199,6 +206,9 @@ function snapshotToWorld(s: Snapshot): World {
     levelId: s.levelId,
     levelCleared: s.levelCleared,
     transitionTimer: 0,
+    endless: s.endless,
+    endlessKillBase: s.endlessKillBase,
+    nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -248,6 +258,9 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     levelId: next.levelId,
     levelCleared: next.levelCleared,
     transitionTimer: 0,
+    endless: next.endless,
+    endlessKillBase: next.endlessKillBase,
+    nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,

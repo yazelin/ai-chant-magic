@@ -31,6 +31,28 @@ describe('toSnapshot', () => {
     expect(toSnapshot(w).levelCleared).toBe(true);
   });
 
+  it('carries endless + endlessKillBase (for the "this run\'s kills" HUD readout)', () => {
+    const w = pyroSolo();
+    w.endless = true;
+    w.endlessKillBase = 66;
+    w.score = 91;
+    const snap = toSnapshot(w);
+    expect(snap.endless).toBe(true);
+    expect(snap.endlessKillBase).toBe(66);
+    expect(snap.score - snap.endlessKillBase).toBe(25);
+  });
+
+  it('carries elite on enemies (endless-mode demoted boss, distinct from boss)', () => {
+    const w = pyroSolo();
+    w.enemies.push({
+      id: 5, pos: { x: 1, y: 2 }, hp: 30, speed: 60,
+      slowUntil: 0, radius: 24, targetId: null, element: 'ice', elite: true,
+    });
+    const se = toSnapshot(w).enemies[0];
+    expect(se.elite).toBe(true);
+    expect(se.boss).toBeUndefined();
+  });
+
   it('serializes player gameplay fields including class/downed/revive/shield', () => {
     const w = pyroSolo();
     const p = w.players[0];

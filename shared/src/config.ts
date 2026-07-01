@@ -46,6 +46,23 @@ export const CONFIG = {
   // How long a cleared level lingers (boss corpse still on the ground, level-clear
   // toast visible) before advancing to the next level / ending the game. Matches
   // the client toast's own 4s auto-fade so the world flips right as it fades.
-  transition: { delay: 4 },
+  // victoryDecisionSec is a separate, longer window: how long a multiplayer room
+  // waits on the 'victory' screen for the host to pick endless-mode vs. lobby.
+  transition: { delay: 4, victoryDecisionSec: 30 },
+  // Endless mode curve/caps — see shared/src/world.ts's enemyStatWaveHp/
+  // enemyStatWaveSpeed/spawnEndlessEnemy/beginWave. All of these only apply
+  // when world.endless is true; the campaign's CONFIG.enemy/CONFIG.wave/
+  // CONFIG.boss formulas are untouched.
+  endless: {
+    maxQueueBase: 60, maxQueuePerExtra: 15,   // per-wave spawn budget by party size
+    maxAliveBase: 40, maxAlivePerExtra: 10,   // concurrent-enemy cap by party size
+    hpCapWave: 40, hpSlopeAfterCap: 0.25,     // hp growth slows (not caps) after wave 40
+    speedCapFrac: 0.85,                       // enemy walk speed never exceeds this % of player speed
+    wraithShareStartWave: 6, wraithShareMaxWave: 16, wraithShareMax: 0.30, // wraith mix-in ramp
+  },
+  // Demoted campaign bosses mixed into endless-mode waves as "elite" mobs —
+  // deliberately lighter than CONFIG.boss (14/2.6/0.55): an elite is a beefed-up
+  // regular enemy the swarm carries, not a singular fight the party stops for.
+  elite: { hpMul: 6, radiusMul: 2.0, speedMul: 0.8, summonInterval: 6, summonCount: 2, scoreBonus: 25 },
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },
 } as const;

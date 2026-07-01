@@ -57,6 +57,11 @@ export interface Enemy {
   // 世界2(frostvale)signature enemy: holds still, then blinks CONFIG.wraith.blinkDist
   // toward its target every blinkInterval, instead of walking. Sim-only schedule.
   wraith?: boolean; nextBlinkAt?: number;
+  // Endless-mode-only: a former campaign boss demoted to an "elite" mob mixed
+  // into the swarm (see CONFIG.elite). Mutually exclusive with `boss` — an
+  // elite must NEVER set boss:true, since removeDeadEnemies() reads that flag
+  // to trigger levelCleared/campaign transitions.
+  elite?: boolean;
 }
 
 export interface Projectile {
@@ -91,6 +96,17 @@ export interface World {
   // implemented level — ends the game with status 'victory'.
   transitionTimer: number;
   spawnQueue: number; spawnTimer: number; spawnCadence: number; breakTimer: number;
+  // Endless mode (unlocked after a 'victory'): the same World continues past
+  // the campaign, status flips back to 'playing' with this flag set. wave
+  // restarts from 0 (see enterEndlessMode); levelId stays frozen at whatever
+  // it was (the last world's visuals/BOSS_ELEMENT keep being read where still
+  // relevant, but spawn composition switches to spawnEndlessEnemy/spawnElite).
+  endless: boolean;
+  // world.score at the moment endless mode was entered — the client shows
+  // "this run's kills" as score - endlessKillBase, without a second counter.
+  endlessKillBase: number;
+  // Elite-mob (demoted boss) spawn schedule — see spawnElite()/beginWave().
+  nextEliteWave: number; eliteWavesSoFar: number; eliteQueue: number;
 }
 
 export interface MoveCommand { kind: 'move'; playerId: string; dir: Vec2; }
