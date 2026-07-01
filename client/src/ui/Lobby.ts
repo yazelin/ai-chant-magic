@@ -133,10 +133,19 @@ export class Lobby {
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('join');
     const watchCode = params.get('watch');
+    // Dev-only 訓練假人 (see main.ts's setupTrainingDummy): ?dummy=1 skips
+    // straight to solo so a tester doesn't have to click through the lobby
+    // every time; ?class=cryo etc. picks which class's spell is the "second
+    // hit" (invalid/absent falls back to the default pyro).
+    const dummyMode = import.meta.env.DEV && params.has('dummy');
+    const dummyClass = params.get('class') as ClassId | null;
     if (watchCode && watchCode.trim()) {
       this.doSpectate(watchCode.trim().toUpperCase());
     } else if (inviteCode && inviteCode.trim()) {
       this.doJoinByCode(inviteCode.trim().toUpperCase());
+    } else if (dummyMode) {
+      if (dummyClass && dummyClass in CLASSES) this.classId = dummyClass;
+      this.startSolo();
     } else {
       this.renderSetup();
     }
