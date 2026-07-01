@@ -69,5 +69,11 @@ export const CONFIG = {
   // cooldownSec gates re-triggering — a coordination reward, not a spammable
   // heal button. Inert with one player (there's no one else to sync with).
   resonance: { windowSec: 1.5, cooldownSec: 20, shieldDuration: 4, healDuration: 4, healRate: 15 },
+  // 職業搭配羈絆: +8% skill power (damage + heal, stacks multiplicatively with
+  // aegis's 2x) per DISTINCT active class pair currently in-fight — see
+  // shared/classes.ts's CLASS_BONDS/activeClassBonds. 2 classes = 1 pair
+  // (+8%), 3 classes = 3 pairs (+24%), all 4 = 6 pairs (+48%). Naturally inert
+  // solo or in a same-class party (0 pairs).
+  classBond: { bonusPerPair: 0.08 },
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4, resonance: 0.6 },
 } as const;
