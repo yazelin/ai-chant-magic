@@ -1,6 +1,6 @@
 // shared/tests/world.test.ts — multiplayer world (Task A4)
 import { describe, it, expect } from 'vitest';
-import { createWorld, createSoloWorld, step } from '../src/world';
+import { createWorld, createSoloWorld, step, MAX_LEVEL_ID } from '../src/world';
 import { CONFIG } from '../src/config';
 import { CLASSES } from '../src/classes';
 import { Enemy, Player, World } from '../src/types';
@@ -1079,5 +1079,91 @@ describe('step — 世界2 冰靈(ice wraith,level 2 signature enemy)', () => {
     step(w, [], 0.05);
     const after = w.enemies.find((e) => e.id === 1)!;
     expect(after.pos.x).toBeCloseTo(p.pos.x); // lands on the player, doesn't fly past
+  });
+});
+
+describe('step — 過關轉場(轉下一關 / 通關)', () => {
+  it('after the transition delay, advances to the next level: levelId+1, wave/enemies reset, spawning resumes', () => {
+    const w = createSoloWorld('storm');
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05); // spawns the level-1 boss
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.hp = 0;
+    step(w, [], 0.05); // clears the level, starts the transition timer
+    expect(w.levelId).toBe(0);
+    const ticks = Math.ceil(CONFIG.transition.delay / 0.05) + 2;
+    for (let i = 0; i < ticks; i++) step(w, [], 0.05);
+    expect(w.levelId).toBe(1);
+    expect(w.levelCleared).toBe(false);
+    // Fresh level: wave restarted from 0, not still at level 1's wave 5 (the
+    // next wave may have already begun in the ticks right after the reset).
+    expect(w.wave).toBeLessThanOrEqual(1);
+    expect(w.status).toBe('playing');
+  });
+
+  it('clearing the last implemented level ends the game in victory instead of transitioning further', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = MAX_LEVEL_ID; // already on the final level
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.hp = 0;
+    step(w, [], 0.05);
+    const ticks = Math.ceil(CONFIG.transition.delay / 0.05) + 2;
+    for (let i = 0; i < ticks; i++) step(w, [], 0.05);
+    expect(w.status).toBe('victory');
+    expect(w.levelId).toBe(MAX_LEVEL_ID); // does not overflow past the last level
+  });
+
+  it('step() is a no-op once status is victory (mirrors the gameover freeze)', () => {
+    const w = createSoloWorld('storm');
+    w.status = 'victory';
+    const before = JSON.stringify(w);
+    step(w, [{ kind: 'move', playerId: w.players[0].id, dir: { x: 1, y: 0 } }], 0.5);
+    expect(JSON.stringify(w)).toBe(before);
+  });
+});
+
+describe('step — 王隨關卡換皮(element/summon)', () => {
+  it('level 1 boss is a normal-element slime king; level 2 boss is ice', () => {
+    const w1 = createSoloWorld('storm');
+    w1.wave = CONFIG.boss.every - 1;
+    w1.breakTimer = 0.02;
+    w1.spawnQueue = 0;
+    w1.enemies = [];
+    step(w1, [], 0.05);
+    expect(w1.enemies.find((e) => e.boss === true)!.element).toBe('normal');
+
+    const w2 = createSoloWorld('storm');
+    w2.levelId = 1;
+    w2.wave = CONFIG.boss.every - 1;
+    w2.breakTimer = 0.02;
+    w2.spawnQueue = 0;
+    w2.enemies = [];
+    step(w2, [], 0.05);
+    expect(w2.enemies.find((e) => e.boss === true)!.element).toBe('ice');
+  });
+
+  it('level 2 boss summons ice wraiths instead of regular slimes', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = 1;
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.nextSummonAt = w.time; // due immediately
+    w.spawnQueue = 0; // isolate from the regular swarm drip
+    step(w, [], 0.05);
+    const minions = w.enemies.filter((e) => !e.boss);
+    expect(minions.length).toBeGreaterThan(0);
+    expect(minions.every((e) => e.wraith === true)).toBe(true);
   });
 });

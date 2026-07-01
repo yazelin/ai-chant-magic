@@ -324,13 +324,14 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           broadcast(room, { type: 'snapshot', tick: room.tickCount, world: snap });
         }
       }
-      // Empty (everyone disconnected) → reap. A finished game with players still
-      // connected → after a short pause (they see the game-over banner), send the
-      // room back to its lobby so they can re-ready and play again.
+      // Empty (everyone disconnected) → reap. A finished game (loss OR full
+      // campaign clear) with players still connected → after a short pause
+      // (they see the game-over/victory banner), send the room back to its
+      // lobby so they can re-ready and play again.
       if (room.isEmpty) {
         registry.remove(room.code);
       } else if (
-        room.status === 'gameover' &&
+        (room.status === 'gameover' || room.status === 'victory') &&
         room.gameoverAt !== null &&
         Date.now() - room.gameoverAt > GAMEOVER_RETURN_MS
       ) {

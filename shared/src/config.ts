@@ -43,5 +43,9 @@ export const CONFIG = {
   // then blinks blinkDist toward its target every blinkInterval (capped so it
   // never overshoots past the target).
   wraith: { blinkInterval: 1.6, blinkDist: 160 },
+  // How long a cleared level lingers (boss corpse still on the ground, level-clear
+  // toast visible) before advancing to the next level / ending the game. Matches
+  // the client toast's own 4s auto-fade so the world flips right as it fades.
+  transition: { delay: 4 },
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },
 } as const;

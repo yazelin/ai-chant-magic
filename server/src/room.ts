@@ -1,4 +1,4 @@
-// Room: lobby -> playing -> gameover state machine + authoritative runtime.
+// Room: lobby -> playing -> gameover|victory state machine + authoritative runtime.
 //
 // Lobby surface (members, code, status, start) is composed by the RoomRegistry
 // and exercised by the pure-logic tests. The runtime (applyInput/tick/snapshot,
@@ -30,7 +30,7 @@ function isValidSpell(s: unknown): s is SpellId {
   return typeof s === 'string' && VALID_SPELLS.has(s);
 }
 
-export type RoomStatus = 'lobby' | 'playing' | 'gameover';
+export type RoomStatus = 'lobby' | 'playing' | 'gameover' | 'victory';
 
 // A lobby member. `send` is the ws push channel, optional so pure tests can
 // construct members without a socket. The ws wiring (index.ts) sets it.
@@ -179,8 +179,8 @@ export class Room {
     }
     this.inputs.clear();
     step(this.world, commands, dt, rng);
-    if (this.world.status === 'gameover') {
-      this.status = 'gameover';
+    if (this.world.status === 'gameover' || this.world.status === 'victory') {
+      this.status = this.world.status;
       if (this.gameoverAt === null) this.gameoverAt = this.clockNow();
     }
     this.tickCount += 1;

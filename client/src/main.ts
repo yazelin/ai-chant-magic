@@ -97,9 +97,10 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
       if (w.status === 'gameover' && prevStatus !== 'gameover') sfxDeath();
       prevStatus = w.status;
       // Adaptive music intensity: calm early, escalates with the wave; calm again
-      // on game over. (Bar-aligned switch handled inside MusicEngine.)
+      // once the run has ended, win or lose. (Bar-aligned switch inside MusicEngine.)
       music.start(); // idempotent + no-op until the AudioContext exists (any gesture)
-      const intensity = w.status === 'gameover' ? 0 : w.wave >= 7 ? 3 : w.wave >= 5 ? 2 : w.wave >= 3 ? 1 : 0;
+      const ended = w.status === 'gameover' || w.status === 'victory';
+      const intensity = ended ? 0 : w.wave >= 7 ? 3 : w.wave >= 5 ? 2 : w.wave >= 3 ? 1 : 0;
       music.setIntensity(intensity);
     }
   }, 100);

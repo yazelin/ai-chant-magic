@@ -13,6 +13,10 @@ const MIC_LABEL: Record<VoiceStatus, string> = {
 
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
 
+// Boss name by world.levelId — keep in lockstep with wavehud.ts's copy and
+// shared/world.ts's spawnBoss() element choice as new worlds ship.
+const BOSS_NAMES = ['史萊姆王', '冰靈女王'];
+
 // Small cooldown pips (party panel): coloured when ready, grey while cooling.
 function cdPips(p: Player, now: number): string {
   return CLASSES[p.classId].spells
@@ -36,10 +40,12 @@ export class Hud {
   private mic: HTMLElement;
   private heard: HTMLElement;
   private gameover: HTMLElement;
+  private victory: HTMLElement;
   private levelClear: HTMLElement;
   private heardTimer: ReturnType<typeof setTimeout> | null = null;
   private levelClearTimer: ReturnType<typeof setTimeout> | null = null;
   private goShown = false;
+  private victoryShown = false;
   private levelClearShown = false;
 
   constructor(
@@ -57,8 +63,16 @@ export class Hud {
       'text-align:center;font:800 22px system-ui,sans-serif;color:#fff;text-shadow:0 2px 8px #000;' +
       'background:rgba(16,16,34,0.82);border:1px solid var(--accent);border-radius:14px;padding:18px 28px;';
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.gameover);
-    // Level-clear toast (boss down): non-blocking, top-centre, auto-fades. Text
-    // only for now — a scene transition/new level is future work (see roadmap).
+    // Centred victory banner (campaign complete) — same shape as gameover, gold
+    // accent instead of the default so it reads as a win rather than a loss.
+    this.victory = document.createElement('div');
+    this.victory.id = 'victory';
+    this.victory.style.cssText =
+      'position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;display:none;' +
+      'text-align:center;font:800 22px system-ui,sans-serif;color:#fff;text-shadow:0 2px 8px #000;' +
+      'background:rgba(16,16,34,0.82);border:1px solid #ffd24d;border-radius:14px;padding:18px 28px;';
+    (document.getElementById('game-chrome') ?? document.body).appendChild(this.victory);
+    // Level-clear toast (boss down): non-blocking, top-centre, auto-fades.
     this.levelClear = document.createElement('div');
     this.levelClear.id = 'level-clear-toast';
     this.levelClear.style.cssText =
@@ -102,11 +116,30 @@ export class Hud {
       this.goShown = false;
       this.gameover.style.display = 'none';
     }
+    // Victory banner — every implemented level cleared. Built once on the
+    // status flip, same shape/restart affordance as the game-over banner.
+    if (world.status === 'victory' && !this.victoryShown) {
+      this.victoryShown = true;
+      this.victory.style.display = 'block';
+      const mins = Math.floor(world.time / 60);
+      const secs = Math.floor(world.time % 60).toString().padStart(2, '0');
+      const hint = this.solo
+        ? '<button id="victory-restart" style="pointer-events:auto;cursor:pointer;margin-top:12px;background:var(--accent);color:#1a1030;border:none;border-radius:10px;padding:9px 22px;font:800 16px system-ui;">重來</button>'
+        : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等大家看完結局…回到房間</div>';
+      this.victory.innerHTML =
+        `全破!兩個世界都已淨化<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">總耗時 ${mins}:${secs} · 擊殺 ${world.score}</div>` +
+        `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${hint}`;
+      this.victory.querySelector('#victory-restart')?.addEventListener('click', () => this.onRestart());
+    } else if (world.status !== 'victory' && this.victoryShown) {
+      this.victoryShown = false;
+      this.victory.style.display = 'none';
+    }
     // Level-clear toast — fires once on the levelCleared flip, auto-fades, resets
     // on restart (a fresh world has levelCleared back to false).
     if (world.levelCleared && !this.levelClearShown) {
       this.levelClearShown = true;
-      this.levelClear.textContent = '史萊姆王 討伐!世界已淨化';
+      const bossName = BOSS_NAMES[world.levelId] ?? BOSS_NAMES[0];
+      this.levelClear.textContent = `${bossName} 討伐!世界已淨化`;
       this.levelClear.style.display = 'block';
       if (this.levelClearTimer) clearTimeout(this.levelClearTimer);
       this.levelClearTimer = setTimeout(() => { this.levelClear.style.display = 'none'; }, 4000);

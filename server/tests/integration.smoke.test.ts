@@ -329,6 +329,34 @@ describe('two-client ws integration smoke (B3)', () => {
   );
 
   it(
+    'returns a finished (victory) room to its lobby on the tick loop, same as gameover',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const joined = await joinedPromise;
+      const code = joined.roomCode;
+
+      const started = waitFor(a, 'started');
+      sendMsg(a, { type: 'start' });
+      await started;
+      await waitFor(a, 'snapshot');
+
+      const room = handle.registry.get(code)!;
+      const returned = waitFor(a, 'returnToLobby');
+      room.status = 'victory';
+      room.gameoverAt = Date.now() - 60_000;
+
+      await returned;
+      await waitUntil(() => room.status === 'lobby');
+      expect(handle.registry.get(code)).toBeTruthy();
+      expect(room.status).toBe('lobby');
+      expect(room.world).toBeNull();
+    },
+    10000
+  );
+
+  it(
     'rejects a setClass with a bogus classId (member keeps old class, no bad-class broadcast)',
     async () => {
       const a = await connect();

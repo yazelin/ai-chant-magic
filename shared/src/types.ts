@@ -9,7 +9,9 @@ export type ClassId = 'pyro' | 'cryo' | 'storm' | 'warden';
 // Slime enemy attribute. Phase 1: drives colour + look only. Phase 2 will give
 // each its signature behaviour (fire=死亡爆炸, ice=減速, storm=突進, holy=補血).
 export type EnemyElement = 'normal' | 'fire' | 'ice' | 'storm' | 'holy';
-export type GameStatus = 'lobby' | 'playing' | 'gameover';
+// 'victory' = cleared the last implemented level (see world.ts's MAX_LEVEL_ID),
+// as distinct from 'gameover' (the party wiped). Both freeze the sim (see step()).
+export type GameStatus = 'lobby' | 'playing' | 'gameover' | 'victory';
 
 export interface Player {
   id: string; name: string; classId: ClassId;
@@ -78,13 +80,16 @@ export interface World {
   players: Player[]; enemies: Enemy[]; projectiles: Projectile[]; effects: TransientEffect[];
   nextEntityId: number; wave: number; score: number;
   // Which world/level the room is on (0-based, index into the client's per-level
-  // theme table). Advancing this level-to-level is not wired up yet; for now
-  // every world is created at level 0 and stays there even once cleared.
+  // theme table).
   levelId: number;
   // True once the current level's boss has been killed. Freezes wave spawning
   // (see updateWaves) — existing enemies can still be fought, but no more waves
-  // roll in. Advancing to the next level is a future step.
+  // roll in until transitionTimer runs out.
   levelCleared: boolean;
+  // Counts down (once levelCleared) to the level-clear toast finishing, at which
+  // point updateWaves either advances to the next level or — on the last
+  // implemented level — ends the game with status 'victory'.
+  transitionTimer: number;
   spawnQueue: number; spawnTimer: number; spawnCadence: number; breakTimer: number;
 }
 

@@ -134,9 +134,12 @@ interface FireVfx {
 export class GameScene extends Phaser.Scene {
   private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
-  // Level theme key, resolved once at create() from world.levelId. Themes are not
-  // (yet) swapped mid-scene — a level transition would tear down/rebuild the scene.
+  // Level theme key, resolved from world.levelId at create() and re-resolved in
+  // draw() whenever levelId changes (a level transition, mid-session — see
+  // applyThemeForLevel()). lastThemedLevelId tracks which level the sky/scenery
+  // were last built for, so the swap only happens once per transition.
   private themeKey!: string;
+  private lastThemedLevelId = -1;
   // Screen-fixed sky gradient (behind everything; the level theme's backdrop).
   private skyGfx!: Phaser.GameObjects.Graphics;
   // Dedicated overlay for aim indicators (per-player chevron + local cursor
@@ -219,13 +222,10 @@ export class GameScene extends Phaser.Scene {
     // Active level theme: an in-scene sky gradient (fixed to screen, behind all)
     // + scenery. Drawn in-engine (not a CSS layer) so the canvas stays opaque and
     // additive-blend VFX composite correctly.
-    this.themeKey = themeKeyForLevel(this.session.getWorld().levelId);
-    const theme = THEMES[this.themeKey];
     this.skyGfx = this.add.graphics();
     this.skyGfx.setScrollFactor(0).setDepth(-1000);
-    this.drawSky();
     this.scale.on('resize', () => this.drawSky());
-    if (theme.mode === 'dream') this.buildScenery(theme);
+    this.applyThemeForLevel(this.session.getWorld().levelId);
 
     // Define each walk animation once. Guard against double-create when the
     // scene restarts (anims live on the global AnimationManager).
@@ -399,6 +399,10 @@ export class GameScene extends Phaser.Scene {
     const g = this.gfx;
     g.clear();
     this.aimGfx.clear();
+
+    // Level transition (world.levelId advanced): re-theme in place, no scene
+    // rebuild needed.
+    if (w.levelId !== this.lastThemedLevelId) this.applyThemeForLevel(w.levelId);
 
     // World-fixed scene (under everything): scrolls as the camera follows the
     // player, so movement reads; style depends on the active level theme.
@@ -796,8 +800,25 @@ export class GameScene extends Phaser.Scene {
     return sprite;
   }
 
-  // Build decorative scene elements once (dream themes): soft goo blobs on the
-  // ground + drifting bubbles. Math.random is fine here (one-off client decor).
+  // Resolve the theme for `levelId`, redraw the sky, and rebuild the decorative
+  // scenery (ground blobs bake in their colour at creation time; bubbles read
+  // theme.bubble fresh each frame in drawScene, so only their count needs
+  // resetting, not their colour). Called once from create() and again from
+  // draw() whenever world.levelId changes — a level transition, entirely
+  // without tearing down/rebuilding the Phaser scene itself.
+  private applyThemeForLevel(levelId: number): void {
+    this.lastThemedLevelId = levelId;
+    this.themeKey = themeKeyForLevel(levelId);
+    const theme = THEMES[this.themeKey];
+    this.scenery = [];
+    this.bubbles = [];
+    if (theme.mode === 'dream') this.buildScenery(theme);
+    this.drawSky();
+  }
+
+  // Build decorative scene elements once per applyThemeForLevel call (dream
+  // themes): soft goo blobs on the ground + drifting bubbles. Math.random is
+  // fine here (one-off client decor).
   private buildScenery(theme: SceneTheme): void {
     const W = CONFIG.arenaWidth;
     const H = CONFIG.arenaHeight;
