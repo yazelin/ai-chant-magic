@@ -31,7 +31,10 @@ export type ErrorCode =
   | 'not-in-room'
   | 'not-host'
   | 'not-victory'
-  | 'not-endless';
+  | 'not-endless'
+  | 'spectator-readonly';
+
+export type RoomStatus = 'lobby' | 'playing' | 'gameover' | 'victory';
 
 interface JoinedMsg {
   type: 'joined';
@@ -71,6 +74,13 @@ interface ReturnToLobbyMsg {
 interface EndlessStartedMsg {
   type: 'endlessStarted';
 }
+interface SpectatingMsg {
+  type: 'spectating';
+  roomCode: string;
+  selfId: string;
+  status: RoomStatus;
+  players: LobbyPlayerView[];
+}
 type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -80,7 +90,8 @@ type ServerMsg =
   | PeerLeftMsg
   | ChatBroadcastMsg
   | ReturnToLobbyMsg
-  | EndlessStartedMsg;
+  | EndlessStartedMsg
+  | SpectatingMsg;
 
 export interface NetCallbacks {
   onJoined?: (m: JoinedMsg) => void;
@@ -92,6 +103,7 @@ export interface NetCallbacks {
   onChat?: (from: string, text: string) => void;
   onReturnToLobby?: () => void;
   onEndlessStarted?: () => void;
+  onSpectating?: (m: SpectatingMsg) => void;
   onOpen?: () => void;
   onClose?: () => void;
 }
@@ -194,6 +206,9 @@ export class NetClient {
       case 'endlessStarted':
         this.cb.onEndlessStarted?.();
         break;
+      case 'spectating':
+        this.cb.onSpectating?.(m);
+        break;
     }
   }
 
@@ -215,6 +230,11 @@ export class NetClient {
 
   quickJoin(name: string, classId: ClassId): void {
     this.send({ type: 'quickJoin', name, classId });
+  }
+
+  // Join as a read-only observer — no classId, works at any room status.
+  spectate(name: string, roomCode: string): void {
+    this.send({ type: 'spectate', name, roomCode });
   }
 
   ready(value: boolean): void {
