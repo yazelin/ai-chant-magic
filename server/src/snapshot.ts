@@ -15,6 +15,7 @@ import type {
   GameStatus,
   EffectKind,
   EnemyElement,
+  ReactionElement,
 } from '@acm/shared';
 
 export interface SnapshotPlayer {
@@ -44,6 +45,11 @@ export interface SnapshotEnemy {
   element: EnemyElement;
   boss?: boolean;
   elite?: boolean; // endless-mode-only: a demoted boss mixed into the swarm
+  // Active elemental-reaction residue (see shared world.ts's applyElementalHit)
+  // — needs a continuous per-frame client tell (a pulsing ring), unlike
+  // frozenUntil/telegraphUntil which ride on the positions/effects alone.
+  auraElement?: ReactionElement;
+  auraUntil?: number;
 }
 
 export interface SnapshotProjectile {
@@ -63,6 +69,7 @@ export interface SnapshotEffect {
   ttl: number;
   colorHint: string;
   spell?: SpellId;
+  reactionName?: string;
 }
 
 export interface Snapshot {
@@ -77,6 +84,7 @@ export interface Snapshot {
   endlessTimeBase: number; // "this run's survival time" = time - endlessTimeBase
   breakTimer: number; // >0 = countdown to next wave
   spawnQueue: number; // enemies left to spawn this wave (for within-wave progress)
+  reactionCount: number; // running total of elemental reactions triggered this run
   players: SnapshotPlayer[];
   enemies: SnapshotEnemy[];
   projectiles: SnapshotProjectile[];
@@ -100,6 +108,7 @@ export function toSnapshot(world: World): Snapshot {
     endlessTimeBase: world.endlessTimeBase,
     breakTimer: world.breakTimer,
     spawnQueue: world.spawnQueue,
+    reactionCount: world.reactionCount,
     players: world.players.map((p) => ({
       id: p.id,
       name: p.name,
@@ -124,6 +133,8 @@ export function toSnapshot(world: World): Snapshot {
       element: e.element,
       boss: e.boss,
       elite: e.elite,
+      auraElement: e.auraElement,
+      auraUntil: e.auraUntil,
     })),
     projectiles: world.projectiles.map((pr) => ({
       id: pr.id,
@@ -143,6 +154,7 @@ export function toSnapshot(world: World): Snapshot {
       if (fx.b !== undefined) out.b = cloneVec(fx.b);
       if (fx.radius !== undefined) out.radius = fx.radius;
       if (fx.spell !== undefined) out.spell = fx.spell;
+      if (fx.reactionName !== undefined) out.reactionName = fx.reactionName;
       return out;
     }),
   };

@@ -1,4 +1,4 @@
-import { World, Command, Vec2, SpellId, Projectile, Enemy, EnemyElement, Player, ClassId, TransientEffect } from './types';
+import { World, Command, Vec2, SpellId, Projectile, Enemy, EnemyElement, Player, ClassId, TransientEffect, ReactionElement } from './types';
 import { CONFIG } from './config';
 import { SPELLS } from './spells';
 import { CLASSES, classSpellSet, activeClassBonds } from './classes';
@@ -159,6 +159,7 @@ export function createWorld(seeds: PlayerSeed[]): World {
     eliteQueue: 0,
     resonanceCalls: [],
     resonanceCooldownUntil: 0,
+    reactionCount: 0,
   };
 }
 
@@ -232,6 +233,97 @@ function skillDamage(world: World, base: number): number {
 
 function skillHeal(world: World, base: number): number {
   return base * skillPowerMultiplier(world);
+}
+
+// ---------------------------------------------------------------------------
+// 元素反應 (elemental reactions): a damaging hit tags the enemy with `tag`
+// for CONFIG.reaction.auraDuration. A LATER hit of a DIFFERENT element while
+// that's still active triggers a named reaction (see triggerReaction) and
+// consumes both. A same-element hit only refreshes the duration. Deliberately
+// NOT seeded from the enemy's native `element` (that's a separate, permanent
+// species/behaviour flag — see fireDeathExplosion/holyHeal/stormMove) — every
+// other *Until field on Enemy can reach zero, and thunder/chain already hit
+// several enemies per cast, so a native-element-as-aura would make every
+// storm-native enemy on screen react on literally the first cast ever landed
+// against it. Called at every damage-application call site in place of the
+// raw `skillDamage(world, base)` call.
+// ---------------------------------------------------------------------------
+function applyElementalHit(world: World, e: Enemy, tag: ReactionElement, base: number): number {
+  const dmg = skillDamage(world, base);
+  const auraActive = e.auraElement !== undefined && world.time < (e.auraUntil ?? 0);
+  if (!auraActive) {
+    e.auraElement = tag;
+    e.auraUntil = world.time + CONFIG.reaction.auraDuration;
+    return dmg;
+  }
+  if (e.auraElement === tag) {
+    e.auraUntil = world.time + CONFIG.reaction.auraDuration; // refresh, no reaction
+    return dmg;
+  }
+  if (world.time < (e.reactionReadyAt ?? 0)) return dmg; // throttled: plain damage, aura untouched
+  const other = e.auraElement as ReactionElement;
+  e.auraElement = undefined;
+  e.auraUntil = 0;
+  e.reactionReadyAt = world.time + CONFIG.reaction.perEnemyCooldownSec;
+  return triggerReaction(world, e, other, tag, dmg);
+}
+
+function reactionPairKey(a: ReactionElement, b: ReactionElement): string {
+  return [a, b].sort().join('+');
+}
+
+// Applies the named reaction's payoff and returns the (possibly bonus-boosted)
+// damage to subtract from `e.hp` at the call site. `dmg` is the triggering
+// hit's already-skillDamage()'d amount (aegis × classBond), consistent with
+// how every bonus in this codebase stacks multiplicatively on top of it.
+function triggerReaction(world: World, e: Enemy, a: ReactionElement, b: ReactionElement, dmg: number): number {
+  world.reactionCount += 1;
+  const key = reactionPairKey(a, b);
+  const fx = (radius: number, colorHint: string, reactionName: string): void => {
+    pushEffect(world, { kind: 'reaction', a: { x: e.pos.x, y: e.pos.y }, radius, ttl: CONFIG.effectTtl.reaction, colorHint, reactionName });
+  };
+  if (key === 'fire+holy' || key === 'holy+ice' || key === 'holy+storm') {
+    // 聖光淨化: no damage change — pays off in warden's actual role (a party
+    // shield) instead of making holy a damage-scaling reagent, since holybolt
+    // is warden's only damage spell and the class's other two are pure support.
+    for (const p of world.players) {
+      if (!inFight(p)) continue;
+      if (dist(p.pos, e.pos) <= CONFIG.reaction.purifyRadius) {
+        p.shieldUntil = Math.max(p.shieldUntil, world.time + CONFIG.reaction.purifyShieldDuration);
+      }
+    }
+    fx(48, CLASSES.warden.color, '聖光淨化');
+    return dmg;
+  }
+  if (key === 'fire+ice') {
+    fx(48, '#ffb27a', '蒸發');
+    return dmg * (1 + CONFIG.reaction.vaporizeBonusMul);
+  }
+  if (key === 'fire+storm') {
+    const r = CONFIG.reaction;
+    for (const other of world.enemies) {
+      if (other.id === e.id || other.hp <= 0) continue;
+      if (dist(e.pos, other.pos) <= r.overloadSplashRadius + other.radius) {
+        other.hp -= dmg * r.overloadSplashMul;
+      }
+    }
+    const nearest = nearestAlivePlayer(world, e.pos);
+    if (nearest) {
+      const rel = sub(e.pos, nearest.pos);
+      const d = len(rel);
+      const ux = d > 0.001 ? rel.x / d : 1;
+      const uy = d > 0.001 ? rel.y / d : 0;
+      e.pos.x = clamp(e.pos.x + ux * r.overloadKnockback, 0, CONFIG.arenaWidth);
+      e.pos.y = clamp(e.pos.y + uy * r.overloadKnockback, 0, CONFIG.arenaHeight);
+    }
+    fx(48, '#ffcc33', '過載');
+    return dmg * (1 + r.overloadBonusMul);
+  }
+  // key === 'ice+storm'
+  e.frozenUntil = Math.max(e.frozenUntil ?? 0, world.time + CONFIG.reaction.superconductRootSec);
+  e.slowUntil = Math.max(e.slowUntil, world.time + CONFIG.reaction.superconductRootSec);
+  fx(48, '#7fd6ff', '超導');
+  return dmg * (1 + CONFIG.reaction.superconductBonusMul);
 }
 
 // In-fight = an active participant: connected AND alive AND not downed. Used for
@@ -480,7 +572,7 @@ function castFrostnova(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
     if (dist(caster.pos, e.pos) <= CONFIG.frostnova.radius + e.radius) {
-      e.hp -= skillDamage(world, CONFIG.frostnova.damage);
+      e.hp -= applyElementalHit(world, e, 'ice', CONFIG.frostnova.damage);
       e.frozenUntil = world.time + CONFIG.frostnova.slowDuration;
       e.slowUntil = world.time + CONFIG.frostnova.slowDuration;
     }
@@ -503,7 +595,7 @@ function castRepulse(world: World, caster: Player): void {
     const rel = sub(e.pos, o);
     const d = len(rel);
     if (d <= CONFIG.repulse.radius + e.radius) {
-      e.hp -= skillDamage(world, CONFIG.repulse.damage);
+      e.hp -= applyElementalHit(world, e, 'storm', CONFIG.repulse.damage);
       const ux = d > 0.001 ? rel.x / d : 1;
       const uy = d > 0.001 ? rel.y / d : 0;
       e.pos.x = Math.max(0, Math.min(CONFIG.arenaWidth, e.pos.x + ux * CONFIG.repulse.knockback));
@@ -524,7 +616,7 @@ function castRepulse(world: World, caster: Player): void {
 function castHolyburst(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
-    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= skillDamage(world, CONFIG.holybolt.damage);
+    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= applyElementalHit(world, e, 'holy', CONFIG.holybolt.damage);
   }
   pushEffect(world, {
     kind: 'nova', ownerId: caster.id,
@@ -563,7 +655,7 @@ function castThunder(world: World, caster: Player): void {
       const along = rel.x * dir.x + rel.y * dir.y;
       if (along < 0 || along > segLen) continue;
       const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x);
-      if (perp <= width + e.radius) { e.hp -= skillDamage(world, dmg); hit.add(e.id); }
+      if (perp <= width + e.radius) { e.hp -= applyElementalHit(world, e, 'storm', dmg); hit.add(e.id); }
     }
     pushEffect(world, {
       kind: 'beam', ownerId: caster.id,
@@ -595,7 +687,7 @@ function castChain(world: World, caster: Player): void {
       if (d <= range && d < bestD) { bestD = d; target = e; }
     }
     if (!target) break;
-    target.hp -= skillDamage(world, CONFIG.chain.damage * Math.pow(CONFIG.chain.falloff, k));
+    target.hp -= applyElementalHit(world, target, 'storm', CONFIG.chain.damage * Math.pow(CONFIG.chain.falloff, k));
     visited.add(target.id);
     pushEffect(world, {
       kind: 'chain', ownerId: caster.id,
@@ -645,13 +737,16 @@ function pushEffect(world: World, e: Omit<TransientEffect, 'id'>): void {
 }
 
 // AoE explosion at a point — damages enemies only (never allies), spawns blast fx.
+// Every current caller (fireball/firestorm) is fire — hardcoded rather than a
+// threaded `spell`/element parameter, since no other spell in this codebase
+// calls explodeAoE.
 function explodeAoE(
   world: World, at: Vec2, ownerId: string,
   explosionRadius: number, explosionDamage: number, colorHint: string
 ): void {
   for (const e of world.enemies) {
     if (dist(at, e.pos) <= explosionRadius + e.radius) {
-      e.hp -= skillDamage(world, explosionDamage);
+      e.hp -= applyElementalHit(world, e, 'fire', explosionDamage);
     }
   }
   pushEffect(world, {
@@ -675,7 +770,7 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
         proj.explosionDamage ?? CONFIG.firestorm.baseDamage, CLASSES.pyro.color);
       return true; // detonated on contact; fuse loop must skip it
     case 'frost':
-      hit.hp -= skillDamage(world, proj.damage);
+      hit.hp -= applyElementalHit(world, hit, 'ice', proj.damage);
       hit.slowUntil = world.time + CONFIG.frost.slowDuration;
       return false;
     default:

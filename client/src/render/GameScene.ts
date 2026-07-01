@@ -13,7 +13,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse, touchMoveDir } from '../input/controls';
 import { GameSession } from '../session/GameSession';
-import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt, sfxEliteKill, sfxResonance } from '../audio/sfx';
+import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt, sfxEliteKill, sfxResonance, sfxReaction } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
@@ -201,6 +201,10 @@ export class GameScene extends Phaser.Scene {
   // Per-frame SFX throttle: at most one explosion sound per frame even if many
   // blasts land at once. Reset at the top of each detectCasts pass.
   private explosionPlayedThisFrame = false;
+  // Same idea for elemental reactions: a wide AoE can trigger several procs in
+  // one frame (e.g. frostnova hitting many fire-aura'd enemies at once) — the
+  // burst/label still fires per proc, but the sound plays once.
+  private reactionPlayedThisFrame = false;
   // Scene clock (seconds), accumulated from dt. Drives bob/pulse/cast timing.
   private t = 0;
 
@@ -665,6 +669,7 @@ export class GameScene extends Phaser.Scene {
     // of new ids (multi-projectile spell, many blasts) doesn't stack into noise.
     let castPlayed = false;
     this.explosionPlayedThisFrame = false;
+    this.reactionPlayedThisFrame = false;
 
     for (const p of w.projectiles) {
       if (this.seenProj.has(p.id)) continue;
@@ -687,6 +692,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (fx.kind === 'blast') this.onBlast(fx);
       else if (fx.kind === 'resonance') sfxResonance();
+      else if (fx.kind === 'reaction') this.onReaction(fx);
     }
   }
 
@@ -811,6 +817,45 @@ export class GameScene extends Phaser.Scene {
       ease: 'Cubic.easeOut',
       onComplete: () => txt.destroy(),
     });
+  }
+
+  // One-shot elemental-reaction proc: a light particle pop (lighter than a
+  // death burst — reactions can proc far more densely than deaths during a
+  // packed AoE) + a floating reaction-name label, positioned above the plain
+  // damage number landing the same frame. SFX throttled to one per frame.
+  private onReaction(fx: TransientEffect): void {
+    if (!this.reactionPlayedThisFrame) {
+      sfxReaction();
+      this.reactionPlayedThisFrame = true;
+    }
+    const color = hexColor(fx.colorHint);
+    const burst = this.add.particles(fx.a.x, fx.a.y, 'spark', {
+      lifespan: 220,
+      speed: { min: 60, max: 180 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.1, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xffffff, color],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    burst.setDepth(DEPTH_VFX);
+    burst.explode(10);
+    this.time.delayedCall(280, () => burst.destroy());
+
+    if (fx.reactionName) {
+      const txt = this.add
+        .text(fx.a.x, fx.a.y - 14, fx.reactionName, {
+          fontFamily: 'system-ui, sans-serif', fontSize: '18px', fontStyle: 'bold',
+          color: fx.colorHint, stroke: '#000000', strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH_PLAYER + 6); // above spawnDamageNumber's DEPTH_PLAYER + 5
+      this.tweens.add({
+        targets: txt, y: txt.y - 34, alpha: 0, duration: 650,
+        ease: 'Cubic.easeOut', onComplete: () => txt.destroy(),
+      });
+    }
   }
 
   // One-shot blast impact. A normal fireball gets a snappy ember burst + brief
@@ -1189,6 +1234,24 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(2.5, 0xffd24d, 0.9);
       g.strokeEllipse(cx, cy, bw + 6, bh + 6);
       g.lineStyle(0, 0, 0);
+    }
+
+    // 元素反應殘留 (elemental-reaction aura) tell: a pulsing outline ring + 2
+    // orbiting motes, tinted with the same per-element palette (SLIME_COLOR)
+    // players already read on the slime's own body — animated/foreign-looking,
+    // distinct from the elite ring's static gold outline.
+    if (e.auraElement && w.time < (e.auraUntil ?? 0)) {
+      const auraColor = SLIME_COLOR[e.auraElement];
+      const pad = Math.max(8, e.radius * 0.28);
+      const pulse = 0.75 + 0.25 * Math.sin(this.t * 6);
+      g.lineStyle(2, auraColor, pulse);
+      g.strokeEllipse(cx, cy, bw + pad * 2, bh + pad * 2);
+      g.lineStyle(0, 0, 0);
+      g.fillStyle(auraColor, 0.9);
+      for (let i = 0; i < 2; i++) {
+        const a = this.t * 3.2 + e.id * 1.7 + i * Math.PI;
+        g.fillCircle(cx + Math.cos(a) * (bw / 2 + pad), cy + Math.sin(a) * (bh / 2 + pad), 2.2);
+      }
     }
 
     // hp bar above the slime: bosses/elites always show it; normal slimes only

@@ -75,5 +75,21 @@ export const CONFIG = {
   // (+8%), 3 classes = 3 pairs (+24%), all 4 = 6 pairs (+48%). Naturally inert
   // solo or in a same-class party (0 pairs).
   classBond: { bonusPerPair: 0.08 },
-  effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4, resonance: 0.6 },
+  // 元素反應 (elemental reactions): a damaging hit tags the enemy with its
+  // element for auraDuration; a later hit of a DIFFERENT element while that's
+  // active triggers a named reaction (see triggerReaction in world.ts), then
+  // both elements are consumed. perEnemyCooldownSec throttles re-triggering on
+  // the SAME enemy (bounds proc frequency under multi-player focus-fire).
+  // Bonus multipliers are on top of the triggering hit's already skillDamage()'d
+  // number (stacks with aegis/classBond, same shape aegis's own 2x already does).
+  reaction: {
+    auraDuration: 4, perEnemyCooldownSec: 2,
+    vaporizeBonusMul: 0.5,        // 蒸發 (Fire×Ice): +50% dmg (total 1.5x)
+    overloadBonusMul: 1.2,        // 過載 (Fire×Storm): +120% dmg (total 2.2x)
+    overloadSplashRadius: 70, overloadSplashMul: 0.5, overloadKnockback: 90,
+    superconductBonusMul: 0.4,    // 超導 (Ice×Storm): +40% dmg (total 1.4x)
+    superconductRootSec: 1.2,     // freeze granted on proc (writes frozenUntil/slowUntil)
+    purifyShieldDuration: 1.5, purifyRadius: 120, // 聖光淨化 (any×Holy): ally shield, no dmg change
+  },
+  effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4, resonance: 0.6, reaction: 0.3 },
 } as const;

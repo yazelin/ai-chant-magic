@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { createWorld, createSoloWorld, step, MAX_LEVEL_ID } from '../src/world';
 import { CONFIG } from '../src/config';
 import { CLASSES } from '../src/classes';
-import { Enemy, Player, World } from '../src/types';
+import { ClassId, Enemy, Player, ReactionElement, SpellId, World } from '../src/types';
 
 function makeEnemy(over: Partial<Enemy> = {}): Enemy {
   return {
@@ -1312,5 +1312,332 @@ describe('step — 王隨關卡換皮(element/summon)', () => {
 
   it('MAX_LEVEL_ID covers all 4 worlds (victory only after level 4)', () => {
     expect(MAX_LEVEL_ID).toBe(3);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 每個傷害技能正確標記元素 (wiring)', () => {
+  const cases: Array<{ classId: ClassId; spell: SpellId; element: ReactionElement }> = [
+    // fireball is not in any current class loadout (pyro = chant1/chant2/firestorm
+    // only) — firestorm below exercises the same shared explodeAoE fire-tagging
+    // path fireball's onProjectileHit case would use if it were ever castable.
+    { classId: 'pyro', spell: 'firestorm', element: 'fire' },
+    { classId: 'cryo', spell: 'frost', element: 'ice' },
+    { classId: 'cryo', spell: 'frostnova', element: 'ice' },
+    { classId: 'storm', spell: 'thunder', element: 'storm' },
+    { classId: 'storm', spell: 'chain', element: 'storm' },
+    { classId: 'storm', spell: 'repulse', element: 'storm' },
+    { classId: 'warden', spell: 'holybolt', element: 'holy' },
+  ];
+  for (const c of cases) {
+    it(`${c.spell} tags a hit enemy with '${c.element}'`, () => {
+      const w = createSoloWorld(c.classId);
+      w.breakTimer = 999;
+      const p = w.players[0];
+      p.pos = { x: 480, y: 320 };
+      p.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 100000, pos: { x: p.pos.x + 5, y: p.pos.y } }));
+      if (c.spell === 'firestorm') step(w, [{ kind: 'cast', playerId: p.id, spell: 'chant1' }], 0);
+      step(w, [{ kind: 'cast', playerId: p.id, spell: c.spell }], 0.05);
+      for (let i = 0; i < 20; i++) {
+        const cur = w.enemies.find((x) => x.id === 1);
+        if (cur?.auraElement !== undefined) break;
+        step(w, [], 0.05);
+      }
+      expect(w.enemies.find((x) => x.id === 1)!.auraElement).toBe(c.element);
+    });
+  }
+});
+
+describe('元素反應 (elemental reactions) — 附著/節流規則', () => {
+  it('a bare enemy hit by any element gets a fresh aura, no reaction, plain skillDamage', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({ id: 1, hp: 1000, pos: { x: p.pos.x + 130, y: p.pos.y } }));
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'frostnova' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(1000 - CONFIG.frostnova.damage);
+    expect(e.auraElement).toBe('ice');
+    expect(e.auraUntil).toBeCloseTo(w.time + CONFIG.reaction.auraDuration);
+    expect(w.reactionCount).toBe(0);
+  });
+
+  it('a same-element re-hit refreshes auraUntil without triggering a reaction', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 1000, pos: { x: p.pos.x + 130, y: p.pos.y },
+      auraElement: 'ice', auraUntil: 1,
+    }));
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'frostnova' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(1000 - CONFIG.frostnova.damage);
+    expect(e.auraElement).toBe('ice');
+    expect(e.auraUntil).toBeCloseTo(w.time + CONFIG.reaction.auraDuration); // refreshed, not left at 1
+    expect(w.reactionCount).toBe(0);
+  });
+
+  it('a mismatched hit within perEnemyCooldownSec of the last proc deals plain damage and leaves the active aura untouched', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 100000, pos: { x: p.pos.x + 130, y: p.pos.y },
+      auraElement: 'storm', auraUntil: 10,
+      reactionReadyAt: 1, // still throttled
+    }));
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'frostnova' }], 0); // would be Superconduct if not throttled
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(100000 - CONFIG.frostnova.damage);
+    expect(e.auraElement).toBe('storm');
+    expect(e.auraUntil).toBe(10);
+    expect(w.reactionCount).toBe(0);
+  });
+
+  it('never writes into e.element — a reaction never changes the enemy species/behaviour flag', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 100000, pos: { x: p.pos.x + 130, y: p.pos.y },
+      element: 'storm', auraElement: 'fire', auraUntil: 10,
+    }));
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'frostnova' }], 0); // triggers Vaporize
+    expect(w.enemies.find((x) => x.id === 1)!.element).toBe('storm');
+    expect(w.reactionCount).toBe(1);
+  });
+
+  it("an enemy's own native element is NOT a pre-existing aura — a differing first hit just applies fresh, no reaction", () => {
+    const w = createSoloWorld('pyro');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({ id: 1, hp: 100000, pos: { x: p.pos.x + 5, y: p.pos.y }, element: 'ice' }));
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'chant1' }], 0);
+    step(w, [{ kind: 'cast', playerId: p.id, spell: 'firestorm' }], 0.05);
+    for (let i = 0; i < 20; i++) {
+      const cur = w.enemies.find((x) => x.id === 1);
+      if (cur?.auraElement !== undefined) break;
+      step(w, [], 0.05);
+    }
+    expect(w.enemies.find((x) => x.id === 1)!.auraElement).toBe('fire');
+    expect(w.reactionCount).toBe(0);
+  });
+
+  it('a solo mono-class run never triggers a reaction (no class can mismatch its own kit)', () => {
+    const w = createSoloWorld('storm');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    p.pos = { x: 480, y: 320 }; p.facing = 0;
+    w.enemies.push(makeEnemy({ id: 1, hp: 1000000, pos: { x: p.pos.x + 30, y: p.pos.y } }));
+    for (let i = 0; i < 10; i++) {
+      p.cooldowns.thunder = 0;
+      step(w, [{ kind: 'cast', playerId: p.id, spell: 'thunder' }], 0);
+    }
+    expect(w.reactionCount).toBe(0);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 蒸發 (Fire×Ice)', () => {
+  it('triggers on a fire-aura enemy hit by ice: 1.5x dmg, both elements consumed, reactionCount++, fx pushed', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+    ]);
+    w.breakTimer = 999;
+    const b = findPlayer(w, 'b');
+    b.pos = { x: 480, y: 320 }; b.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 1000, pos: { x: b.pos.x + 130, y: b.pos.y },
+      auraElement: 'fire', auraUntil: 10,
+    }));
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // pyro+cryo = 1 pair
+    step(w, [{ kind: 'cast', playerId: 'b', spell: 'frostnova' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    const base = CONFIG.frostnova.damage * bondMul;
+    expect(e.hp).toBeCloseTo(1000 - base * (1 + CONFIG.reaction.vaporizeBonusMul));
+    expect(e.auraElement).toBeUndefined();
+    expect(e.auraUntil).toBe(0);
+    expect(w.reactionCount).toBe(1);
+    expect(w.effects.some((fx) => fx.kind === 'reaction' && fx.reactionName === '蒸發')).toBe(true);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 過載 (Fire×Storm)', () => {
+  it('triggers on a fire-aura enemy hit by storm: 2.2x dmg on target, 0.5x splash on a nearby second enemy, knockback', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'c', name: 'Cy', classId: 'storm' },
+    ]);
+    w.breakTimer = 999;
+    const c = findPlayer(w, 'c');
+    c.pos = { x: 480, y: 320 }; c.facing = 0;
+    const target = makeEnemy({
+      id: 1, hp: 100000, pos: { x: c.pos.x + 30, y: c.pos.y },
+      auraElement: 'fire', auraUntil: 10,
+    });
+    // 50px away from target (within the 70px splash radius) but 50px perpendicular
+    // off thunder's ray (width 28) — so thunder itself never hits it directly.
+    const splash = makeEnemy({ id: 2, hp: 1000, pos: { x: target.pos.x, y: target.pos.y + 50 } });
+    w.enemies.push(target, splash);
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // pyro+storm = 1 pair
+    const dmg = CONFIG.thunder.damage * bondMul;
+    step(w, [{ kind: 'cast', playerId: 'c', spell: 'thunder' }], 0);
+    const t = w.enemies.find((x) => x.id === 1)!;
+    const s = w.enemies.find((x) => x.id === 2)!;
+    expect(t.hp).toBeCloseTo(100000 - dmg * (1 + CONFIG.reaction.overloadBonusMul));
+    expect(s.hp).toBeCloseTo(1000 - dmg * CONFIG.reaction.overloadSplashMul);
+    expect(t.pos.x).toBeCloseTo(c.pos.x + 30 + CONFIG.reaction.overloadKnockback);
+    expect(t.pos.y).toBeCloseTo(c.pos.y);
+    expect(w.reactionCount).toBe(1);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 超導 (Ice×Storm)', () => {
+  it('triggers on an ice-aura enemy hit by storm: 1.4x dmg + grants its own freeze/slow when none existed', () => {
+    const w = createWorld([
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+      { id: 'c', name: 'Cy', classId: 'storm' },
+    ]);
+    w.breakTimer = 999;
+    const c = findPlayer(w, 'c');
+    c.pos = { x: 480, y: 320 }; c.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 100000, pos: { x: c.pos.x + 30, y: c.pos.y },
+      auraElement: 'ice', auraUntil: 10,
+    }));
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // cryo+storm = 1 pair
+    const dmg = CONFIG.thunder.damage * bondMul;
+    step(w, [{ kind: 'cast', playerId: 'c', spell: 'thunder' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(100000 - dmg * (1 + CONFIG.reaction.superconductBonusMul));
+    expect(e.frozenUntil).toBeCloseTo(w.time + CONFIG.reaction.superconductRootSec);
+    expect(e.slowUntil).toBeCloseTo(w.time + CONFIG.reaction.superconductRootSec);
+    expect(w.reactionCount).toBe(1);
+  });
+
+  it('does not clip a pre-existing LONGER freeze (e.g. from frostnova) shorter', () => {
+    const w = createWorld([
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+      { id: 'c', name: 'Cy', classId: 'storm' },
+    ]);
+    w.breakTimer = 999;
+    const c = findPlayer(w, 'c');
+    c.pos = { x: 480, y: 320 }; c.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 100000, pos: { x: c.pos.x + 30, y: c.pos.y },
+      auraElement: 'ice', auraUntil: 10,
+      frozenUntil: w.time + 50,
+    }));
+    step(w, [{ kind: 'cast', playerId: 'c', spell: 'thunder' }], 0);
+    expect(w.enemies.find((x) => x.id === 1)!.frozenUntil).toBeCloseTo(w.time + 50);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 聖光淨化 (Any×Holy)', () => {
+  it('does not change damage; shields all inFight allies within purifyRadius of the enemy, not allies outside it', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'd', name: 'Di', classId: 'warden' },
+      { id: 'e2', name: 'Faraway', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const d = findPlayer(w, 'd');
+    const far = findPlayer(w, 'e2');
+    a.pos = { x: 480, y: 320 };
+    d.pos = { x: 480, y: 320 }; d.facing = 0;
+    far.pos = { x: 480, y: 320 + 300 }; // outside purifyRadius (120)
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 100000, pos: { x: 480, y: 320 },
+      auraElement: 'fire', auraUntil: 10,
+    }));
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // pyro+warden = 1 pair
+    step(w, [{ kind: 'cast', playerId: 'd', spell: 'holybolt' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(100000 - CONFIG.holybolt.damage * bondMul); // unchanged by the reaction
+    expect(a.shieldUntil).toBeCloseTo(w.time + CONFIG.reaction.purifyShieldDuration);
+    expect(d.shieldUntil).toBeCloseTo(w.time + CONFIG.reaction.purifyShieldDuration);
+    expect(far.shieldUntil).toBe(0);
+    expect(w.reactionCount).toBe(1);
+  });
+});
+
+describe('元素反應 (elemental reactions) — 王/菁英一視同仁、疊乘 classBond/aegis', () => {
+  it('an elite enemy reacts with the exact same multiplier as a plain enemy (no special-casing)', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+    ]);
+    w.breakTimer = 999;
+    const b = findPlayer(w, 'b');
+    b.pos = { x: 480, y: 320 }; b.facing = 0;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 10000000, pos: { x: b.pos.x + 130, y: b.pos.y },
+      auraElement: 'fire', auraUntil: 10, elite: true,
+    }));
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair;
+    step(w, [{ kind: 'cast', playerId: 'b', spell: 'frostnova' }], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    expect(e.hp).toBeCloseTo(10000000 - CONFIG.frostnova.damage * bondMul * (1 + CONFIG.reaction.vaporizeBonusMul));
+  });
+
+  it('reaction bonus stacks multiplicatively on top of an active aegis + classBond multiplier', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+      { id: 'd', name: 'Di', classId: 'warden' },
+    ]);
+    w.breakTimer = 999;
+    const b = findPlayer(w, 'b');
+    const d = findPlayer(w, 'd');
+    b.pos = { x: 480, y: 320 }; b.facing = 0;
+    d.pos = { x: 480, y: 320 };
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 1000000, pos: { x: b.pos.x + 130, y: b.pos.y },
+      auraElement: 'fire', auraUntil: 100,
+    }));
+    const bondMul = 1 + 3 * CONFIG.classBond.bonusPerPair; // pyro+cryo+warden = 3 pairs
+    step(w, [
+      { kind: 'cast', playerId: 'd', spell: 'aegis' },
+      { kind: 'cast', playerId: 'b', spell: 'frostnova' },
+    ], 0);
+    const e = w.enemies.find((x) => x.id === 1)!;
+    const expected = 1000000 - CONFIG.frostnova.damage * 2 * bondMul * (1 + CONFIG.reaction.vaporizeBonusMul);
+    expect(e.hp).toBeCloseTo(expected);
+  });
+
+  it('two REAL sequential casts from two real players (no injected aura state) still trigger a reaction end to end', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'pyro' },
+      { id: 'b', name: 'Bo', classId: 'cryo' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 480, y: 320 }; a.facing = 0;
+    b.pos = { x: 480, y: 320 }; b.facing = 0;
+    const enemy = makeEnemy({ id: 1, hp: 100000, pos: { x: a.pos.x + 5, y: a.pos.y } });
+    w.enemies.push(enemy);
+
+    // Real cast #1: pyro charges then fires firestorm (a projectile — needs travel ticks).
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'chant1' }], 0);
+    step(w, [{ kind: 'cast', playerId: 'a', spell: 'firestorm' }], 0.05);
+    for (let i = 0; i < 20; i++) {
+      const cur = w.enemies.find((x) => x.id === 1);
+      if (cur?.auraElement !== undefined) break;
+      step(w, [], 0.05);
+    }
+    expect(w.enemies.find((x) => x.id === 1)!.auraElement).toBe('fire'); // confirms cast #1 actually landed
+
+    // Real cast #2: cryo's frostnova (instant aoe-self) — should mismatch and react.
+    step(w, [{ kind: 'cast', playerId: 'b', spell: 'frostnova' }], 0);
+    expect(w.reactionCount).toBe(1);
+    expect(w.enemies.find((x) => x.id === 1)!.auraElement).toBeUndefined();
   });
 });

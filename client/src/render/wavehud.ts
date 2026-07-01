@@ -92,11 +92,15 @@ export class WaveHud {
     const breaking = world.breakTimer > 0;
     const waveFrac = breaking ? 1 : Math.max(0, Math.min(1, 1 - remaining / this.waveTotal));
 
+    // 反應 = running elemental-reaction proc count. Unlike the .bond line
+    // below (hidden at 0 active pairs), this always shows — same as the kill
+    // count, there's no "meaningless at 0" state (solo/mono-class play just
+    // always reads 反應 0).
     if (world.endless) {
       const runScore = world.score - world.endlessKillBase;
-      this.label.textContent = `無盡模式　第 ${wave} 波　擊殺 ${runScore}`;
+      this.label.textContent = `無盡模式　第 ${wave} 波　擊殺 ${runScore}　反應 ${world.reactionCount}`;
     } else {
-      this.label.textContent = `關卡 ${level}　第 ${wave} 波　擊殺 ${world.score}`;
+      this.label.textContent = `關卡 ${level}　第 ${wave} 波　擊殺 ${world.score}　反應 ${world.reactionCount}`;
     }
 
     // 職業搭配羈絆 — mirrors the sim's in-fight gating (connected/alive/not
