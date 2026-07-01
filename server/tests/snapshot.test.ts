@@ -19,6 +19,12 @@ describe('toSnapshot', () => {
     expect(snap.status).toBe('playing');
   });
 
+  it('carries levelId (which level/world the room is on)', () => {
+    const w = pyroSolo();
+    w.levelId = 1;
+    expect(toSnapshot(w).levelId).toBe(1);
+  });
+
   it('serializes player gameplay fields including class/downed/revive/shield', () => {
     const w = pyroSolo();
     const p = w.players[0];

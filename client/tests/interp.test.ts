@@ -14,6 +14,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
     status: 'playing',
     wave: 1,
     score: 0,
+    levelId: 0,
     players: [],
     enemies: [],
     projectiles: [],
@@ -90,6 +91,12 @@ describe('interpolate', () => {
     expect(fresh.pos.y).toBeCloseTo(300);
   });
 
+  it('passes through levelId from the newer snapshot (not lerped)', () => {
+    const prev = snap({ levelId: 0 });
+    const next = snap({ levelId: 1 });
+    expect(interpolate(prev, next, 0.5).levelId).toBe(1);
+  });
+
   it('passes through hp/status/wave/score/effects from the newer snapshot', () => {
     const prev = snap({ wave: 1, score: 0, players: [player('a', 0, 0, { hp: 80 })] });
     const next = snap({
@@ -115,6 +122,12 @@ describe('SnapshotBuffer.sample (injected clock)', () => {
     const w = buf.sample();
     expect(w.players).toHaveLength(0);
     expect(w.enemies).toHaveLength(0);
+  });
+
+  it('carries levelId through when only one snapshot is buffered', () => {
+    const buf = new SnapshotBuffer(() => 1000);
+    buf.push(snap({ levelId: 1 }), 500);
+    expect(buf.sample().levelId).toBe(1);
   });
 
   it('returns the only snapshot directly when just one is buffered', () => {

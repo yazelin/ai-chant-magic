@@ -42,8 +42,8 @@ const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on 
 // --- Level scene themes -----------------------------------------------------
 // A "world" = a swappable theme: a CSS sky (applied to #game-chrome) + a scene
 // draw mode. Adding a future world (Re:Zero / 學園都市 / 現代-貞德 / …, can be
-// more than four) = one entry here + flip ACTIVE_THEME. Art is intentionally
-// light — the point is the architecture, not the polish.
+// more than four) = one entry in THEMES + one more slot in LEVEL_THEMES. Art is
+// intentionally light — the point is the architecture, not the polish.
 interface SceneTheme {
   skyTop: number; // in-scene vertical sky gradient (top → bottom)
   skyBottom: number;
@@ -55,6 +55,7 @@ interface SceneTheme {
 }
 const THEMES: Record<string, SceneTheme> = {
   // "developer's world" — the plain engineering grid (fine while iterating).
+  // Not part of LEVEL_THEMES; hardcode THEMES.engineer above if you want it locally.
   engineer: { skyTop: 0x14142a, skyBottom: 0x0a0a12, mode: 'grid', border: 0x4a4a78, grid: 0x2a2a4a },
   // Level 1 — slime / KonoSuba dreamscape.
   slime: {
@@ -62,7 +63,11 @@ const THEMES: Record<string, SceneTheme> = {
     border: 0x3a6a60, blobColors: [0x2fae7a, 0x3a9d9d, 0x7a6ad0], bubble: 0xaff0d4,
   },
 };
-const ACTIVE_THEME = 'slime'; // swap per level (e.g. 'engineer' while developing)
+// world.levelId (server-authoritative) indexes into this to pick THEMES[key].
+const LEVEL_THEMES: string[] = ['slime'];
+function themeKeyForLevel(levelId: number): string {
+  return LEVEL_THEMES[levelId] ?? LEVEL_THEMES[0];
+}
 const PLAYER_SPRITE_H_DEFAULT = CONFIG.player.radius * 3; // ≈ 42px
 
 // Walk sprites use 128px cells mostly filled by the character; a fixed scale
@@ -123,6 +128,9 @@ interface FireVfx {
 export class GameScene extends Phaser.Scene {
   private session: GameSession;
   private gfx!: Phaser.GameObjects.Graphics;
+  // Level theme key, resolved once at create() from world.levelId. Themes are not
+  // (yet) swapped mid-scene — a level transition would tear down/rebuild the scene.
+  private themeKey!: string;
   // Screen-fixed sky gradient (behind everything; the level theme's backdrop).
   private skyGfx!: Phaser.GameObjects.Graphics;
   // Dedicated overlay for aim indicators (per-player chevron + local cursor
@@ -205,7 +213,8 @@ export class GameScene extends Phaser.Scene {
     // Active level theme: an in-scene sky gradient (fixed to screen, behind all)
     // + scenery. Drawn in-engine (not a CSS layer) so the canvas stays opaque and
     // additive-blend VFX composite correctly.
-    const theme = THEMES[ACTIVE_THEME];
+    this.themeKey = themeKeyForLevel(this.session.getWorld().levelId);
+    const theme = THEMES[this.themeKey];
     this.skyGfx = this.add.graphics();
     this.skyGfx.setScrollFactor(0).setDepth(-1000);
     this.drawSky();
@@ -808,7 +817,7 @@ export class GameScene extends Phaser.Scene {
   // Screen-fixed vertical sky gradient for the active theme (opaque backdrop).
   private drawSky(): void {
     if (!this.skyGfx) return;
-    const t = THEMES[ACTIVE_THEME];
+    const t = THEMES[this.themeKey];
     this.skyGfx.clear();
     this.skyGfx.fillGradientStyle(t.skyTop, t.skyTop, t.skyBottom, t.skyBottom, 1);
     this.skyGfx.fillRect(0, 0, this.scale.width, this.scale.height);
@@ -818,7 +827,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.gfx;
     const aw = CONFIG.arenaWidth;
     const ah = CONFIG.arenaHeight;
-    const theme = THEMES[ACTIVE_THEME];
+    const theme = THEMES[this.themeKey];
     if (theme.mode === 'grid') {
       const step = 80;
       g.lineStyle(1, theme.grid ?? 0x2a2a4a, 0.55);
