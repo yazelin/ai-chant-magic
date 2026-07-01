@@ -53,11 +53,23 @@ interface BufferedInput {
   casts: SpellId[];
 }
 
+// A read-only observer: never occupies a player slot (doesn't count toward
+// isFull/MAX_PLAYERS), can join a room in ANY status (unlike joinByCode's
+// already-started rejection for real players), and never sends move/cast/
+// setClass/ready/start — the ws layer (index.ts) enforces that gate.
+export interface Spectator {
+  id: string;
+  name: string;
+  connected: boolean;
+  send?: (data: string) => void;
+}
+
 export const MAX_PLAYERS = 4;
 
 export class Room {
   readonly code: string;
   readonly members: LobbyMember[] = [];
+  readonly spectators: Spectator[] = [];
   status: RoomStatus = 'lobby';
   world: World | null = null;
   tickCount = 0;
@@ -106,6 +118,25 @@ export class Room {
 
   getMember(id: string): LobbyMember | undefined {
     return this.members.find((m) => m.id === id);
+  }
+
+  // Spectators bypass isFull/isStarted entirely — a 5th+ friend can always
+  // watch, at any point in the room's lifecycle (registry.ts's joinByCode
+  // rejections don't apply here; the ws layer routes 'spectate' straight to
+  // this method instead of through RoomRegistry.joinByCode).
+  addSpectator(s: Spectator): void {
+    this.spectators.push(s);
+  }
+
+  getSpectator(id: string): Spectator | undefined {
+    return this.spectators.find((s) => s.id === id);
+  }
+
+  // Mirrors removePlayer: mark disconnected, never splice (keeps any index-
+  // based bookkeeping stable, consistent with how players are handled).
+  removeSpectator(id: string): void {
+    const s = this.getSpectator(id);
+    if (s) s.connected = false;
   }
 
   setReady(id: string, value: boolean): void {

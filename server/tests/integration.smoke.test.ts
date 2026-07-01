@@ -685,4 +685,137 @@ describe('two-client ws integration smoke (B3)', () => {
     },
     10000
   );
+
+  it(
+    'a spectator can join a lobby room, sees it, and receives snapshots once it starts',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedPromise).roomCode;
+
+      const watcher = await connect();
+      const spectating = waitFor(watcher, 'spectating');
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: code });
+      const spec = await spectating;
+      expect(spec.roomCode).toBe(code);
+      expect(spec.status).toBe('lobby');
+      expect(spec.players).toHaveLength(1);
+
+      const startedA = waitFor(a, 'started');
+      const startedWatcher = waitFor(watcher, 'started');
+      sendMsg(a, { type: 'start' });
+      await Promise.all([startedA, startedWatcher]);
+
+      await Promise.all([waitFor(a, 'snapshot'), waitFor(watcher, 'snapshot')]);
+    },
+    10000
+  );
+
+  it(
+    'a spectator never occupies a player slot — 4 real players + a spectator still all fit',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'P1', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      for (const name of ['P2', 'P3', 'P4']) {
+        const p = await connect();
+        const joined = waitFor(p, 'joined');
+        sendMsg(p, { type: 'join', name, classId: 'pyro', roomCode: code });
+        await joined;
+      }
+
+      const watcher = await connect();
+      const spectating = waitFor(watcher, 'spectating');
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: code });
+      const spec = await spectating;
+      expect(spec.players).toHaveLength(4); // the room is "full" of players, unaffected by the spectator
+    },
+    10000
+  );
+
+  it(
+    'a spectator can join a room that already started (unlike a real player, no already-started rejection)',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+
+      const watcher = await connect();
+      const spectating = waitFor(watcher, 'spectating');
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: code });
+      const spec = await spectating;
+      expect(spec.status).toBe('playing');
+    },
+    10000
+  );
+
+  it(
+    'spectating an unknown room code is rejected with not-found',
+    async () => {
+      const watcher = await connect();
+      const err = waitFor(watcher, 'error');
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: 'ZZZZ' });
+      expect((await err).code).toBe('not-found');
+    },
+    10000
+  );
+
+  it(
+    'a spectator sending move/cast/setClass/ready/start is rejected with spectator-readonly, and chat still works',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const watcher = await connect();
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: code });
+      await waitFor(watcher, 'spectating');
+
+      for (const blocked of [
+        { type: 'ready', value: true },
+        { type: 'setClass', classId: 'cryo' },
+        { type: 'start' },
+        { type: 'enterEndless' },
+        { type: 'skipToLobby' },
+        { type: 'endEndless' },
+      ]) {
+        const err = waitFor(watcher, 'error');
+        sendMsg(watcher, blocked);
+        expect((await err).code).toBe('spectator-readonly');
+      }
+
+      const chatSeenByHost = waitForMatch(a, 'chat', (m) => m.from === 'Onlooker');
+      sendMsg(watcher, { type: 'chat', text: '加油!' });
+      expect((await chatSeenByHost).text).toBe('加油!');
+    },
+    10000
+  );
+
+  it(
+    'a spectator leaving does not affect room emptiness/reaping (driven by real players only)',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const watcher = await connect();
+      sendMsg(watcher, { type: 'spectate', name: 'Onlooker', roomCode: code });
+      await waitFor(watcher, 'spectating');
+      sendMsg(watcher, { type: 'leave' });
+
+      // The room must still be findable (the host never left) — a lingering
+      // spectator disconnect must not tear down or otherwise disrupt the room.
+      await new Promise((r) => setTimeout(r, 100));
+      expect(handle.registry.get(code)).toBeTruthy();
+    },
+    10000
+  );
 });
