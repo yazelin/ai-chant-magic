@@ -64,5 +64,10 @@ export const CONFIG = {
   // deliberately lighter than CONFIG.boss (14/2.6/0.55): an elite is a beefed-up
   // regular enemy the swarm carries, not a singular fight the party stops for.
   elite: { hpMul: 6, radiusMul: 2.0, speedMul: 0.8, summonInterval: 6, summonCount: 2, scoreBonus: 25 },
-  effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },
+  // 共鳴詠唱: ≥2 distinct players calling within windowSec of each other grant
+  // the WHOLE party (not just the callers) a shield + heal-over-time burst.
+  // cooldownSec gates re-triggering — a coordination reward, not a spammable
+  // heal button. Inert with one player (there's no one else to sync with).
+  resonance: { windowSec: 1.5, cooldownSec: 20, shieldDuration: 4, healDuration: 4, healRate: 15 },
+  effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4, resonance: 0.6 },
 } as const;

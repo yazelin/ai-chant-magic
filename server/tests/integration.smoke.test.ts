@@ -818,4 +818,37 @@ describe('two-client ws integration smoke (B3)', () => {
     },
     10000
   );
+
+  it(
+    '共鳴詠唱: two distinct real players sending resonance input in the same window trigger the party shield for both',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const b = await connect();
+      const joinedB = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'cryo', roomCode: code });
+      await joinedB;
+
+      const startedA = waitFor(a, 'started');
+      const startedB = waitFor(b, 'started');
+      sendMsg(a, { type: 'start' });
+      await Promise.all([startedA, startedB]);
+      await Promise.all([waitFor(a, 'snapshot'), waitFor(b, 'snapshot')]);
+
+      sendMsg(a, { type: 'input', seq: 1, resonance: true });
+      sendMsg(b, { type: 'input', seq: 1, resonance: true });
+
+      const buffed = waitForMatch(
+        a,
+        'snapshot',
+        (m) => m.world.players.every((p) => p.shieldUntil > m.world.time),
+      );
+      const snap = await buffed;
+      expect(snap.world.players.every((p) => p.shieldUntil > snap.world.time)).toBe(true);
+    },
+    10000
+  );
 });

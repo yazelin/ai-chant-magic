@@ -71,7 +71,7 @@ export interface Projectile {
   explosionDamage?: number; explosionRadius?: number;
 }
 
-export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura';
+export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura' | 'resonance';
 
 export interface TransientEffect {
   id: number; kind: EffectKind; ownerId?: string;
@@ -109,9 +109,19 @@ export interface World {
   endlessTimeBase: number;
   // Elite-mob (demoted boss) spawn schedule — see spawnElite()/beginWave().
   nextEliteWave: number; eliteWavesSoFar: number; eliteQueue: number;
+  // 共鳴詠唱: rolling buffer of recent resonance calls (sim-only — not
+  // serialized; the client never needs this bookkeeping, only the resulting
+  // effect/buff). Trimmed to CONFIG.resonance.windowSec each step; ≥2 DISTINCT
+  // callers within that window triggers the party buff (see updateResonance).
+  resonanceCalls: { playerId: string; at: number }[];
+  resonanceCooldownUntil: number;
 }
 
 export interface MoveCommand { kind: 'move'; playerId: string; dir: Vec2; }
 export interface FaceCommand { kind: 'face'; playerId: string; angle: number; }
 export interface CastCommand { kind: 'cast'; playerId: string; spell: SpellId; }
-export type Command = MoveCommand | FaceCommand | CastCommand;
+// A player calling out for the group's shared "共鳴" (resonance) coordination
+// buff — distinct from a spell cast (no SpellId/cooldown/class loadout;
+// available to every class, and inert with only one player in the room).
+export interface ResonanceCommand { kind: 'resonance'; playerId: string; }
+export type Command = MoveCommand | FaceCommand | CastCommand | ResonanceCommand;
