@@ -74,4 +74,15 @@ export class NetSession implements GameSession {
   restart(): void {
     /* server-authoritative; no client restart */
   }
+
+  // Server-authoritative: send the request and wait for the next snapshot to
+  // reflect it (or an `error` if we're not the host / not in the right state —
+  // see Hud's onError wiring). We never mutate the world ourselves.
+  enterEndless(): void {
+    this.client.enterEndless();
+  }
+
+  endEndless(): void {
+    this.client.endEndless();
+  }
 }

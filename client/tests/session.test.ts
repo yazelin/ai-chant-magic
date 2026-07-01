@@ -77,4 +77,39 @@ describe('LocalSession', () => {
     s.tick(0.05);
     expect(calls).toBeGreaterThanOrEqual(3); // start + 2 ticks
   });
+
+  it('enterEndless() flips a victory world back to playing with endless=true, preserving player hp', () => {
+    const s = new LocalSession('pyro');
+    s.start();
+    const w = s.getWorld();
+    w.status = 'victory';
+    w.players[0].hp = 42;
+    s.enterEndless();
+    expect(w.status).toBe('playing');
+    expect(w.endless).toBe(true);
+    expect(w.players[0].hp).toBe(42);
+  });
+
+  it('endEndless() ends an active endless run like a wipe (status gameover)', () => {
+    const s = new LocalSession('pyro');
+    s.start();
+    s.getWorld().status = 'victory';
+    s.enterEndless();
+    s.endEndless();
+    expect(s.getWorld().status).toBe('gameover');
+  });
+
+  it('enterEndless()/endEndless() notify onWorld subscribers', () => {
+    const s = new LocalSession('pyro');
+    let calls = 0;
+    s.onWorld(() => { calls += 1; });
+    s.start();
+    s.getWorld().status = 'victory';
+    const before = calls;
+    s.enterEndless();
+    expect(calls).toBeGreaterThan(before);
+    const afterEnter = calls;
+    s.endEndless();
+    expect(calls).toBeGreaterThan(afterEnter);
+  });
 });

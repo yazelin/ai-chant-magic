@@ -29,7 +29,9 @@ export type ErrorCode =
   | 'server-full'
   | 'bad-message'
   | 'not-in-room'
-  | 'not-host';
+  | 'not-host'
+  | 'not-victory'
+  | 'not-endless';
 
 interface JoinedMsg {
   type: 'joined';
@@ -66,6 +68,9 @@ interface ChatBroadcastMsg {
 interface ReturnToLobbyMsg {
   type: 'returnToLobby';
 }
+interface EndlessStartedMsg {
+  type: 'endlessStarted';
+}
 type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -74,7 +79,8 @@ type ServerMsg =
   | ErrorMsg
   | PeerLeftMsg
   | ChatBroadcastMsg
-  | ReturnToLobbyMsg;
+  | ReturnToLobbyMsg
+  | EndlessStartedMsg;
 
 export interface NetCallbacks {
   onJoined?: (m: JoinedMsg) => void;
@@ -85,6 +91,7 @@ export interface NetCallbacks {
   onPeerLeft?: (id: string) => void;
   onChat?: (from: string, text: string) => void;
   onReturnToLobby?: () => void;
+  onEndlessStarted?: () => void;
   onOpen?: () => void;
   onClose?: () => void;
 }
@@ -184,6 +191,9 @@ export class NetClient {
       case 'returnToLobby':
         this.cb.onReturnToLobby?.();
         break;
+      case 'endlessStarted':
+        this.cb.onEndlessStarted?.();
+        break;
     }
   }
 
@@ -240,6 +250,20 @@ export class NetClient {
 
   leave(): void {
     this.send({ type: 'leave' });
+  }
+
+  // Host-only; the server rejects these (not-host/not-victory/not-endless) if
+  // sent out of turn — see server/src/protocol.ts.
+  enterEndless(): void {
+    this.send({ type: 'enterEndless' });
+  }
+
+  skipToLobby(): void {
+    this.send({ type: 'skipToLobby' });
+  }
+
+  endEndless(): void {
+    this.send({ type: 'endEndless' });
   }
 
   close(): void {
