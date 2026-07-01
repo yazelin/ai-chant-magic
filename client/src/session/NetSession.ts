@@ -85,4 +85,8 @@ export class NetSession implements GameSession {
   endEndless(): void {
     this.client.endEndless();
   }
+
+  skipToLobby(): void {
+    this.client.skipToLobby();
+  }
 }

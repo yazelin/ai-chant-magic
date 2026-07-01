@@ -18,6 +18,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
     levelCleared: false,
     endless: false,
     endlessKillBase: 0,
+    endlessTimeBase: 0,
     players: [],
     enemies: [],
     projectiles: [],
@@ -106,12 +107,13 @@ describe('interpolate', () => {
     expect(interpolate(prev, next, 0.5).levelCleared).toBe(true);
   });
 
-  it('passes through endless + endlessKillBase from the newer snapshot', () => {
-    const prev = snap({ endless: false, endlessKillBase: 0 });
-    const next = snap({ endless: true, endlessKillBase: 66 });
+  it('passes through endless + endlessKillBase + endlessTimeBase from the newer snapshot', () => {
+    const prev = snap({ endless: false, endlessKillBase: 0, endlessTimeBase: 0 });
+    const next = snap({ endless: true, endlessKillBase: 66, endlessTimeBase: 180 });
     const w = interpolate(prev, next, 0.5);
     expect(w.endless).toBe(true);
     expect(w.endlessKillBase).toBe(66);
+    expect(w.endlessTimeBase).toBe(180);
   });
 
   it('passes through hp/status/wave/score/effects from the newer snapshot', () => {

@@ -62,6 +62,14 @@ describe('enterEndlessMode', () => {
     expect(w.score).toBe(42);
   });
 
+  it('snapshots the entry time as endlessTimeBase (world.time never resets, unlike wave)', () => {
+    const w = createSoloWorld('storm');
+    w.time = 137.5;
+    enterEndlessMode(w);
+    expect(w.endlessTimeBase).toBe(137.5);
+    expect(w.time).toBe(137.5);
+  });
+
   it('preserves player hp/position/cooldowns (only battle/wave transients reset)', () => {
     const w = createSoloWorld('storm');
     const p = w.players[0];

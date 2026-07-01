@@ -42,6 +42,14 @@ describe('toSnapshot', () => {
     expect(snap.score - snap.endlessKillBase).toBe(25);
   });
 
+  it('carries endlessTimeBase (for the "this run\'s survival time" HUD readout)', () => {
+    const w = pyroSolo();
+    w.time = 250;
+    w.endlessTimeBase = 180;
+    const snap = toSnapshot(w);
+    expect(snap.time - snap.endlessTimeBase).toBe(70);
+  });
+
   it('carries elite on enemies (endless-mode demoted boss, distinct from boss)', () => {
     const w = pyroSolo();
     w.enemies.push({

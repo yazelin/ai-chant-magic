@@ -90,4 +90,10 @@ export class LocalSession implements GameSession {
     endEndlessMode(this.world);
     this.worldCb(this.world);
   }
+
+  // No-op: solo has no room lobby to return to (the victory screen doesn't
+  // even show this button for solo — see hud.ts). Kept for interface symmetry.
+  skipToLobby(): void {
+    /* not applicable to solo play */
+  }
 }
