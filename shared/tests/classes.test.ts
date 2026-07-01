@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CLASSES, classSpellSet } from '../src/classes';
+import { CLASSES, classSpellSet, CLASS_BONDS, activeClassBonds } from '../src/classes';
 import { SPELLS } from '../src/spells';
 import type { ClassId, SpellId } from '../src/types';
 
@@ -64,5 +64,48 @@ describe('classes', () => {
       expect(set).toBeInstanceOf(Set);
       expect([...set].sort()).toEqual([...CLASSES[id].spells].sort());
     }
+  });
+});
+
+describe('CLASS_BONDS / activeClassBonds (職業搭配羈絆)', () => {
+  it('covers exactly the 6 unique unordered pairs among the 4 classes, each with a name', () => {
+    expect(CLASS_BONDS).toHaveLength(6);
+    const seen = new Set<string>();
+    for (const b of CLASS_BONDS) {
+      expect(b.pair[0]).not.toBe(b.pair[1]);
+      expect(b.name.length).toBeGreaterThan(0);
+      const key = [...b.pair].sort().join('+');
+      expect(seen.has(key)).toBe(false); // no duplicate pair
+      seen.add(key);
+    }
+    // every unordered pair among the 4 classes is covered exactly once
+    for (let i = 0; i < ALL_CLASS_IDS.length; i++) {
+      for (let j = i + 1; j < ALL_CLASS_IDS.length; j++) {
+        const key = [ALL_CLASS_IDS[i], ALL_CLASS_IDS[j]].sort().join('+');
+        expect(seen.has(key)).toBe(true);
+      }
+    }
+  });
+
+  it('no bonds active with zero or one class present', () => {
+    expect(activeClassBonds(new Set())).toHaveLength(0);
+    expect(activeClassBonds(new Set(['pyro']))).toHaveLength(0);
+  });
+
+  it('exactly one bond active for a specific pair', () => {
+    const active = activeClassBonds(new Set(['pyro', 'cryo']));
+    expect(active).toHaveLength(1);
+    expect(active[0].pair.includes('pyro')).toBe(true);
+    expect(active[0].pair.includes('cryo')).toBe(true);
+  });
+
+  it('3 distinct classes present activates all 3 pairs among them (not the ones involving the 4th)', () => {
+    const active = activeClassBonds(new Set(['pyro', 'cryo', 'storm']));
+    expect(active).toHaveLength(3);
+    expect(active.every((b) => !b.pair.includes('warden'))).toBe(true);
+  });
+
+  it('all 4 classes present activates all 6 bonds', () => {
+    expect(activeClassBonds(new Set(ALL_CLASS_IDS))).toHaveLength(6);
   });
 });

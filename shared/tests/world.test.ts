@@ -509,10 +509,10 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     expect(w.effects.some((e) => e.kind === 'aura')).toBe(true);
   });
 
-  it('aegis doubles skill damage while active, then damage returns to normal after it expires', () => {
+  it('aegis doubles skill damage while active, then damage returns to normal (minus the warden+storm class bond, always on) after it expires', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'warden' },
-      { id: 'b', name: 'Bo', classId: 'storm' },
+      { id: 'b', name: 'Bo', classId: 'storm' }, // warden+storm is itself a bonded pair (雷光聖盾) — stacks with aegis
     ]);
     w.breakTimer = 999;
     const a = findPlayer(w, 'a');
@@ -520,19 +520,101 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     a.pos = { x: 480, y: 320 };
     b.pos = { x: a.pos.x + 20, y: a.pos.y };
     b.facing = 0;
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // 1 active pair (warden+storm)
 
-    w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: b.pos.x + 120, y: b.pos.y } }));
+    w.enemies.push(makeEnemy({ id: 1, hp: 400, pos: { x: b.pos.x + 120, y: b.pos.y } }));
     step(w, [
       { kind: 'cast', playerId: 'a', spell: 'aegis' },
       { kind: 'cast', playerId: 'b', spell: 'thunder' },
     ], 0);
-    expect(w.enemies.find((e) => e.id === 1)!.hp).toBe(200 - CONFIG.thunder.damage * 2);
+    expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(400 - CONFIG.thunder.damage * 2 * bondMul);
 
     step(w, [], CONFIG.aegis.duration + 0.01);
     b.cooldowns.thunder = 0;
-    w.enemies = [makeEnemy({ id: 2, hp: 200, pos: { x: b.pos.x + 120, y: b.pos.y } })];
+    w.enemies = [makeEnemy({ id: 2, hp: 400, pos: { x: b.pos.x + 120, y: b.pos.y } })];
     step(w, [{ kind: 'cast', playerId: 'b', spell: 'thunder' }], 0);
-    expect(w.enemies.find((e) => e.id === 2)!.hp).toBe(200 - CONFIG.thunder.damage);
+    // aegis's 2x is gone, but the class bond is passive/always-on — not a timed buff.
+    expect(w.enemies.find((e) => e.id === 2)!.hp).toBeCloseTo(400 - CONFIG.thunder.damage * bondMul);
+  });
+
+  describe('職業搭配羈絆 (class-pair bond) — passive skill-power multiplier from party composition', () => {
+    it('no bonus with a same-class party (0 distinct pairs)', () => {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'storm' },
+        { id: 'b', name: 'Bo', classId: 'storm' },
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      a.pos = { x: 480, y: 320 };
+      a.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: a.pos.x + 120, y: a.pos.y } }));
+      step(w, [{ kind: 'cast', playerId: 'a', spell: 'thunder' }], 0);
+      expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(200 - CONFIG.thunder.damage);
+    });
+
+    it('a single bonded pair grants +bonusPerPair skill power', () => {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'storm' },
+        { id: 'b', name: 'Bo', classId: 'warden' }, // storm+warden = 雷光聖盾
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      a.pos = { x: 480, y: 320 };
+      a.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: a.pos.x + 120, y: a.pos.y } }));
+      step(w, [{ kind: 'cast', playerId: 'a', spell: 'thunder' }], 0);
+      const expected = 200 - CONFIG.thunder.damage * (1 + CONFIG.classBond.bonusPerPair);
+      expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(expected);
+    });
+
+    it('4 distinct classes present activates all 6 pairs (+6*bonusPerPair)', () => {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'storm' },
+        { id: 'b', name: 'Bo', classId: 'pyro' },
+        { id: 'c', name: 'Cy', classId: 'cryo' },
+        { id: 'd', name: 'Di', classId: 'warden' },
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      a.pos = { x: 480, y: 320 };
+      a.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 400, pos: { x: a.pos.x + 120, y: a.pos.y } }));
+      step(w, [{ kind: 'cast', playerId: 'a', spell: 'thunder' }], 0);
+      const expected = 400 - CONFIG.thunder.damage * (1 + 6 * CONFIG.classBond.bonusPerPair);
+      expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(expected);
+    });
+
+    it('a downed teammate\'s class does not count toward "present" (matches inFight gating)', () => {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'storm' },
+        { id: 'b', name: 'Bo', classId: 'warden' },
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      const b = findPlayer(w, 'b');
+      b.downed = true;
+      a.pos = { x: 480, y: 320 };
+      a.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: a.pos.x + 120, y: a.pos.y } }));
+      step(w, [{ kind: 'cast', playerId: 'a', spell: 'thunder' }], 0);
+      expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(200 - CONFIG.thunder.damage);
+    });
+
+    it('a disconnected teammate\'s class does not count toward "present" either', () => {
+      const w = createWorld([
+        { id: 'a', name: 'Ana', classId: 'storm' },
+        { id: 'b', name: 'Bo', classId: 'warden' },
+      ]);
+      w.breakTimer = 999;
+      const a = findPlayer(w, 'a');
+      const b = findPlayer(w, 'b');
+      b.connected = false;
+      a.pos = { x: 480, y: 320 };
+      a.facing = 0;
+      w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: a.pos.x + 120, y: a.pos.y } }));
+      step(w, [{ kind: 'cast', playerId: 'a', spell: 'thunder' }], 0);
+      expect(w.enemies.find((e) => e.id === 1)!.hp).toBeCloseTo(200 - CONFIG.thunder.damage);
+    });
   });
 
   it('heal restores alive allies in radius incl self, caps at maxHp, skips downed/dead', () => {
@@ -566,7 +648,7 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     expect(d.hp).toBe(d.maxHp); // capped at maxHp
   });
 
-  it('aegis doubles healing ticks while active', () => {
+  it('aegis doubles healing ticks while active (warden+pyro is also a 庇護烈焰 class bond, stacks)', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'warden' },
       { id: 'b', name: 'Bo', classId: 'pyro' },
@@ -583,7 +665,8 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     ], 0);
 
     step(w, [], 1);
-    expect(b.hp).toBeCloseTo(20 + CONFIG.heal.rate * 2);
+    const bondMul = 1 + CONFIG.classBond.bonusPerPair; // warden+pyro = 1 active pair
+    expect(b.hp).toBeCloseTo(20 + CONFIG.heal.rate * 2 * bondMul);
   });
 });
 

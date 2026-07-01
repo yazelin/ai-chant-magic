@@ -1,4 +1,4 @@
-import { World, CONFIG } from '@acm/shared';
+import { World, CONFIG, activeClassBonds } from '@acm/shared';
 
 // Top-centre HUD: a segmented level-progress bar (one "level" = boss.every waves,
 // ending in that level's boss), the current wave filling by how much of it is
@@ -21,6 +21,7 @@ const STYLE = `
 #wavehud .seg > i { display: block; height: 100%; width: 0; background: #b06cff; }
 #wavehud .seg.boss > i { background: #ffd24d; }
 #wavehud .count { font-size: 22px; font-weight: 800; color: #ffd24d; text-shadow: 0 2px 4px #000; }
+#wavehud .bond { font-size: 11px; color: #ffd24d; text-shadow: 0 1px 2px #000; display: none; }
 #wavehud .bossbar { display: none; flex-direction: column; align-items: center; gap: 2px; margin-top: 2px; }
 #wavehud .bossbar .bl { font-size: 13px; font-weight: 800; color: #ffd24d; text-shadow: 0 1px 3px #000; letter-spacing: 1px; }
 #wavehud .bossbar .bbar { width: min(620px, 86vw); height: 16px; border-radius: 8px;
@@ -35,6 +36,7 @@ export class WaveHud {
   private segEls: HTMLElement[] = [];
   private segBoxEls: HTMLElement[] = []; // outer .seg divs (toggle the gold "boss" highlight)
   private count: HTMLElement;
+  private bond: HTMLElement;
   private bossBox: HTMLElement;
   private bossFill: HTMLElement;
   private bossLabel: HTMLElement;
@@ -59,13 +61,14 @@ export class WaveHud {
         `<div class="seg${i === SEGS - 1 ? ' boss' : ''}"><i></i></div>`).join('') +
       '</div>';
     this.root.innerHTML =
-      `<div class="wlabel"></div>${segs}<div class="count"></div>` +
+      `<div class="wlabel"></div>${segs}<div class="count"></div><div class="bond"></div>` +
       `<div class="bossbar"><div class="bl">史萊姆王</div><div class="bbar"><i></i></div></div>`;
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.root);
     this.label = this.root.querySelector('.wlabel') as HTMLElement;
     this.segBoxEls = Array.from(this.root.querySelectorAll('.seg')) as HTMLElement[];
     this.segEls = Array.from(this.root.querySelectorAll('.seg > i')) as HTMLElement[];
     this.count = this.root.querySelector('.count') as HTMLElement;
+    this.bond = this.root.querySelector('.bond') as HTMLElement;
     this.bossBox = this.root.querySelector('.bossbar') as HTMLElement;
     this.bossFill = this.root.querySelector('.bossbar .bbar > i') as HTMLElement;
     this.bossLabel = this.root.querySelector('.bossbar .bl') as HTMLElement;
@@ -94,6 +97,21 @@ export class WaveHud {
       this.label.textContent = `無盡模式　第 ${wave} 波　擊殺 ${runScore}`;
     } else {
       this.label.textContent = `關卡 ${level}　第 ${wave} 波　擊殺 ${world.score}`;
+    }
+
+    // 職業搭配羈絆 — mirrors the sim's in-fight gating (connected/alive/not
+    // downed) so the readout always matches what's actually boosting damage.
+    // Hidden with 0 active pairs (solo, or a same-class party) — nothing to show.
+    const present = new Set(
+      world.players.filter((p) => p.connected && p.alive && !p.downed).map((p) => p.classId),
+    );
+    const bonds = activeClassBonds(present);
+    if (bonds.length > 0) {
+      const pct = Math.round(bonds.length * CONFIG.classBond.bonusPerPair * 100);
+      this.bond.textContent = `羈絆 +${pct}%(${bonds.map((b) => b.name).join('、')})`;
+      this.bond.style.display = 'block';
+    } else {
+      this.bond.style.display = 'none';
     }
     // The last segment's gold "boss wave" highlight only means something in the
     // campaign (a fixed every-5th wave); endless's elite cadence drifts

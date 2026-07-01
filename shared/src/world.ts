@@ -1,7 +1,7 @@
 import { World, Command, Vec2, SpellId, Projectile, Enemy, EnemyElement, Player, ClassId, TransientEffect } from './types';
 import { CONFIG } from './config';
 import { SPELLS } from './spells';
-import { CLASSES, classSpellSet } from './classes';
+import { CLASSES, classSpellSet, activeClassBonds } from './classes';
 import { dist, sub, len, scale } from './vec';
 
 // Last implemented level (0-based): 0=slime/為美好世界, 1=frostvale/Re:Zero,
@@ -210,8 +210,20 @@ function findPlayer(world: World, id: string): Player | undefined {
   return world.players.find((p) => p.id === id);
 }
 
+// 職業搭配羈絆: +CONFIG.classBond.bonusPerPair skill power per distinct active
+// class pair among in-fight players (see shared/classes.ts's CLASS_BONDS).
+// Passive/always-on (not a timed buff like aegis) — reflects party composition
+// at the moment of the cast, not who specifically triggered anything.
+function classBondMultiplier(world: World): number {
+  const present = new Set(
+    world.players.filter((p) => p.connected && p.alive && !p.downed).map((p) => p.classId)
+  );
+  return 1 + activeClassBonds(present).length * CONFIG.classBond.bonusPerPair;
+}
+
 function skillPowerMultiplier(world: World): number {
-  return world.players.some((p) => p.connected && p.alive && !p.downed && world.time < (p.aegisUntil ?? 0)) ? 2 : 1;
+  const aegisMul = world.players.some((p) => p.connected && p.alive && !p.downed && world.time < (p.aegisUntil ?? 0)) ? 2 : 1;
+  return aegisMul * classBondMultiplier(world);
 }
 
 function skillDamage(world: World, base: number): number {
