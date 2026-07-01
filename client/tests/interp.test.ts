@@ -19,6 +19,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
     endless: false,
     endlessKillBase: 0,
     endlessTimeBase: 0,
+    reactionCount: 0,
     players: [],
     enemies: [],
     projectiles: [],
@@ -44,8 +45,8 @@ function player(id: string, x: number, y: number, over: Record<string, unknown> 
   };
 }
 
-function enemy(id: number, x: number, y: number) {
-  return { id, pos: { x, y }, hp: 30, slowUntil: 0, radius: 12 };
+function enemy(id: number, x: number, y: number, over: Record<string, unknown> = {}) {
+  return { id, pos: { x, y }, hp: 30, slowUntil: 0, radius: 12, ...over };
 }
 
 describe('interpolate', () => {
@@ -133,6 +134,29 @@ describe('interpolate', () => {
     expect(w.effects).toHaveLength(1);
     expect(w.effects[0].id).toBe(7);
   });
+
+  it('passes through reactionCount from the newer snapshot', () => {
+    const prev = snap({ reactionCount: 2 });
+    const next = snap({ reactionCount: 5 });
+    expect(interpolate(prev, next, 0.5).reactionCount).toBe(5);
+  });
+
+  it('carries an enemy\'s auraElement/auraUntil through (multiplayer reaction-ring tell)', () => {
+    const prev = snap({ enemies: [enemy(1, 0, 0)] });
+    const next = snap({ enemies: [enemy(1, 40, 0, { auraElement: 'fire', auraUntil: 12.5 })] });
+    const w = interpolate(prev, next, 0.5);
+    expect(w.enemies[0].auraElement).toBe('fire');
+    expect(w.enemies[0].auraUntil).toBeCloseTo(12.5);
+  });
+
+  it('passes a reaction effect\'s reactionName through', () => {
+    const prev = snap();
+    const next = snap({
+      effects: [{ id: 9, kind: 'reaction', a: { x: 1, y: 1 }, ttl: 0.3, colorHint: '#ffb27a', reactionName: '蒸發' }],
+    });
+    const w = interpolate(prev, next, 0.5);
+    expect(w.effects[0].reactionName).toBe('蒸發');
+  });
 });
 
 describe('SnapshotBuffer.sample (injected clock)', () => {
@@ -208,5 +232,17 @@ describe('SnapshotBuffer.sample (injected clock)', () => {
     const buf = new SnapshotBuffer(() => 0, 3);
     for (let i = 0; i < 5; i++) buf.push(snap(), i * 10);
     expect(buf.size()).toBe(3);
+  });
+
+  it('carries reactionCount and an enemy aura through snapshotToWorld (single-snapshot path — the exact path a real multiplayer client uses before a second snapshot arrives)', () => {
+    const buf = new SnapshotBuffer(() => 1000);
+    buf.push(snap({
+      reactionCount: 3,
+      enemies: [enemy(1, 10, 10, { auraElement: 'ice', auraUntil: 9.1 })],
+    }), 500);
+    const w = buf.sample();
+    expect(w.reactionCount).toBe(3);
+    expect(w.enemies[0].auraElement).toBe('ice');
+    expect(w.enemies[0].auraUntil).toBeCloseTo(9.1);
   });
 });

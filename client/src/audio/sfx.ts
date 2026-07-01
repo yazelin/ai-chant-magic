@@ -345,6 +345,28 @@ export function sfxResonance(): void {
   try { arp([523, 659, 784, 1046, 1318], 0.1, 'sine', 0.34); } catch { /* ignore */ }
 }
 
+// ELEMENTAL REACTION proc — a quick, bright bandpass-filtered spark, distinct
+// from sfxHit's low "啵" and sfxZap's high zap, and much shorter than
+// sfxResonance's ~0.9s fanfare (a reaction can proc several times a second
+// during a packed AoE, so it needs to stay light rather than announce itself).
+export function sfxReaction(): void {
+  try {
+    blip('triangle', 900, 1600, 0.11, 0.3);
+    const src = noiseSource();
+    if (!ctx || !master || !src) return;
+    const now = ctx.currentTime;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2200;
+    bp.Q.value = 6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.22, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(now, Math.random() * 0.5, 0.12); src.stop(now + 0.12);
+  } catch { /* ignore */ }
+}
+
 // NEW WAVE — bright ascending C-E-G-C arpeggio.
 export function sfxWave(): void {
   try { arp([523, 659, 784, 1046], 0.08, 'square', 0.26); } catch { /* ignore */ }

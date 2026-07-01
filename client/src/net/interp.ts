@@ -21,6 +21,7 @@ import {
   SpellId,
   EffectKind,
   GameStatus,
+  ReactionElement,
 } from '@acm/shared';
 
 // --- wire shape (must match server/src/snapshot.ts exactly) -----------------
@@ -50,6 +51,8 @@ export interface SnapshotEnemy {
   element?: EnemyElement;
   boss?: boolean;
   elite?: boolean;
+  auraElement?: ReactionElement;
+  auraUntil?: number;
 }
 
 export interface SnapshotProjectile {
@@ -69,6 +72,7 @@ export interface SnapshotEffect {
   ttl: number;
   colorHint: string;
   spell?: SpellId;
+  reactionName?: string;
 }
 
 export interface Snapshot {
@@ -81,6 +85,7 @@ export interface Snapshot {
   endless: boolean;
   endlessKillBase: number;
   endlessTimeBase: number;
+  reactionCount?: number;
   breakTimer?: number;
   spawnQueue?: number;
   players: SnapshotPlayer[];
@@ -137,6 +142,8 @@ function toWorldEnemy(se: SnapshotEnemy, pos: Vec2): Enemy {
     element: se.element ?? 'normal',
     boss: se.boss,
     elite: se.elite,
+    auraElement: se.auraElement,
+    auraUntil: se.auraUntil,
   };
 }
 
@@ -165,6 +172,7 @@ function toWorldEffect(fx: SnapshotEffect): TransientEffect {
   if (fx.b !== undefined) out.b = { x: fx.b.x, y: fx.b.y };
   if (fx.radius !== undefined) out.radius = fx.radius;
   if (fx.spell !== undefined) out.spell = fx.spell;
+  if (fx.reactionName !== undefined) out.reactionName = fx.reactionName;
   return out;
 }
 
@@ -188,6 +196,7 @@ export function emptyWorld(): World {
     endlessTimeBase: 0,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     resonanceCalls: [], resonanceCooldownUntil: 0, // sim-only; the client never reads these
+    reactionCount: 0,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -214,6 +223,7 @@ function snapshotToWorld(s: Snapshot): World {
     endlessTimeBase: s.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     resonanceCalls: [], resonanceCooldownUntil: 0,
+    reactionCount: s.reactionCount ?? 0,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -268,6 +278,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     endlessTimeBase: next.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     resonanceCalls: [], resonanceCooldownUntil: 0,
+    reactionCount: next.reactionCount ?? 0,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,

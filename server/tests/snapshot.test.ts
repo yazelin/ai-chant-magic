@@ -141,6 +141,44 @@ describe('toSnapshot', () => {
     expect(snap.effects[0].colorHint).toBe('#ff8c1a');
   });
 
+  it('carries reactionCount (elemental-reaction running total)', () => {
+    const w = pyroSolo();
+    w.reactionCount = 7;
+    expect(toSnapshot(w).reactionCount).toBe(7);
+  });
+
+  it('carries an enemy\'s active elemental-reaction aura (auraElement/auraUntil)', () => {
+    const w = pyroSolo();
+    w.enemies.push({
+      id: 5, pos: { x: 10, y: 20 }, hp: 30, speed: 60,
+      slowUntil: 0, radius: 12, targetId: null, element: 'normal',
+      auraElement: 'fire', auraUntil: 12.3,
+    });
+    const se = toSnapshot(w).enemies[0];
+    expect(se.auraElement).toBe('fire');
+    expect(se.auraUntil).toBeCloseTo(12.3);
+  });
+
+  it('omits auraElement/auraUntil when an enemy has no active aura', () => {
+    const w = pyroSolo();
+    w.enemies.push({
+      id: 6, pos: { x: 0, y: 0 }, hp: 30, speed: 60,
+      slowUntil: 0, radius: 12, targetId: null, element: 'normal',
+    });
+    const se = toSnapshot(w).enemies[0];
+    expect(se.auraElement).toBeUndefined();
+    expect(se.auraUntil).toBeUndefined();
+  });
+
+  it('carries reactionName on a reaction-kind effect', () => {
+    const w = pyroSolo();
+    w.effects.push({
+      id: 2, kind: 'reaction', a: { x: 1, y: 1 }, radius: 48,
+      ttl: 0.3, colorHint: '#ffb27a', reactionName: '蒸發',
+    });
+    expect(toSnapshot(w).effects[0].reactionName).toBe('蒸發');
+  });
+
   it('is a structural clone that survives JSON round-trip (no functions/refs)', () => {
     const w = createWorld([
       { id: 'p1', name: 'Alice', classId: 'pyro' },

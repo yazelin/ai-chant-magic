@@ -9,6 +9,10 @@ export type ClassId = 'pyro' | 'cryo' | 'storm' | 'warden';
 // Slime enemy attribute. Phase 1: drives colour + look only. Phase 2 will give
 // each its signature behaviour (fire=死亡爆炸, ice=減速, storm=突進, holy=補血).
 export type EnemyElement = 'normal' | 'fire' | 'ice' | 'storm' | 'holy';
+// The 4 elements a player spell can leave as reaction residue on an enemy —
+// reuses EnemyElement's non-'normal' members rather than a separate vocabulary
+// for "the element of a spell" vs "the element of a slime species".
+export type ReactionElement = Exclude<EnemyElement, 'normal'>;
 // 'victory' = cleared the last implemented level (see world.ts's MAX_LEVEL_ID),
 // as distinct from 'gameover' (the party wiped). Both freeze the sim (see step()).
 export type GameStatus = 'lobby' | 'playing' | 'gameover' | 'victory';
@@ -62,6 +66,20 @@ export interface Enemy {
   // elite must NEVER set boss:true, since removeDeadEnemies() reads that flag
   // to trigger levelCleared/campaign transitions.
   elite?: boolean;
+  // Elemental-reaction residue: the element of the last damaging hit that
+  // didn't itself trigger a reaction, held until auraUntil. A hit of a
+  // DIFFERENT element while active triggers a reaction (see triggerReaction in
+  // world.ts), consuming both. A same-element hit only refreshes auraUntil.
+  // Entirely separate from `element` (the enemy's permanent species/behaviour)
+  // — an ice-native enemy is NOT pre-seeded with an ice aura; see
+  // applyElementalHit's doc comment for why. Serialized (needs a continuous
+  // per-frame tell, unlike frozenUntil's one-shot convention).
+  auraElement?: ReactionElement;
+  auraUntil?: number;
+  // Per-enemy reaction throttle: world.time must reach this before a
+  // mismatched hit can trigger another reaction on THIS enemy (bounds proc
+  // frequency under focus-fire). Sim-only — no continuous visual rides on it.
+  reactionReadyAt?: number;
 }
 
 export interface Projectile {
@@ -71,13 +89,16 @@ export interface Projectile {
   explosionDamage?: number; explosionRadius?: number;
 }
 
-export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura' | 'resonance';
+export type EffectKind = 'beam' | 'chain' | 'nova' | 'blast' | 'aura' | 'resonance' | 'reaction';
 
 export interface TransientEffect {
   id: number; kind: EffectKind; ownerId?: string;
   a: Vec2; b?: Vec2; radius?: number; ttl: number; colorHint: string;
   // Which spell produced this effect (lets the renderer play a per-skill SFX).
   spell?: SpellId;
+  // Which elemental reaction produced this effect (kind:'reaction' only) —
+  // lets the renderer show a flavour label + pick the matching SFX.
+  reactionName?: string;
 }
 
 export interface World {
@@ -115,6 +136,10 @@ export interface World {
   // callers within that window triggers the party buff (see updateResonance).
   resonanceCalls: { playerId: string; at: number }[];
   resonanceCooldownUntil: number;
+  // Running total of elemental reactions triggered this run (never reset by
+  // enterEndlessMode, same persistence rule as score) — a positive-feedback
+  // counter, shown in the HUD like the kill count.
+  reactionCount: number;
 }
 
 export interface MoveCommand { kind: 'move'; playerId: string; dir: Vec2; }
