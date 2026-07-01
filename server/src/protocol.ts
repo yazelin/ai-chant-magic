@@ -6,6 +6,7 @@
 
 import type { ClassId, SpellId, Vec2 } from '@acm/shared';
 import type { Snapshot } from './snapshot';
+import type { RoomStatus } from './room';
 
 // ---------------------------------------------------------------------------
 // Shared lobby view (sent inside `joined` / `lobby`)
@@ -96,6 +97,15 @@ export interface EndEndlessMsg {
   type: 'endEndless';
 }
 
+// Join a room as a read-only observer — never occupies a player slot, and
+// works at any room status (lobby/playing/gameover/victory), unlike join's
+// already-started/full rejections. No classId: a spectator never plays.
+export interface SpectateMsg {
+  type: 'spectate';
+  name: string;
+  roomCode: string;
+}
+
 export type ClientMsg =
   | CreateMsg
   | JoinMsg
@@ -108,7 +118,8 @@ export type ClientMsg =
   | ChatMsg
   | EnterEndlessMsg
   | SkipToLobbyMsg
-  | EndEndlessMsg;
+  | EndEndlessMsg
+  | SpectateMsg;
 
 // ---------------------------------------------------------------------------
 // Server -> Client
@@ -145,7 +156,8 @@ export type ErrorCode =
   | 'not-in-room'
   | 'not-host'
   | 'not-victory'
-  | 'not-endless';
+  | 'not-endless'
+  | 'spectator-readonly';
 
 export interface ErrorMsg {
   type: 'error';
@@ -177,6 +189,18 @@ export interface EndlessStartedMsg {
   type: 'endlessStarted';
 }
 
+// Reply to a successful `spectate` — carries the room's CURRENT status so a
+// spectator joining mid-game (the common case) can render the right view
+// immediately, without waiting for/relying on a `started` broadcast that may
+// have already fired before they connected.
+export interface SpectatingMsg {
+  type: 'spectating';
+  roomCode: string;
+  selfId: string;
+  status: RoomStatus;
+  players: LobbyPlayerView[];
+}
+
 export type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -186,7 +210,8 @@ export type ServerMsg =
   | PeerLeftMsg
   | ChatBroadcastMsg
   | ReturnToLobbyMsg
-  | EndlessStartedMsg;
+  | EndlessStartedMsg
+  | SpectatingMsg;
 
 // ---------------------------------------------------------------------------
 // Parsing helper (used by the thin ws wiring in index.ts / B2)
@@ -205,6 +230,7 @@ const CLIENT_MSG_TYPES: ReadonlySet<string> = new Set([
   'enterEndless',
   'skipToLobby',
   'endEndless',
+  'spectate',
 ]);
 
 export function parseClientMsg(raw: string): ClientMsg | null {

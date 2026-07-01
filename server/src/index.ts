@@ -21,7 +21,7 @@ import { createServer, type Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { RoomRegistry, RoomError } from './rooms';
-import { Room, type LobbyMember } from './room';
+import { Room, type LobbyMember, type Spectator } from './room';
 import {
   parseClientMsg,
   type ServerMsg,
@@ -64,11 +64,27 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
   const registry = new RoomRegistry();
 
   // Per-socket session: which room/player this connection is bound to.
+  // isSpectator distinguishes a read-only observer from a real player sharing
+  // the same playerId field (both just need a unique id to route messages).
   interface Session {
     room?: Room;
     playerId?: string;
+    isSpectator?: boolean;
   }
   const sessions = new WeakMap<WebSocket, Session>();
+
+  // Messages a spectator must never be able to act on — read-only per Task's
+  // spec. 'chat' and 'leave' are deliberately NOT in this set (cheering and
+  // stopping watching are both fine for an observer).
+  const SPECTATOR_BLOCKED = new Set([
+    'ready',
+    'setClass',
+    'start',
+    'input',
+    'enterEndless',
+    'skipToLobby',
+    'endEndless',
+  ]);
 
   let nextPlayerId = 1;
   function makePlayerId(): string {
@@ -93,11 +109,23 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
     }));
   }
 
-  // Broadcast a ServerMsg to every still-connected member of a room.
+  // Broadcast a ServerMsg to every still-connected member AND spectator of a
+  // room — spectators get the exact same snapshot/lobby/chat/etc. traffic,
+  // just never send back anything that mutates the room.
   function broadcast(room: Room, msg: ServerMsg): void {
+    const data = JSON.stringify(msg);
     for (const m of room.members) {
-      if (m.connected && m.send) m.send(JSON.stringify(msg));
+      if (m.connected && m.send) m.send(data);
     }
+    for (const s of room.spectators) {
+      if (s.connected && s.send) s.send(data);
+    }
+  }
+
+  // Resolves a display name for chat, checking members first then spectators
+  // — a spectator's cheer should still show their name, not "???".
+  function nameFor(room: Room, id: string): string | undefined {
+    return room.getMember(id)?.name ?? room.getSpectator(id)?.name;
   }
 
   function newMember(ws: WebSocket, name: string, classId: LobbyMember['classId']): LobbyMember {
@@ -126,6 +154,11 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
     }
     const session = sessions.get(ws) ?? {};
     sessions.set(ws, session);
+
+    if (session.isSpectator && SPECTATOR_BLOCKED.has(msg.type)) {
+      sendError(ws, 'spectator-readonly', '觀戰者無法操作遊戲');
+      return;
+    }
 
     switch (msg.type) {
       case 'create': {
@@ -256,17 +289,50 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         if (!room || !playerId) return;
         const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 200) : '';
         if (!text) return;
-        const me = lobbyViews(room).find((p) => p.id === playerId);
-        broadcast(room, { type: 'chat', from: me?.name ?? '???', text });
+        broadcast(room, { type: 'chat', from: nameFor(room, playerId) ?? '???', text });
         break;
       }
       case 'leave': {
-        const { room, playerId } = session;
+        const { room, playerId, isSpectator } = session;
         if (room && playerId) {
-          room.removePlayer(playerId);
-          broadcast(room, { type: 'peerLeft', id: playerId });
+          if (isSpectator) {
+            room.removeSpectator(playerId);
+          } else {
+            room.removePlayer(playerId);
+            broadcast(room, { type: 'peerLeft', id: playerId });
+          }
         }
         sessions.delete(ws);
+        break;
+      }
+      case 'spectate': {
+        try {
+          const room = registry.get(msg.roomCode);
+          if (!room) {
+            throw new RoomError('not-found', `no room ${msg.roomCode}`);
+          }
+          const id = makePlayerId();
+          const spectator: Spectator = {
+            id,
+            name: msg.name || id,
+            connected: true,
+            send: (data: string) => {
+              if (ws.readyState === ws.OPEN) ws.send(data);
+            },
+          };
+          room.addSpectator(spectator);
+          sessions.set(ws, { room, playerId: id, isSpectator: true });
+          send(ws, {
+            type: 'spectating',
+            roomCode: room.code,
+            selfId: id,
+            status: room.status,
+            players: lobbyViews(room),
+          });
+        } catch (e) {
+          if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
+          else throw e;
+        }
         break;
       }
       case 'enterEndless': {
@@ -354,8 +420,12 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
     ws.on('close', () => {
       const s = sessions.get(ws);
       if (s?.room && s.playerId) {
-        s.room.removePlayer(s.playerId);
-        broadcast(s.room, { type: 'peerLeft', id: s.playerId });
+        if (s.isSpectator) {
+          s.room.removeSpectator(s.playerId);
+        } else {
+          s.room.removePlayer(s.playerId);
+          broadcast(s.room, { type: 'peerLeft', id: s.playerId });
+        }
       }
       sessions.delete(ws);
     });

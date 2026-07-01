@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Room, type LobbyMember } from '../src/room';
+import { Room, type LobbyMember, type Spectator } from '../src/room';
 import type { Snapshot } from '../src/snapshot';
 
 function member(id: string, classId: LobbyMember['classId'] = 'pyro'): LobbyMember {
@@ -316,5 +316,54 @@ describe('Room — endless mode (victory vs gameover use separate wall-clock fie
     room.returnToLobby();
     expect(room.victoryDecisionAt).toBeNull();
     expect(room.status).toBe('lobby');
+  });
+});
+
+function spectator(id: string): Spectator {
+  return { id, name: id, connected: true };
+}
+
+describe('Room — spectators (read-only observers, never occupy a player slot)', () => {
+  it('addSpectator does not count toward isFull / MAX_PLAYERS', () => {
+    const room = new Room('AAAA', member('host'));
+    room.addPlayer(member('p2'));
+    room.addPlayer(member('p3'));
+    room.addPlayer(member('p4'));
+    expect(room.isFull).toBe(true); // 4 players, at the cap
+    room.addSpectator(spectator('s1'));
+    room.addSpectator(spectator('s2'));
+    expect(room.members).toHaveLength(4);
+    expect(room.spectators).toHaveLength(2);
+    expect(room.isFull).toBe(true); // spectators never push it over/under the cap
+  });
+
+  it('a spectator can join a room that has already started (no already-started rejection at the Room level)', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    expect(room.status).toBe('playing');
+    room.addSpectator(spectator('s1'));
+    expect(room.spectators).toHaveLength(1);
+  });
+
+  it('getSpectator finds a spectator by id', () => {
+    const room = new Room('AAAA', member('host'));
+    room.addSpectator(spectator('s1'));
+    expect(room.getSpectator('s1')?.id).toBe('s1');
+    expect(room.getSpectator('nope')).toBeUndefined();
+  });
+
+  it('removeSpectator marks connected=false but never splices (mirrors removePlayer)', () => {
+    const room = new Room('AAAA', member('host'));
+    room.addSpectator(spectator('s1'));
+    room.removeSpectator('s1');
+    expect(room.spectators).toHaveLength(1);
+    expect(room.getSpectator('s1')?.connected).toBe(false);
+  });
+
+  it('isEmpty is driven by members only — a lingering spectator does not keep an all-disconnected room "non-empty"', () => {
+    const room = new Room('AAAA', member('host'));
+    room.addSpectator(spectator('s1'));
+    room.removePlayer('host');
+    expect(room.isEmpty).toBe(true);
   });
 });
