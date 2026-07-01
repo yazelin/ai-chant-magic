@@ -4,11 +4,23 @@ import { SPELLS } from './spells';
 import { CLASSES, classSpellSet } from './classes';
 import { dist, sub, len, scale } from './vec';
 
-// Last implemented level (0-based): level 0 = slime/為美好世界, level 1 =
-// frostvale/Re:Zero. Bump this alongside a new LEVEL_THEMES entry (client) when
-// a new world ships. Clearing this level ends the game in victory instead of
-// transitioning further.
-export const MAX_LEVEL_ID = 1;
+// Last implemented level (0-based): 0=slime/為美好世界, 1=frostvale/Re:Zero,
+// 2=electropolis/學園都市, 3=grail/聖杯戰爭. Bump this alongside a new
+// LEVEL_THEMES entry (client) when a new world ships. Clearing this level ends
+// the game in victory instead of transitioning further.
+export const MAX_LEVEL_ID = 3;
+
+// Regular-enemy kind per level (index = levelId). Level 0 keeps the original
+// random elemental mix (pickElement); levels 1+ each commit to one signature
+// enemy so every world's swarm reads differently at a glance. 'wraith' routes
+// to makeWraith (blink movement); any EnemyElement routes to makeSlime with it
+// (storm = dash-and-lunge, already built for phase-2 slimes; holy = tanky
+// mutual healer, ditto) — reusing already-battle-tested behaviour rather than
+// inventing a new mechanic per world.
+const LEVEL_ENEMY: Array<EnemyElement | 'wraith' | 'mixed'> = ['mixed', 'wraith', 'storm', 'holy'];
+// Boss element per level (colour only — every world's boss walks, never
+// blinks/dashes, so it always reads as "the big slow tank", on purpose).
+const BOSS_ELEMENT: EnemyElement[] = ['normal', 'ice', 'storm', 'holy'];
 
 // ---------------------------------------------------------------------------
 // World construction
@@ -712,19 +724,22 @@ function updateWraith(world: World, e: Enemy, toP: Vec2, d: number): void {
   e.pos.y += (toP.y / d) * jump;
 }
 
-// 王召喚:每 summonInterval 在自己周圍生 summonCount 隻小怪 + 召喚光環。世界2 召喚
-// 冰靈,其餘世界召喚一般史萊姆(呼應該世界的一般敵人種類)。
+// 王召喚:每 summonInterval 在自己周圍生 summonCount 隻小怪 + 召喚光環,種類跟該
+// 世界的一般敵人一致(見 LEVEL_ENEMY)。level 0 沒有 rng 可用,固定召喚一般史萊姆
+// (跟過去行為一致,不是真隨機混色)。
 function bossSummon(world: World, e: Enemy): void {
   const b = CONFIG.boss;
   if (e.nextSummonAt === undefined) e.nextSummonAt = world.time + b.summonInterval;
   if (world.time < e.nextSummonAt) return;
   e.nextSummonAt = world.time + b.summonInterval;
+  const kind = LEVEL_ENEMY[world.levelId] ?? 'mixed';
   for (let i = 0; i < b.summonCount; i++) {
     const ang = (i / b.summonCount) * Math.PI * 2;
     const r = e.radius + 24;
     const pos = { x: e.pos.x + Math.cos(ang) * r, y: e.pos.y + Math.sin(ang) * r };
-    if (world.levelId === 1) makeWraith(world, pos);
-    else makeSlime(world, pos, 'normal');
+    if (kind === 'wraith') makeWraith(world, pos);
+    else if (kind === 'mixed') makeSlime(world, pos, 'normal');
+    else makeSlime(world, pos, kind);
   }
   pushEffect(world, {
     kind: 'aura', a: { x: e.pos.x, y: e.pos.y },
@@ -899,13 +914,14 @@ function makeWraith(world: World, pos: Vec2): void {
 
 function spawnEnemy(world: World, rng: () => number): void {
   const pos = ringSpawnPos(world, rng);
-  if (world.levelId === 1) makeWraith(world, pos);
-  else makeSlime(world, pos, pickElement(world.wave, rng));
+  const kind = LEVEL_ENEMY[world.levelId] ?? 'mixed';
+  if (kind === 'wraith') makeWraith(world, pos);
+  else if (kind === 'mixed') makeSlime(world, pos, pickElement(world.wave, rng));
+  else makeSlime(world, pos, kind);
 }
 
-// 世界王:巨大、肉、慢、週期召喚。世界1 是史萊姆王(element 'normal',顏色由
-// client 的 boss 旗標決定);世界2 是冰靈女王(element 'ice',召喚冰靈——見
-// bossSummon)。走路移動(不閃現),跟一般冰靈的招牌移動方式刻意不同。
+// 世界王:巨大、肉、慢、週期召喚(見 BOSS_ELEMENT/bossSummon)。永遠走路移動,
+// 不套用該世界雜兵的招牌移動方式(閃現/突進等),讀起來一貫是「緩慢大坦克」。
 function spawnBoss(world: World, rng: () => number): void {
   const b = CONFIG.boss;
   const hp = (CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave) * b.hpMul;
@@ -917,7 +933,7 @@ function spawnBoss(world: World, rng: () => number): void {
     slowUntil: 0,
     radius: CONFIG.enemy.radius * b.radiusMul,
     targetId: null,
-    element: world.levelId === 1 ? 'ice' : 'normal',
+    element: BOSS_ELEMENT[world.levelId] ?? 'normal',
     maxHp: hp,
     boss: true,
     nextSummonAt: world.time + b.summonInterval,

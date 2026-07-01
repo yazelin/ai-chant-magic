@@ -41,9 +41,11 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
 const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on top)
 // --- Level scene themes -----------------------------------------------------
 // A "world" = a swappable theme: a CSS sky (applied to #game-chrome) + a scene
-// draw mode. Adding a future world (Re:Zero / 學園都市 / 現代-貞德 / …, can be
-// more than four) = one entry in THEMES + one more slot in LEVEL_THEMES. Art is
-// intentionally light — the point is the architecture, not the polish.
+// draw mode. All four playable characters' home worlds are covered (slime →
+// frostvale → electropolis → grail); adding a fifth would still just be one
+// entry in THEMES + one more slot in LEVEL_THEMES (see MAX_LEVEL_ID in
+// shared/world.ts). Art stays light on purpose — the point is the
+// architecture, not the polish.
 interface SceneTheme {
   skyTop: number; // in-scene vertical sky gradient (top → bottom)
   skyBottom: number;
@@ -68,9 +70,20 @@ const THEMES: Record<string, SceneTheme> = {
     skyTop: 0x1a2f42, skyBottom: 0x080b14, mode: 'dream',
     border: 0x4a7a9a, blobColors: [0x6fc8e8, 0xaee0f0, 0xd8e8ff], bubble: 0xe8f7ff,
   },
+  // Level 3 — electropolis / 學園都市. Reuses 'grid' mode (same draw code as
+  // engineer's dev floor) with a violet palette matching 御坂美琴's colour.
+  electropolis: {
+    skyTop: 0x241a3a, skyBottom: 0x0a0612, mode: 'grid', border: 0x6a4a9a, grid: 0x4a2a6a,
+  },
+  // Level 4 — grail / 聖杯戰爭・現代. 'dream' mode again, warm gold palette
+  // matching 貞德's colour — soft holy light instead of goo blobs.
+  grail: {
+    skyTop: 0x3a2f1a, skyBottom: 0x100c06, mode: 'dream',
+    border: 0x9a7a3a, blobColors: [0xffd24d, 0xfff0c0, 0xffe8a0], bubble: 0xfff4d8,
+  },
 };
 // world.levelId (server-authoritative) indexes into this to pick THEMES[key].
-const LEVEL_THEMES: string[] = ['slime', 'frostvale'];
+const LEVEL_THEMES: string[] = ['slime', 'frostvale', 'electropolis', 'grail'];
 function themeKeyForLevel(levelId: number): string {
   return LEVEL_THEMES[levelId] ?? LEVEL_THEMES[0];
 }

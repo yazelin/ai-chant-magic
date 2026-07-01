@@ -7,7 +7,7 @@ import { World, CONFIG } from '@acm/shared';
 const SEGS = CONFIG.boss.every;
 // Boss name by world.levelId — keep in lockstep with shared/world.ts's
 // spawnBoss() element choice (and MAX_LEVEL_ID) as new worlds ship.
-const BOSS_NAMES = ['史萊姆王', '冰靈女王'];
+const BOSS_NAMES = ['史萊姆王', '冰靈女王', '雷靈王', '聖杯女王'];
 
 const STYLE = `
 #wavehud { position: fixed; top: 6px; left: 50%; transform: translateX(-50%);

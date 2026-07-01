@@ -15,7 +15,7 @@ const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 
 // Boss name by world.levelId — keep in lockstep with wavehud.ts's copy and
 // shared/world.ts's spawnBoss() element choice as new worlds ship.
-const BOSS_NAMES = ['史萊姆王', '冰靈女王'];
+const BOSS_NAMES = ['史萊姆王', '冰靈女王', '雷靈王', '聖杯女王'];
 
 // Small cooldown pips (party panel): coloured when ready, grey while cooling.
 function cdPips(p: Player, now: number): string {
@@ -127,7 +127,7 @@ export class Hud {
         ? '<button id="victory-restart" style="pointer-events:auto;cursor:pointer;margin-top:12px;background:var(--accent);color:#1a1030;border:none;border-radius:10px;padding:9px 22px;font:800 16px system-ui;">重來</button>'
         : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等大家看完結局…回到房間</div>';
       this.victory.innerHTML =
-        `全破!兩個世界都已淨化<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">總耗時 ${mins}:${secs} · 擊殺 ${world.score}</div>` +
+        `全破!四個世界都已淨化<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">總耗時 ${mins}:${secs} · 擊殺 ${world.score}</div>` +
         `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${hint}`;
       this.victory.querySelector('#victory-restart')?.addEventListener('click', () => this.onRestart());
     } else if (world.status !== 'victory' && this.victoryShown) {
