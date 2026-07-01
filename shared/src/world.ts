@@ -4,6 +4,12 @@ import { SPELLS } from './spells';
 import { CLASSES, classSpellSet } from './classes';
 import { dist, sub, len, scale } from './vec';
 
+// Last implemented level (0-based): level 0 = slime/為美好世界, level 1 =
+// frostvale/Re:Zero. Bump this alongside a new LEVEL_THEMES entry (client) when
+// a new world ships. Clearing this level ends the game in victory instead of
+// transitioning further.
+export const MAX_LEVEL_ID = 1;
+
 // ---------------------------------------------------------------------------
 // World construction
 // ---------------------------------------------------------------------------
@@ -67,6 +73,7 @@ export function createWorld(seeds: PlayerSeed[]): World {
     score: 0,
     levelId: 0,
     levelCleared: false,
+    transitionTimer: 0,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: CONFIG.wave.baseCadence,
@@ -117,7 +124,7 @@ export function step(
   dt: number,
   rng: () => number = Math.random
 ): World {
-  if (world.status === 'gameover') return world;
+  if (world.status === 'gameover' || world.status === 'victory') return world;
   world.time += dt;
 
   // Latest move per player; cast queue processes every cast.
@@ -516,7 +523,11 @@ function removeDeadEnemies(world: World): void {
   for (const e of world.enemies) {
     if (e.hp > 0) { survivors.push(e); continue; }
     if (e.element === 'fire') fireDeathExplosion(world, e); // 火史萊姆死亡小爆炸
-    if (e.boss) world.levelCleared = true; // 史萊姆王死 = 這關過了,停止繼續刷怪
+    if (e.boss) {
+      // 王死 = 這關過了,停止繼續刷怪,倒數轉場(見 updateWaves)。
+      world.levelCleared = true;
+      world.transitionTimer = CONFIG.transition.delay;
+    }
   }
   world.score += world.enemies.length - survivors.length;
   world.enemies = survivors;
@@ -701,7 +712,8 @@ function updateWraith(world: World, e: Enemy, toP: Vec2, d: number): void {
   e.pos.y += (toP.y / d) * jump;
 }
 
-// 史萊姆王召喚:每 summonInterval 在自己周圍生 summonCount 隻小史萊姆 + 召喚光環。
+// 王召喚:每 summonInterval 在自己周圍生 summonCount 隻小怪 + 召喚光環。世界2 召喚
+// 冰靈,其餘世界召喚一般史萊姆(呼應該世界的一般敵人種類)。
 function bossSummon(world: World, e: Enemy): void {
   const b = CONFIG.boss;
   if (e.nextSummonAt === undefined) e.nextSummonAt = world.time + b.summonInterval;
@@ -710,7 +722,9 @@ function bossSummon(world: World, e: Enemy): void {
   for (let i = 0; i < b.summonCount; i++) {
     const ang = (i / b.summonCount) * Math.PI * 2;
     const r = e.radius + 24;
-    makeSlime(world, { x: e.pos.x + Math.cos(ang) * r, y: e.pos.y + Math.sin(ang) * r }, 'normal');
+    const pos = { x: e.pos.x + Math.cos(ang) * r, y: e.pos.y + Math.sin(ang) * r };
+    if (world.levelId === 1) makeWraith(world, pos);
+    else makeSlime(world, pos, 'normal');
   }
   pushEffect(world, {
     kind: 'aura', a: { x: e.pos.x, y: e.pos.y },
@@ -889,7 +903,9 @@ function spawnEnemy(world: World, rng: () => number): void {
   else makeSlime(world, pos, pickElement(world.wave, rng));
 }
 
-// 史萊姆王:巨大、肉、慢、週期召喚。Element 'normal'(顏色由客端 boss 旗標決定)。
+// 世界王:巨大、肉、慢、週期召喚。世界1 是史萊姆王(element 'normal',顏色由
+// client 的 boss 旗標決定);世界2 是冰靈女王(element 'ice',召喚冰靈——見
+// bossSummon)。走路移動(不閃現),跟一般冰靈的招牌移動方式刻意不同。
 function spawnBoss(world: World, rng: () => number): void {
   const b = CONFIG.boss;
   const hp = (CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave) * b.hpMul;
@@ -901,7 +917,7 @@ function spawnBoss(world: World, rng: () => number): void {
     slowUntil: 0,
     radius: CONFIG.enemy.radius * b.radiusMul,
     targetId: null,
-    element: 'normal',
+    element: world.levelId === 1 ? 'ice' : 'normal',
     maxHp: hp,
     boss: true,
     nextSummonAt: world.time + b.summonInterval,
@@ -909,7 +925,28 @@ function spawnBoss(world: World, rng: () => number): void {
 }
 
 function updateWaves(world: World, dt: number, rng: () => number): void {
-  if (world.levelCleared) return; // boss is down; no more waves until the next level ships
+  if (world.levelCleared) {
+    // Boss is down; let the level-clear toast linger, then either move on to
+    // the next level or — on the last one — end the game.
+    if (world.transitionTimer > 0) {
+      world.transitionTimer -= dt;
+      if (world.transitionTimer <= 0) {
+        world.transitionTimer = 0;
+        if (world.levelId >= MAX_LEVEL_ID) {
+          world.status = 'victory';
+        } else {
+          world.levelId += 1;
+          world.levelCleared = false;
+          world.enemies = [];
+          world.wave = 0;
+          world.spawnQueue = 0;
+          world.spawnTimer = 0;
+          world.breakTimer = 0;
+        }
+      }
+    }
+    return;
+  }
   if (world.breakTimer > 0) {
     world.breakTimer -= dt;
     if (world.breakTimer <= 0) {

@@ -1,10 +1,13 @@
 import { World, CONFIG } from '@acm/shared';
 
 // Top-centre HUD: a segmented level-progress bar (one "level" = boss.every waves,
-// ending in the 史萊姆王), the current wave filling by how much of it is cleared;
-// a "下一波 N" countdown during the break; and — while a boss is alive — a
-// prominent fixed boss HP bar visible from anywhere on the map.
+// ending in that level's boss), the current wave filling by how much of it is
+// cleared; a "下一波 N" countdown during the break; and — while a boss is alive
+// — a prominent fixed boss HP bar visible from anywhere on the map.
 const SEGS = CONFIG.boss.every;
+// Boss name by world.levelId — keep in lockstep with shared/world.ts's
+// spawnBoss() element choice (and MAX_LEVEL_ID) as new worlds ship.
+const BOSS_NAMES = ['史萊姆王', '冰靈女王'];
 
 const STYLE = `
 #wavehud { position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
@@ -68,7 +71,9 @@ export class WaveHud {
 
   update(world: World): void {
     const wave = Math.max(1, world.wave);
-    const level = Math.floor((wave - 1) / SEGS) + 1;
+    // Each level restarts its own wave count at a transition (see world.ts), so
+    // the chapter number is world.levelId directly, not derived from wave.
+    const level = world.levelId + 1;
     const inBlock = (wave - 1) % SEGS; // 0..SEGS-1, last = boss wave
 
     // within-wave progress from spawnQueue + alive enemies (recorded at wave start)
@@ -90,7 +95,7 @@ export class WaveHud {
     this.count.textContent = breaking ? `下一波 ${Math.ceil(world.breakTimer)}` : '';
     this.count.style.display = breaking ? 'block' : 'none'; // don't reserve space when idle
 
-    // boss HP bar (fixed, always visible while the 史萊姆王 lives)
+    // boss HP bar (fixed, always visible while the level's boss lives)
     const boss = world.enemies.find((e) => e.boss);
     if (boss) {
       if (boss.id !== this.bossId) { this.bossId = boss.id; this.bossMax = boss.hp; }
@@ -98,7 +103,8 @@ export class WaveHud {
       this.bossBox.style.display = 'flex';
       const frac = Math.max(0, Math.min(1, boss.hp / this.bossMax));
       this.bossFill.style.width = `${frac * 100}%`;
-      this.bossLabel.textContent = `史萊姆王　${Math.ceil(Math.max(0, boss.hp))} / ${Math.round(this.bossMax)}`;
+      const name = BOSS_NAMES[world.levelId] ?? BOSS_NAMES[0];
+      this.bossLabel.textContent = `${name}　${Math.ceil(Math.max(0, boss.hp))} / ${Math.round(this.bossMax)}`;
     } else {
       this.bossBox.style.display = 'none';
       this.bossId = null;

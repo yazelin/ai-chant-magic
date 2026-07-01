@@ -177,6 +177,7 @@ export function emptyWorld(): World {
     score: 0,
     levelId: 0,
     levelCleared: false,
+    transitionTimer: 0, // sim-only countdown; the wire snapshot doesn't carry it
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -197,6 +198,7 @@ function snapshotToWorld(s: Snapshot): World {
     score: s.score,
     levelId: s.levelId,
     levelCleared: s.levelCleared,
+    transitionTimer: 0,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -245,6 +247,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     score: next.score,
     levelId: next.levelId,
     levelCleared: next.levelCleared,
+    transitionTimer: 0,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
