@@ -29,9 +29,12 @@ jobs:
       # build only the client workspace for Pages; output is client/dist
       # VITE_SERVER_URL bakes the live Render ws server in as the default;
       # players can still override per-session with ?server=wss://...
+      # VITE_LEADERBOARD_URL bakes in the 週挑戰 leaderboard Worker (see
+      # cloudflare/leaderboard/) — a separate, independently-deployed backend.
       - run: npm run build:client
         env:
           VITE_SERVER_URL: wss://ai-chant-magic-server.onrender.com
+          VITE_LEADERBOARD_URL: https://ai-chant-magic-leaderboard.yazelinj303.workers.dev
       - uses: actions/upload-pages-artifact@v3
         with:
           path: client/dist
