@@ -18,6 +18,9 @@ export interface Player {
   alive: boolean; downed: boolean;
   bleedoutAt: number; reviveProgress: number; respawnAtWave: number;
   shieldUntil: number;
+  // Sim-only marker for Jeanne's 聖盾. Unlike shieldUntil, this is used for the
+  // team power buff, so generic shields do not accidentally double skill output.
+  aegisUntil?: number;
   // Brief invincibility after taking a contact hit (i-frames): no contact damage
   // applies until this sim time. Stops swarms from melting you frame-by-frame.
   // Sim-only (not serialized; the client reads hp from snapshots).

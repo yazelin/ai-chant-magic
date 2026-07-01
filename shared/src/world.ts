@@ -88,6 +88,18 @@ function findPlayer(world: World, id: string): Player | undefined {
   return world.players.find((p) => p.id === id);
 }
 
+function skillPowerMultiplier(world: World): number {
+  return world.players.some((p) => p.connected && p.alive && !p.downed && world.time < (p.aegisUntil ?? 0)) ? 2 : 1;
+}
+
+function skillDamage(world: World, base: number): number {
+  return base * skillPowerMultiplier(world);
+}
+
+function skillHeal(world: World, base: number): number {
+  return base * skillPowerMultiplier(world);
+}
+
 // In-fight = an active participant: connected AND alive AND not downed. Used for
 // command application, enemy targeting and reviver eligibility. A disconnected
 // player stays in the world but is treated as having left (no command, no chase,
@@ -252,6 +264,7 @@ function castSpell(world: World, caster: Player, spell: SpellId): void {
         if (!ally.alive || ally.downed) continue;
         if (dist(caster.pos, ally.pos) <= CONFIG.aegis.radius) {
           ally.shieldUntil = world.time + CONFIG.aegis.duration;
+          ally.aegisUntil = world.time + CONFIG.aegis.duration;
         }
       }
       pushEffect(world, {
@@ -291,7 +304,7 @@ function castFrostnova(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
     if (dist(caster.pos, e.pos) <= CONFIG.frostnova.radius + e.radius) {
-      e.hp -= CONFIG.frostnova.damage;
+      e.hp -= skillDamage(world, CONFIG.frostnova.damage);
       e.frozenUntil = world.time + CONFIG.frostnova.slowDuration;
       e.slowUntil = world.time + CONFIG.frostnova.slowDuration;
     }
@@ -314,7 +327,7 @@ function castRepulse(world: World, caster: Player): void {
     const rel = sub(e.pos, o);
     const d = len(rel);
     if (d <= CONFIG.repulse.radius + e.radius) {
-      e.hp -= CONFIG.repulse.damage;
+      e.hp -= skillDamage(world, CONFIG.repulse.damage);
       const ux = d > 0.001 ? rel.x / d : 1;
       const uy = d > 0.001 ? rel.y / d : 0;
       e.pos.x = Math.max(0, Math.min(CONFIG.arenaWidth, e.pos.x + ux * CONFIG.repulse.knockback));
@@ -335,7 +348,7 @@ function castRepulse(world: World, caster: Player): void {
 function castHolyburst(world: World, caster: Player): void {
   for (const e of world.enemies) {
     if (e.hp <= 0) continue;
-    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= CONFIG.holybolt.damage;
+    if (dist(caster.pos, e.pos) <= CONFIG.holybolt.radius + e.radius) e.hp -= skillDamage(world, CONFIG.holybolt.damage);
   }
   pushEffect(world, {
     kind: 'nova', ownerId: caster.id,
@@ -374,7 +387,7 @@ function castThunder(world: World, caster: Player): void {
       const along = rel.x * dir.x + rel.y * dir.y;
       if (along < 0 || along > segLen) continue;
       const perp = Math.abs(rel.x * -dir.y + rel.y * dir.x);
-      if (perp <= width + e.radius) { e.hp -= dmg; hit.add(e.id); }
+      if (perp <= width + e.radius) { e.hp -= skillDamage(world, dmg); hit.add(e.id); }
     }
     pushEffect(world, {
       kind: 'beam', ownerId: caster.id,
@@ -406,7 +419,7 @@ function castChain(world: World, caster: Player): void {
       if (d <= range && d < bestD) { bestD = d; target = e; }
     }
     if (!target) break;
-    target.hp -= CONFIG.chain.damage * Math.pow(CONFIG.chain.falloff, k);
+    target.hp -= skillDamage(world, CONFIG.chain.damage * Math.pow(CONFIG.chain.falloff, k));
     visited.add(target.id);
     pushEffect(world, {
       kind: 'chain', ownerId: caster.id,
@@ -462,7 +475,7 @@ function explodeAoE(
 ): void {
   for (const e of world.enemies) {
     if (dist(at, e.pos) <= explosionRadius + e.radius) {
-      e.hp -= explosionDamage;
+      e.hp -= skillDamage(world, explosionDamage);
     }
   }
   pushEffect(world, {
@@ -486,12 +499,12 @@ function onProjectileHit(world: World, proj: Projectile, hit: Enemy): boolean {
         proj.explosionDamage ?? CONFIG.firestorm.baseDamage, CLASSES.pyro.color);
       return true; // detonated on contact; fuse loop must skip it
     case 'frost':
-      hit.hp -= proj.damage;
+      hit.hp -= skillDamage(world, proj.damage);
       hit.slowUntil = world.time + CONFIG.frost.slowDuration;
       return false;
     default:
       // holybolt and other direct-hit projectiles
-      hit.hp -= proj.damage;
+      hit.hp -= skillDamage(world, proj.damage);
       return false;
   }
 }
@@ -587,7 +600,7 @@ function enterDowned(world: World, p: Player): void {
 function updateRegen(world: World, dt: number): void {
   for (const p of world.players) {
     if (!p.alive || p.downed) continue;
-    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + (p.healRate ?? CONFIG.heal.rate) * dt);
+    if (world.time < (p.healUntil ?? 0)) p.hp = Math.min(p.maxHp, p.hp + skillHeal(world, p.healRate ?? CONFIG.heal.rate) * dt);
   }
 }
 

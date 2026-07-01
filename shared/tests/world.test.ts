@@ -498,10 +498,40 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     d.downed = true;
     step(w, [{ kind: 'cast', playerId: 'a', spell: 'aegis' }], 0.016);
     expect(a.shieldUntil).toBeCloseTo(w.time + CONFIG.aegis.duration); // self
+    expect(a.aegisUntil).toBeCloseTo(w.time + CONFIG.aegis.duration); // self power buff marker
     expect(b.shieldUntil).toBeCloseTo(w.time + CONFIG.aegis.duration); // in range alive
+    expect(b.aegisUntil).toBeCloseTo(w.time + CONFIG.aegis.duration);
     expect(c.shieldUntil).toBe(0); // out of range
+    expect(c.aegisUntil).toBeUndefined();
     expect(d.shieldUntil).toBe(0); // downed -> skipped
+    expect(d.aegisUntil).toBeUndefined();
     expect(w.effects.some((e) => e.kind === 'aura')).toBe(true);
+  });
+
+  it('aegis doubles skill damage while active, then damage returns to normal after it expires', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'warden' },
+      { id: 'b', name: 'Bo', classId: 'storm' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 480, y: 320 };
+    b.pos = { x: a.pos.x + 20, y: a.pos.y };
+    b.facing = 0;
+
+    w.enemies.push(makeEnemy({ id: 1, hp: 200, pos: { x: b.pos.x + 120, y: b.pos.y } }));
+    step(w, [
+      { kind: 'cast', playerId: 'a', spell: 'aegis' },
+      { kind: 'cast', playerId: 'b', spell: 'thunder' },
+    ], 0);
+    expect(w.enemies.find((e) => e.id === 1)!.hp).toBe(200 - CONFIG.thunder.damage * 2);
+
+    step(w, [], CONFIG.aegis.duration + 0.01);
+    b.cooldowns.thunder = 0;
+    w.enemies = [makeEnemy({ id: 2, hp: 200, pos: { x: b.pos.x + 120, y: b.pos.y } })];
+    step(w, [{ kind: 'cast', playerId: 'b', spell: 'thunder' }], 0);
+    expect(w.enemies.find((e) => e.id === 2)!.hp).toBe(200 - CONFIG.thunder.damage);
   });
 
   it('heal restores alive allies in radius incl self, caps at maxHp, skips downed/dead', () => {
@@ -533,6 +563,26 @@ describe('step — shield / aegis / heal (buff + heal allies, alive only)', () =
     expect(b.hp).toBeLessThanOrEqual(b.maxHp);
     expect(c.hp).toBe(0); // downed ally skipped (never got the HoT)
     expect(d.hp).toBe(d.maxHp); // capped at maxHp
+  });
+
+  it('aegis doubles healing ticks while active', () => {
+    const w = createWorld([
+      { id: 'a', name: 'Ana', classId: 'warden' },
+      { id: 'b', name: 'Bo', classId: 'pyro' },
+    ]);
+    w.breakTimer = 999;
+    const a = findPlayer(w, 'a');
+    const b = findPlayer(w, 'b');
+    a.pos = { x: 480, y: 320 };
+    b.pos = { x: a.pos.x + 20, y: a.pos.y };
+    b.hp = 20;
+    step(w, [
+      { kind: 'cast', playerId: 'a', spell: 'aegis' },
+      { kind: 'cast', playerId: 'a', spell: 'heal' },
+    ], 0);
+
+    step(w, [], 1);
+    expect(b.hp).toBeCloseTo(20 + CONFIG.heal.rate * 2);
   });
 });
 
