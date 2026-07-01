@@ -62,9 +62,15 @@ const THEMES: Record<string, SceneTheme> = {
     skyTop: 0x1b3a44, skyBottom: 0x080d16, mode: 'dream',
     border: 0x3a6a60, blobColors: [0x2fae7a, 0x3a9d9d, 0x7a6ad0], bubble: 0xaff0d4,
   },
+  // Level 2 — frostvale / Re:Zero snowy dreamscape. Same 'dream' draw mode as
+  // slime, just an icy palette swap — no new sprites/draw code.
+  frostvale: {
+    skyTop: 0x1a2f42, skyBottom: 0x080b14, mode: 'dream',
+    border: 0x4a7a9a, blobColors: [0x6fc8e8, 0xaee0f0, 0xd8e8ff], bubble: 0xe8f7ff,
+  },
 };
 // world.levelId (server-authoritative) indexes into this to pick THEMES[key].
-const LEVEL_THEMES: string[] = ['slime'];
+const LEVEL_THEMES: string[] = ['slime', 'frostvale'];
 function themeKeyForLevel(levelId: number): string {
   return LEVEL_THEMES[levelId] ?? LEVEL_THEMES[0];
 }
