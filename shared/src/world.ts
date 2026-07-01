@@ -153,6 +153,7 @@ export function createWorld(seeds: PlayerSeed[]): World {
     breakTimer: 0,
     endless: false,
     endlessKillBase: 0,
+    endlessTimeBase: 0,
     nextEliteWave: 0,
     eliteWavesSoFar: 0,
     eliteQueue: 0,
@@ -182,6 +183,7 @@ export function enterEndlessMode(world: World): void {
   world.transitionTimer = 0;
   world.endless = true;
   world.endlessKillBase = world.score;
+  world.endlessTimeBase = world.time;
   world.nextEliteWave = 5;
   world.eliteWavesSoFar = 0;
   world.eliteQueue = 0;

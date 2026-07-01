@@ -13,7 +13,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse, touchMoveDir } from '../input/controls';
 import { GameSession } from '../session/GameSession';
-import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt } from '../audio/sfx';
+import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt, sfxEliteKill } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
@@ -39,6 +39,14 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
   holy: 0xffd24d, // gold
 };
 const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on top)
+// Endless-mode elite identity → display name, keyed by the same element the
+// enemy already carries (spawnElite() cycles through these 4 — see shared/
+// world.ts's BOSS_ELEMENT). No crown (that reads "boss encounter"); elites get
+// a gold outline instead, since the request was to send bosses in "as if they
+// were regular mobs" rather than staging a unique boss fight.
+const ELITE_NAME_BY_ELEMENT: Partial<Record<EnemyElement, string>> = {
+  normal: '史萊姆王', ice: '冰靈女王', storm: '雷靈王', holy: '聖杯女王',
+};
 // --- Level scene themes -----------------------------------------------------
 // A "world" = a swappable theme: a CSS sky (applied to #game-chrome) + a scene
 // draw mode. All four playable characters' home worlds are covered (slime →
@@ -167,10 +175,15 @@ export class GameScene extends Phaser.Scene {
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
   // First-seen hp per enemy id → treated as "full" for the damage hp bar.
   private enemyMaxHp = new Map<number, number>();
+  // Elite (endless-mode) name labels, pooled by enemy id like player labels.
+  private eliteLabels = new Map<number, Phaser.GameObjects.Text>();
   // Impact detection (drives hit/kill/hurt SFX + visual feedback): previous-frame
   // hp + last-known position per enemy, the local player's previous hp, and a
   // per-enemy "flash white" expiry (scene time) applied in drawEnemy.
-  private prevEnemy = new Map<number, { hp: number; x: number; y: number; element: EnemyElement }>();
+  private prevEnemy = new Map<
+    number,
+    { hp: number; x: number; y: number; element: EnemyElement; elite: boolean }
+  >();
   private prevSelfHp = -1;
   private enemyHitFlash = new Map<number, number>();
   // Local player hurt cue: scene time until which to tint the self sprite red.
@@ -414,8 +427,15 @@ export class GameScene extends Phaser.Scene {
     this.aimGfx.clear();
 
     // Level transition (world.levelId advanced): re-theme in place, no scene
-    // rebuild needed.
-    if (w.levelId !== this.lastThemedLevelId) this.applyThemeForLevel(w.levelId);
+    // rebuild needed. Endless mode freezes world.levelId at whatever it was on
+    // victory (see enterEndlessMode), so it would otherwise show the same
+    // scenery forever — cycle through all 4 themes every 10 waves instead,
+    // purely a client-side visual choice (doesn't touch world.levelId, which
+    // other readouts like the boss-name lookups still use as-is).
+    const themeLevelId = w.endless
+      ? Math.floor((Math.max(1, w.wave) - 1) / 10) % LEVEL_THEMES.length
+      : w.levelId;
+    if (themeLevelId !== this.lastThemedLevelId) this.applyThemeForLevel(themeLevelId);
 
     // World-fixed scene (under everything): scrolls as the camera follows the
     // player, so movement reads; style depends on the active level theme.
@@ -440,6 +460,12 @@ export class GameScene extends Phaser.Scene {
     // prune render-side per-enemy hp memory for enemies that have left the world
     for (const id of this.enemyMaxHp.keys()) {
       if (!liveEnemies.has(id)) this.enemyMaxHp.delete(id);
+    }
+    for (const [id, label] of this.eliteLabels) {
+      if (!liveEnemies.has(id)) {
+        label.destroy();
+        this.eliteLabels.delete(id);
+      }
     }
 
     // projectiles: fire spells get the additive glow + ember trail; the others
@@ -674,19 +700,24 @@ export class GameScene extends Phaser.Scene {
         this.spawnDamageNumber(e.pos.x, e.pos.y - ENEMY_SPRITE_H / 2, Math.round(prev.hp - e.hp));
         this.enemyHitFlash.set(e.id, this.t + 0.08); // flash white ~0.08s
       }
-      this.prevEnemy.set(e.id, { hp: e.hp, x: e.pos.x, y: e.pos.y, element: e.element });
+      this.prevEnemy.set(e.id, { hp: e.hp, x: e.pos.x, y: e.pos.y, element: e.element, elite: !!e.elite });
     }
     // Kills: ids tracked last frame but absent now (enemies only leave by dying).
     let killed = false;
+    let eliteKilled = false;
     for (const [id, prev] of this.prevEnemy) {
       if (!liveIds.has(id)) {
         this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal);
         this.prevEnemy.delete(id);
         this.enemyHitFlash.delete(id);
         killed = true;
+        if (prev.elite) eliteKilled = true;
       }
     }
-    if (killed) sfxHit(); // one kill blip per frame, no matter how many died
+    // An elite kill gets its own heavier chime instead of stacking with the
+    // regular blip (there's no level-clear fanfare to lean on in endless mode).
+    if (eliteKilled) sfxEliteKill();
+    else if (killed) sfxHit(); // one kill blip per frame, no matter how many died
 
     const self = this.self();
     if (self) {
@@ -1094,11 +1125,37 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // hp bar above the slime: bosses always show it; normal slimes only once damaged.
+    // Elite (endless-mode demoted boss): gold outline instead of a crown — a
+    // boss fighting "as if it were a regular mob", not a staged boss fight.
+    if (e.elite) {
+      g.lineStyle(2.5, 0xffd24d, 0.9);
+      g.strokeEllipse(cx, cy, bw + 6, bh + 6);
+      g.lineStyle(0, 0, 0);
+    }
+
+    // hp bar above the slime: bosses/elites always show it; normal slimes only
+    // once damaged.
     if (!this.enemyMaxHp.has(e.id)) this.enemyMaxHp.set(e.id, e.hp);
     const max = this.enemyMaxHp.get(e.id)!;
-    if (e.boss) this.drawBar(cx, cy - bh / 2 - bh * 0.42, e.hp / max, 46);
-    else if (e.hp < max - 0.01) this.drawBar(cx, cy - bh / 2 - 8, e.hp / max, 20);
+    const barY = cy - bh / 2 - bh * 0.42;
+    if (e.boss) this.drawBar(cx, barY, e.hp / max, 46);
+    else if (e.elite) {
+      this.drawBar(cx, barY, e.hp / max, 34);
+      this.drawEliteLabel(e, cx, barY - 6);
+    } else if (e.hp < max - 0.01) this.drawBar(cx, cy - bh / 2 - 8, e.hp / max, 20);
+  }
+
+  private drawEliteLabel(e: Enemy, x: number, y: number): void {
+    let label = this.eliteLabels.get(e.id);
+    if (!label) {
+      label = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold' })
+        .setOrigin(0.5, 1);
+      this.eliteLabels.set(e.id, label);
+    }
+    label.setText(ELITE_NAME_BY_ELEMENT[e.element] ?? '菁英');
+    label.setColor('#ffd24d');
+    label.setPosition(x, y);
   }
 
   // --- players: flip L/R + cast pose/punch (NO rotation) ----------------------

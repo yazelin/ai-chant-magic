@@ -22,7 +22,7 @@ import { MusicEngine } from './audio/music';
 // (connected, already `started`) and hands us a GameSession + the self class id.
 // Both modes drive the same GameScene; voice casting and the 1/2/3 test keys
 // work identically (they all route through session.sendCast).
-function startGame(session: GameSession, classId: ClassId, solo = false): void {
+function startGame(session: GameSession, classId: ClassId, solo = false, isHost = false): void {
   // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
   // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
   // leaving the canvas at 0x0 — must set an explicit display.
@@ -66,7 +66,16 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
   });
 
   // Solo gets a 重來 button on the game-over banner (mobile has no R key).
-  const hud = new Hud(solo, () => scene.restart());
+  // Endless mode's decision buttons (victory screen) are host-gated for net
+  // play; solo is always its own host (see Lobby.startSolo).
+  const hud = new Hud(
+    solo,
+    () => scene.restart(),
+    () => session.enterEndless(),
+    () => session.skipToLobby(),
+    isHost,
+    () => session.endEndless(),
+  );
   const skillbar = new SkillBar();
   const wavehud = new WaveHud();
   const incantation = new IncantationOverlay();
@@ -142,8 +151,8 @@ function startGame(session: GameSession, classId: ClassId, solo = false): void {
       voice.stop();
       game.destroy(true);
       chrome?.classList.remove('playing');
-      ['skillbar', 'wavehud', 'gameover', 'incantation'].forEach((id) =>
-        document.getElementById(id)?.remove(),
+      ['skillbar', 'wavehud', 'gameover', 'victory', 'level-clear-toast', 'endless-quit', 'incantation'].forEach(
+        (id) => document.getElementById(id)?.remove(),
       );
     });
   }

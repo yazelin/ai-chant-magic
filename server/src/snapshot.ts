@@ -74,6 +74,7 @@ export interface Snapshot {
   levelCleared: boolean;
   endless: boolean;
   endlessKillBase: number; // "this run's kills" on the client = score - endlessKillBase
+  endlessTimeBase: number; // "this run's survival time" = time - endlessTimeBase
   breakTimer: number; // >0 = countdown to next wave
   spawnQueue: number; // enemies left to spawn this wave (for within-wave progress)
   players: SnapshotPlayer[];
@@ -96,6 +97,7 @@ export function toSnapshot(world: World): Snapshot {
     levelCleared: world.levelCleared,
     endless: world.endless,
     endlessKillBase: world.endlessKillBase,
+    endlessTimeBase: world.endlessTimeBase,
     breakTimer: world.breakTimer,
     spawnQueue: world.spawnQueue,
     players: world.players.map((p) => ({

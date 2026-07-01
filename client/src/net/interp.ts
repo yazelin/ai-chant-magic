@@ -80,6 +80,7 @@ export interface Snapshot {
   levelCleared: boolean;
   endless: boolean;
   endlessKillBase: number;
+  endlessTimeBase: number;
   breakTimer?: number;
   spawnQueue?: number;
   players: SnapshotPlayer[];
@@ -184,6 +185,7 @@ export function emptyWorld(): World {
     transitionTimer: 0, // sim-only countdown; the wire snapshot doesn't carry it
     endless: false,
     endlessKillBase: 0,
+    endlessTimeBase: 0,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0, // sim-only; the client never reads these
     spawnQueue: 0,
     spawnTimer: 0,
@@ -208,6 +210,7 @@ function snapshotToWorld(s: Snapshot): World {
     transitionTimer: 0,
     endless: s.endless,
     endlessKillBase: s.endlessKillBase,
+    endlessTimeBase: s.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
@@ -260,6 +263,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     transitionTimer: 0,
     endless: next.endless,
     endlessKillBase: next.endlessKillBase,
+    endlessTimeBase: next.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,

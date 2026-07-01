@@ -1,6 +1,13 @@
-import { World, Player, CLASSES } from '@acm/shared';
+import { World, Player, CLASSES, CONFIG } from '@acm/shared';
 import { VoiceStatus } from '../voice/recognizer';
 import { skillIconSvg } from '../ui/skillIcons';
+import {
+  loadRecord,
+  saveRecordIfBetter,
+  markEndlessUnlocked,
+  type EndlessBucket,
+  type EndlessRecord,
+} from '../session/endlessRecords';
 
 // Short mic-pill labels (the long permission instruction shows as a .note below).
 const MIC_LABEL: Record<VoiceStatus, string> = {
@@ -16,6 +23,33 @@ const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 // Boss name by world.levelId — keep in lockstep with wavehud.ts's copy and
 // shared/world.ts's spawnBoss() element choice as new worlds ship.
 const BOSS_NAMES = ['史萊姆王', '冰靈女王', '雷靈王', '聖杯女王'];
+
+// Endless-mode milestone flavour text, keyed by the exact wave (milestones only
+// ever land on multiples of 10); anything past the last entry falls back.
+const MILESTONE_FLAVOR: Record<number, string> = {
+  10: '熱身結束', 20: '漸入佳境', 30: '深淵漸近', 40: '傳說在望', 50: '無盡深處',
+};
+function milestoneFlavor(wave: number): string {
+  return MILESTONE_FLAVOR[wave] ?? '深淵不見底';
+}
+
+function endlessBucket(world: World): EndlessBucket {
+  return world.players.filter((p) => p.connected).length > 1 ? 'party' : 'solo';
+}
+
+function fmtMMSS(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds);
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60).toString().padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
+const GOLD_BTN =
+  'pointer-events:auto;cursor:pointer;background:var(--accent);color:#1a1030;border:none;' +
+  'border-radius:10px;padding:9px 22px;font:800 16px system-ui;';
+const PLAIN_BTN =
+  'pointer-events:auto;cursor:pointer;background:transparent;color:#c7cbdb;border:1px solid #666;' +
+  'border-radius:10px;padding:9px 22px;font:700 14px system-ui;';
 
 // Small cooldown pips (party panel): coloured when ready, grey while cooling.
 function cdPips(p: Player, now: number): string {
@@ -42,15 +76,30 @@ export class Hud {
   private gameover: HTMLElement;
   private victory: HTMLElement;
   private levelClear: HTMLElement;
+  private endlessQuit: HTMLElement;
   private heardTimer: ReturnType<typeof setTimeout> | null = null;
   private levelClearTimer: ReturnType<typeof setTimeout> | null = null;
   private goShown = false;
   private victoryShown = false;
   private levelClearShown = false;
+  // Endless-mode bookkeeping: the run's starting best (snapshotted once so the
+  // record-break toast compares against a fixed target, not a moving one —
+  // records are only persisted at death), and the victory-screen decision
+  // countdown's start time (kept separate from the DOM rebuild so the
+  // countdown text can update every render() without dropping button handlers).
+  private endlessWasActive = false;
+  private endlessPriorBest: EndlessRecord | null = null;
+  private endlessRecordBrokenShown = false;
+  private endlessLastToastWave = -1;
+  private victoryEnteredAt: number | null = null;
 
   constructor(
     private solo = false,
     private onRestart: () => void = () => {},
+    private onEnterEndless: () => void = () => {},
+    private onSkipToLobby: () => void = () => {},
+    private isHost = false,
+    private onEndEndless: () => void = () => {},
   ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
@@ -72,7 +121,9 @@ export class Hud {
       'text-align:center;font:800 22px system-ui,sans-serif;color:#fff;text-shadow:0 2px 8px #000;' +
       'background:rgba(16,16,34,0.82);border:1px solid #ffd24d;border-radius:14px;padding:18px 28px;';
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.victory);
-    // Level-clear toast (boss down): non-blocking, top-centre, auto-fades.
+    // Level-clear toast (campaign boss down) / endless-mode milestone+record
+    // toast: non-blocking, top-centre, auto-fades. Same DOM slot for both —
+    // they never fire at the same time (levelCleared never happens once endless).
     this.levelClear = document.createElement('div');
     this.levelClear.id = 'level-clear-toast';
     this.levelClear.style.cssText =
@@ -80,6 +131,19 @@ export class Hud {
       'text-align:center;font:800 20px system-ui,sans-serif;color:#ffd24d;text-shadow:0 2px 8px #000;' +
       'background:rgba(16,16,34,0.82);border:1px solid #ffd24d;border-radius:14px;padding:12px 24px;';
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.levelClear);
+    // Small always-visible "quit early" affordance during an endless run — the
+    // only other ways out are an actual party wipe or reloading the page.
+    // Host-only (matches endEndless's server-side gate), so it's never shown
+    // to someone whose click would just silently error.
+    this.endlessQuit = document.createElement('button');
+    this.endlessQuit.id = 'endless-quit';
+    this.endlessQuit.textContent = '結束挑戰';
+    this.endlessQuit.style.cssText =
+      'position:fixed;top:8px;right:8px;z-index:61;display:none;pointer-events:auto;cursor:pointer;' +
+      'background:rgba(16,16,34,0.82);color:#c7cbdb;border:1px solid #666;border-radius:8px;' +
+      'padding:5px 10px;font:700 12px system-ui;';
+    this.endlessQuit.addEventListener('click', () => this.onEndEndless());
+    (document.getElementById('game-chrome') ?? document.body).appendChild(this.endlessQuit);
   }
 
   setMicStatus(s: VoiceStatus, message?: string): void {
@@ -101,52 +165,160 @@ export class Hud {
     this.heardTimer = setTimeout(() => { this.heard.textContent = ''; }, 2600);
   }
 
+  // Shared by the campaign level-clear toast and the endless milestone/record
+  // toast — same DOM slot, same auto-fade timer.
+  private showToast(text: string, ms: number): void {
+    this.levelClear.textContent = text;
+    this.levelClear.style.display = 'block';
+    if (this.levelClearTimer) clearTimeout(this.levelClearTimer);
+    this.levelClearTimer = setTimeout(() => { this.levelClear.style.display = 'none'; }, ms);
+  }
+
   render(world: World, selfId: string | null = null): void {
     // Game-over banner — built once on the status flip (so its 重來 button keeps
     // a live click handler instead of being recreated every tick).
     if (world.status === 'gameover' && !this.goShown) {
       this.goShown = true;
+      // Don't let a still-fading endless toast visually collide with the banner.
+      if (this.levelClearTimer) clearTimeout(this.levelClearTimer);
+      this.levelClear.style.display = 'none';
+      this.levelClearShown = false;
+
       this.gameover.style.display = 'block';
       const hint = this.solo
-        ? '<button id="go-restart" style="pointer-events:auto;cursor:pointer;margin-top:12px;background:var(--accent);color:#1a1030;border:none;border-radius:10px;padding:9px 22px;font:800 16px system-ui;">重來</button>'
+        ? `<button id="go-restart" style="margin-top:12px;${GOLD_BTN}">重來</button>`
         : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等所有人都倒下…回到房間</div>';
-      this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}`;
+
+      if (world.endless) {
+        const bucket = endlessBucket(world);
+        const self = world.players.find((p) => p.id === selfId);
+        const runWave = world.wave;
+        const runScore = world.score - world.endlessKillBase;
+        const survived = fmtMMSS(world.time - world.endlessTimeBase);
+        let recordLine = '';
+        if (self) {
+          const prior = loadRecord(self.classId, bucket);
+          const saved = saveRecordIfBetter(self.classId, bucket, { wave: runWave, score: runScore });
+          if (!prior) recordLine = `本次紀錄:第 ${runWave} 波(此組合首次挑戰)`;
+          else if (saved) recordLine = `新紀錄!超越前次第 ${prior.wave} 波`;
+          else recordLine = `本次第 ${runWave} 波,尚未超越最佳第 ${prior.wave} 波(差 ${prior.wave - runWave} 波)`;
+        }
+        this.gameover.innerHTML =
+          `無盡深淵・力竭倒下<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}</div>` +
+          `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}`;
+      } else {
+        this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}`;
+      }
       this.gameover.querySelector('#go-restart')?.addEventListener('click', () => this.onRestart());
     } else if (world.status !== 'gameover' && this.goShown) {
       this.goShown = false;
       this.gameover.style.display = 'none';
     }
+
     // Victory banner — every implemented level cleared. Built once on the
-    // status flip, same shape/restart affordance as the game-over banner.
+    // status flip. Offers "keep going in endless mode" alongside restart/lobby.
     if (world.status === 'victory' && !this.victoryShown) {
       this.victoryShown = true;
+      this.victoryEnteredAt = Date.now();
+      markEndlessUnlocked(); // seeing the ending once is enough to unlock it forever
       this.victory.style.display = 'block';
       const mins = Math.floor(world.time / 60);
       const secs = Math.floor(world.time % 60).toString().padStart(2, '0');
-      const hint = this.solo
-        ? '<button id="victory-restart" style="pointer-events:auto;cursor:pointer;margin-top:12px;background:var(--accent);color:#1a1030;border:none;border-radius:10px;padding:9px 22px;font:800 16px system-ui;">重來</button>'
-        : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等大家看完結局…回到房間</div>';
+
+      const bucket = endlessBucket(world);
+      const self = world.players.find((p) => p.id === selfId);
+      const record = self ? loadRecord(self.classId, bucket) : null;
+      const recordLine = record
+        ? `歷代最佳:第 ${record.wave} 波・擊殺 ${record.score}(${bucket === 'solo' ? '單人' : '小隊'})`
+        : '尚無紀錄,成為第一位撐過無盡深淵的人';
+
+      let action: string;
+      if (this.solo) {
+        action =
+          `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">` +
+          `<button id="victory-endless" style="${GOLD_BTN}">挑戰無盡模式</button>` +
+          `<button id="victory-restart" style="${PLAIN_BTN}">重來</button></div>`;
+      } else if (this.isHost) {
+        action =
+          `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">` +
+          `<button id="victory-endless" style="${GOLD_BTN}">挑戰無盡模式</button>` +
+          `<button id="victory-skip" style="${PLAIN_BTN}">返回大廳</button></div>`;
+      } else {
+        action =
+          `<div style="font-size:13px;color:#9aa0b5;margin-top:10px">房主可開啟無盡模式,` +
+          `<span id="victory-countdown">${CONFIG.transition.victoryDecisionSec}</span> 秒內未選擇將自動返回房間</div>`;
+      }
+
       this.victory.innerHTML =
         `全破!四個世界都已淨化<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">總耗時 ${mins}:${secs} · 擊殺 ${world.score}</div>` +
-        `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${hint}`;
+        `<div style="font-size:12px;color:#ffd24d;margin-top:2px">${recordLine}</div>` +
+        `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${action}`;
+      this.victory.querySelector('#victory-endless')?.addEventListener('click', () => this.onEnterEndless());
       this.victory.querySelector('#victory-restart')?.addEventListener('click', () => this.onRestart());
+      this.victory.querySelector('#victory-skip')?.addEventListener('click', () => this.onSkipToLobby());
     } else if (world.status !== 'victory' && this.victoryShown) {
       this.victoryShown = false;
+      this.victoryEnteredAt = null;
       this.victory.style.display = 'none';
     }
-    // Level-clear toast — fires once on the levelCleared flip, auto-fades, resets
-    // on restart (a fresh world has levelCleared back to false).
+    // Keep the non-host decision countdown live without rebuilding the banner
+    // (rebuilding on every tick would drop the button handlers and flicker).
+    if (world.status === 'victory' && !this.solo && !this.isHost && this.victoryEnteredAt !== null) {
+      const remain = Math.ceil(
+        CONFIG.transition.victoryDecisionSec - (Date.now() - this.victoryEnteredAt) / 1000,
+      );
+      const el = this.victory.querySelector('#victory-countdown');
+      if (el) el.textContent = String(Math.max(0, remain));
+    }
+
+    // Level-clear toast (campaign) — fires once on the levelCleared flip.
     if (world.levelCleared && !this.levelClearShown) {
       this.levelClearShown = true;
       const bossName = BOSS_NAMES[world.levelId] ?? BOSS_NAMES[0];
-      this.levelClear.textContent = `${bossName} 討伐!世界已淨化`;
-      this.levelClear.style.display = 'block';
-      if (this.levelClearTimer) clearTimeout(this.levelClearTimer);
-      this.levelClearTimer = setTimeout(() => { this.levelClear.style.display = 'none'; }, 4000);
+      this.showToast(`${bossName} 討伐!世界已淨化`, 4000);
     } else if (!world.levelCleared && this.levelClearShown) {
       this.levelClearShown = false;
       this.levelClear.style.display = 'none';
     }
+
+    // Endless-mode milestone / record-break toast — same DOM slot as the
+    // level-clear toast, which is permanently idle once world.endless is true.
+    if (world.endless && world.status === 'playing') {
+      if (!this.endlessWasActive) {
+        // Just (re-)entered this tick — snapshot the run's starting best so the
+        // record-break toast compares against a fixed target, not one that
+        // moves as this very run's own attempts get persisted elsewhere. Fires
+        // for every connected client (state-driven, not tied to who clicked
+        // the button), so non-host players see it too as soon as their next
+        // snapshot reflects it.
+        this.endlessWasActive = true;
+        const self = world.players.find((p) => p.id === selfId);
+        this.endlessPriorBest = self ? loadRecord(self.classId, endlessBucket(world)) : null;
+        this.endlessRecordBrokenShown = false;
+        this.endlessLastToastWave = -1;
+        this.showToast('無盡模式啟動!', 4000);
+      }
+      if (world.wave > 0 && world.wave !== this.endlessLastToastWave) {
+        const brokeRecord =
+          !this.endlessRecordBrokenShown &&
+          this.endlessPriorBest !== null &&
+          world.wave > this.endlessPriorBest.wave;
+        if (brokeRecord) {
+          this.endlessRecordBrokenShown = true;
+          this.endlessLastToastWave = world.wave;
+          this.showToast(`超越歷史紀錄!目前第 ${world.wave} 波`, 5000);
+        } else if (world.wave % 10 === 0) {
+          this.endlessLastToastWave = world.wave;
+          const survived = fmtMMSS(world.time - world.endlessTimeBase);
+          this.showToast(`第 ${world.wave} 波達成・${milestoneFlavor(world.wave)}・已撐 ${survived}`, 4000);
+        }
+      }
+    } else if (!world.endless && this.endlessWasActive) {
+      this.endlessWasActive = false;
+    }
+    this.endlessQuit.style.display =
+      world.endless && world.status === 'playing' && (this.solo || this.isHost) ? 'block' : 'none';
+
     // Player status panels — self first.
     const players = world.players
       .filter((p) => p.connected)

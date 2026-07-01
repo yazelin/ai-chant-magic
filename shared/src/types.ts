@@ -102,9 +102,11 @@ export interface World {
   // it was (the last world's visuals/BOSS_ELEMENT keep being read where still
   // relevant, but spawn composition switches to spawnEndlessEnemy/spawnElite).
   endless: boolean;
-  // world.score at the moment endless mode was entered — the client shows
-  // "this run's kills" as score - endlessKillBase, without a second counter.
+  // world.score/time at the moment endless mode was entered — world.time never
+  // resets (unlike wave), so the client shows "this run's kills/survival time"
+  // as score - endlessKillBase / time - endlessTimeBase, without new counters.
   endlessKillBase: number;
+  endlessTimeBase: number;
   // Elite-mob (demoted boss) spawn schedule — see spawnElite()/beginWave().
   nextEliteWave: number; eliteWavesSoFar: number; eliteQueue: number;
 }

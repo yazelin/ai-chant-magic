@@ -33,6 +33,7 @@ export class WaveHud {
   private root: HTMLElement;
   private label: HTMLElement;
   private segEls: HTMLElement[] = [];
+  private segBoxEls: HTMLElement[] = []; // outer .seg divs (toggle the gold "boss" highlight)
   private count: HTMLElement;
   private bossBox: HTMLElement;
   private bossFill: HTMLElement;
@@ -62,6 +63,7 @@ export class WaveHud {
       `<div class="bossbar"><div class="bl">史萊姆王</div><div class="bbar"><i></i></div></div>`;
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.root);
     this.label = this.root.querySelector('.wlabel') as HTMLElement;
+    this.segBoxEls = Array.from(this.root.querySelectorAll('.seg')) as HTMLElement[];
     this.segEls = Array.from(this.root.querySelectorAll('.seg > i')) as HTMLElement[];
     this.count = this.root.querySelector('.count') as HTMLElement;
     this.bossBox = this.root.querySelector('.bossbar') as HTMLElement;
@@ -87,7 +89,17 @@ export class WaveHud {
     const breaking = world.breakTimer > 0;
     const waveFrac = breaking ? 1 : Math.max(0, Math.min(1, 1 - remaining / this.waveTotal));
 
-    this.label.textContent = `關卡 ${level}　第 ${wave} 波　擊殺 ${world.score}`;
+    if (world.endless) {
+      const runScore = world.score - world.endlessKillBase;
+      this.label.textContent = `無盡模式　第 ${wave} 波　擊殺 ${runScore}`;
+    } else {
+      this.label.textContent = `關卡 ${level}　第 ${wave} 波　擊殺 ${world.score}`;
+    }
+    // The last segment's gold "boss wave" highlight only means something in the
+    // campaign (a fixed every-5th wave); endless's elite cadence drifts
+    // (5/4/3), so it's just a plain progress readout there.
+    const lastIdx = this.segEls.length - 1;
+    if (lastIdx >= 0) this.segBoxEls[lastIdx]?.classList.toggle('boss', !world.endless);
     for (let i = 0; i < this.segEls.length; i++) {
       const f = i < inBlock ? 1 : i === inBlock ? waveFrac : 0;
       this.segEls[i].style.width = `${Math.round(f * 100)}%`;
@@ -95,8 +107,11 @@ export class WaveHud {
     this.count.textContent = breaking ? `下一波 ${Math.ceil(world.breakTimer)}` : '';
     this.count.style.display = breaking ? 'block' : 'none'; // don't reserve space when idle
 
-    // boss HP bar (fixed, always visible while the level's boss lives)
-    const boss = world.enemies.find((e) => e.boss);
+    // Fixed boss HP bar — a singleton readout that only makes sense in the
+    // campaign (exactly one boss at a time). Endless can field up to 3 elites
+    // at once (see CONFIG.elite cadence), so this stays hidden there; elites
+    // get their own per-enemy hp bar/label in GameScene instead.
+    const boss = world.endless ? undefined : world.enemies.find((e) => e.boss);
     if (boss) {
       if (boss.id !== this.bossId) { this.bossId = boss.id; this.bossMax = boss.hp; }
       if (boss.hp > this.bossMax) this.bossMax = boss.hp;

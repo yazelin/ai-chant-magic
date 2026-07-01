@@ -348,6 +348,16 @@ export function sfxDeath(): void {
   try { blip('sine', 420, 60, 0.7, 0.4); } catch { /* ignore */ }
 }
 
+// ELITE KILL (endless mode) — a demoted campaign boss going down: heavier than
+// a regular sfxHit blip, but a quick triumphant chime rather than staging a
+// full level-clear fanfare (there's no level to clear in endless mode).
+export function sfxEliteKill(): void {
+  try {
+    blip('square', 260, 60, 0.2, 0.42);
+    arp([784, 659, 1046], 0.07, 'triangle', 0.3);
+  } catch { /* ignore */ }
+}
+
 // --- Per-skill cast SFX ----------------------------------------------------
 // One distinct sound per spell so every skill is recognizable by ear. Reuses
 // the blip/arp/noise helpers; best-effort + guarded like everything else.

@@ -14,6 +14,7 @@ import {
   resolveServerUrl,
   needsServerSetup,
 } from '../net/NetClient';
+import { loadRecord, isEndlessUnlocked } from '../session/endlessRecords';
 
 const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 
@@ -108,7 +109,9 @@ export class Lobby {
   private practicing = false;
   private hitTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private onStart: (session: GameSession, classId: ClassId, solo: boolean) => void) {
+  constructor(
+    private onStart: (session: GameSession, classId: ClassId, solo: boolean, isHost: boolean) => void,
+  ) {
     this.root = document.getElementById('lobby')!;
     this.name = randomName(); // a fun default; player can edit or re-roll
     this.renderSetup();
@@ -320,10 +323,15 @@ export class Lobby {
         const dur = (sw.frames / 9).toFixed(2); // ≈9fps, close to in-game 10
         sprite = `background-image:url(${sw.url});background-size:${sw.frames * 96}px 96px;animation:walk${sw.frames} ${dur}s steps(${sw.frames}) infinite`;
       }
+      // Solo endless best, once the player has ever seen the ending — a quiet
+      // nudge that there's more game past the campaign, without spoiling/
+      // cluttering the card for anyone who hasn't unlocked it yet.
+      const record = isEndlessUnlocked() ? loadRecord(id, 'solo') : null;
+      const recordLine = record ? `<div class="crecord">無盡最佳・第 ${record.wave} 波</div>` : '';
       card.innerHTML = `
         <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div><div class="fx"></div></div>
         <div class="cname" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])}</div>
-        <div class="cworld">◈ ${escapeHtml(WORLD_NAME[id])}</div>
+        <div class="cworld">◈ ${escapeHtml(WORLD_NAME[id])}</div>${recordLine}
       `;
       card.addEventListener('click', () => {
         if (id === this.classId) return;
@@ -390,7 +398,7 @@ export class Lobby {
   private startSolo(): void {
     const session = new LocalSession(this.classId);
     this.hide();
-    this.onStart(session, this.classId, true);
+    this.onStart(session, this.classId, true, true); // solo is always its own host
   }
 
   // --- Net: create / quickJoin ---------------------------------------------
@@ -470,7 +478,7 @@ export class Lobby {
   private beginNetGame(client: NetClient): void {
     const session = new NetSession(client);
     this.hide();
-    this.onStart(session, this.classId, false);
+    this.onStart(session, this.classId, false, this.isHost);
   }
 
   // main.ts registers how to tear the running game down (Phaser / loop / overlays).

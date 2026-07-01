@@ -24,4 +24,8 @@ export interface GameSession {
   enterEndless(): void;
   // End an in-progress endless run on demand (same effect as a party wipe).
   endEndless(): void;
+  // Host-only, net-play-only: skip the victory decision window and return
+  // everyone to the lobby immediately. Meaningless for solo (no lobby to
+  // return to — restart() is the solo equivalent), so it's a no-op there.
+  skipToLobby(): void;
 }
