@@ -13,7 +13,7 @@ import {
 } from '@acm/shared';
 import { moveDirFromKeys, facingFromMouse, touchMoveDir } from '../input/controls';
 import { GameSession } from '../session/GameSession';
-import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt, sfxEliteKill } from '../audio/sfx';
+import { initAudio, sfxExplosion, sfxSpell, sfxHit, sfxHurt, sfxEliteKill, sfxResonance } from '../audio/sfx';
 import { SHEET_WALKERS, sheetWalkerKey, castKeyFor } from './walkSheets';
 
 // Pixel-art sprite textures. Keys for the four mages are their ClassId so a
@@ -276,6 +276,9 @@ export class GameScene extends Phaser.Scene {
       if (k === '1' || k === '2' || k === '3') {
         const spell = this.selfSpell(Number(k) - 1);
         if (spell) this.session.sendCast(spell);
+      } else if (k === '4') {
+        // 共鳴詠唱 test key — not a class spell, always available.
+        this.session.sendResonance();
       }
     });
     this.input.keyboard!.on('keyup', (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase()));
@@ -683,6 +686,7 @@ export class GameScene extends Phaser.Scene {
         if (fx.kind !== 'blast' && fx.spell && !castPlayed) { sfxSpell(fx.spell); castPlayed = true; }
       }
       if (fx.kind === 'blast') this.onBlast(fx);
+      else if (fx.kind === 'resonance') sfxResonance();
     }
   }
 
@@ -976,11 +980,28 @@ export class GameScene extends Phaser.Scene {
       const alpha = Math.max(0.15, Math.min(1, fx.ttl * 3));
       if (fx.kind === 'beam' || fx.kind === 'chain') {
         this.drawGlowLine(fx, color, alpha);
+      } else if (fx.kind === 'resonance') {
+        this.drawResonanceBurst(fx, color, alpha);
       } else {
         this.drawGlowCircle(fx, color, alpha);
       }
     }
     g.lineStyle(0, 0, 0);
+  }
+
+  // 共鳴詠唱's shared party-wide burst — an expanding double ring (not a
+  // static aura) so it reads as a one-shot celebratory pulse rather than a
+  // lingering zone, visible to every client regardless of who called it.
+  private drawResonanceBurst(fx: TransientEffect, color: number, alpha: number): void {
+    const g = this.gfx;
+    const r = fx.radius ?? 220;
+    const total = CONFIG.effectTtl.resonance;
+    const progress = 1 - Math.max(0, Math.min(1, fx.ttl / total)); // 0 at spawn -> 1 at death
+    const ringR = r * (0.3 + progress * 0.9);
+    g.lineStyle(5, color, alpha * (1 - progress * 0.6));
+    g.strokeCircle(fx.a.x, fx.a.y, ringR);
+    g.lineStyle(2, 0xffffff, alpha * 0.6);
+    g.strokeCircle(fx.a.x, fx.a.y, ringR * 0.7);
   }
 
   private drawGlowLine(fx: TransientEffect, color: number, alpha: number): void {

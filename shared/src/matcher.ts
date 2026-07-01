@@ -53,6 +53,15 @@ function containsFuzzy(hay: string, needle: string): boolean {
   return false;
 }
 
+// Fuzzy-matches a transcript against a flat phrase list, independent of the
+// SpellId/loadout system — for call-and-response cues like 共鳴詠唱 that
+// aren't spells (no cooldown/class restriction) but still deserve the same
+// typo-tolerant recognition quality as a real spell.
+export function matchesAny(transcript: string, aliases: string[]): boolean {
+  const hay = normalize(transcript);
+  return aliases.some((alias) => containsFuzzy(hay, normalize(alias)));
+}
+
 export function matchSpell(transcript: string, opts: MatchOptions = {}): SpellId | null {
   const hay = normalize(transcript);
 

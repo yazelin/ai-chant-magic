@@ -701,6 +701,7 @@ export class Lobby {
             <button id="chat-send" type="button">送出</button>
           </div>
         </div>
+        <div class="hint">小技巧:遊戲中和隊友一起喊「共鳴」(或按 4),同步呼喚可觸發全隊祝福</div>
         <div class="btns">
           ${
             this.isHost

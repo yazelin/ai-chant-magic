@@ -21,6 +21,7 @@ export class LocalSession implements GameSession {
   private latestMove: Vec2 = { x: 0, y: 0 };
   private latestFace = 0;
   private queuedCasts: SpellId[] = [];
+  private resonanceQueued = false;
   private worldCb: (w: World) => void = () => {};
 
   constructor(classId: ClassId = 'pyro') {
@@ -42,6 +43,12 @@ export class LocalSession implements GameSession {
 
   sendCast(spell: SpellId): void {
     this.queuedCasts.push(spell);
+  }
+
+  // Always inert solo (a single player can never reach the ≥2-distinct-callers
+  // threshold), but wired through for interface symmetry with NetSession.
+  sendResonance(): void {
+    this.resonanceQueued = true;
   }
 
   getWorld(): World {
@@ -67,6 +74,10 @@ export class LocalSession implements GameSession {
       commands.push({ kind: 'cast', playerId: this.selfId, spell });
     }
     this.queuedCasts = [];
+    if (this.resonanceQueued) {
+      commands.push({ kind: 'resonance', playerId: this.selfId });
+      this.resonanceQueued = false;
+    }
 
     step(this.world, commands, dt);
     this.worldCb(this.world);
@@ -78,6 +89,7 @@ export class LocalSession implements GameSession {
     this.latestMove = { x: 0, y: 0 };
     this.latestFace = 0;
     this.queuedCasts = [];
+    this.resonanceQueued = false;
     this.worldCb(this.world);
   }
 

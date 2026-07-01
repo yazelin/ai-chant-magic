@@ -99,6 +99,17 @@ describe('LocalSession', () => {
     expect(s.getWorld().status).toBe('gameover');
   });
 
+  it('sendResonance() is inert solo (a single player can never reach 2 distinct callers)', () => {
+    const s = new LocalSession('pyro');
+    s.start();
+    s.getWorld().breakTimer = 999;
+    s.sendResonance();
+    s.tick(0.05);
+    s.sendResonance();
+    s.tick(0.05);
+    expect(s.getWorld().players[0].shieldUntil).toBe(0);
+  });
+
   it('enterEndless()/endEndless() notify onWorld subscribers', () => {
     const s = new LocalSession('pyro');
     let calls = 0;

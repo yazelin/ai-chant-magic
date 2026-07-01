@@ -4,6 +4,8 @@ import { Hud } from './render/hud';
 import { IncantationOverlay } from './render/incantation';
 import {
   matchSpell,
+  matchesAny,
+  RESONANCE_ALIASES,
   ClassId,
   classSpellSet,
   SPELLS,
@@ -141,6 +143,13 @@ function startGame(
   const voice = spectator ? null : new WebSpeechVoiceInput('zh-TW');
   voice?.onStatusChange((s, message) => hud.setMicStatus(s, message));
   voice?.onTranscript((text) => {
+    // 共鳴詠唱 is checked first — it's not a class spell (no loadout/cooldown
+    // gating), so it must never be shadowed by a class's own alias matching.
+    if (matchesAny(text, RESONANCE_ALIASES)) {
+      hud.setHeard(text, '共鳴詠唱');
+      session.sendResonance();
+      return;
+    }
     const spell = matchSpell(text, { allowed, extra: chantsAsExtra() });
     hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
     if (spell) session.sendCast(spell);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalize, levenshtein } from '../src/matcher';
+import { normalize, levenshtein, matchesAny } from '../src/matcher';
 
 describe('normalize', () => {
   it('lowercases and strips spaces and punctuation', () => {
@@ -100,5 +100,21 @@ describe('matchSpell — broadened firestorm / shield aliases', () => {
     // even on the no-allowed path, 聖盾 must not match shield now that
     // bare '盾' was dropped from shield's aliases
     expect(matchSpell('聖盾')).toBe('aegis');
+  });
+});
+
+describe('matchesAny', () => {
+  it('matches any alias in the list, fuzzily like matchSpell', () => {
+    expect(matchesAny('共鳴', ['共鳴', '同心協力', 'resonance'])).toBe(true);
+    expect(matchesAny('大家一起共鳴詠唱吧', ['共鳴'])).toBe(true);
+    expect(matchesAny('resonance now', ['resonance'])).toBe(true);
+  });
+
+  it('returns false when nothing in the transcript matches any alias', () => {
+    expect(matchesAny('火球術', ['共鳴', 'resonance'])).toBe(false);
+  });
+
+  it('is not confused by an unrelated spell-cast phrase', () => {
+    expect(matchesAny('護盾術', ['共鳴', 'resonance', 'echo'])).toBe(false);
   });
 });

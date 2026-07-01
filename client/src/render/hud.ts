@@ -92,6 +92,9 @@ export class Hud {
   private endlessPriorBest: EndlessRecord | null = null;
   private endlessRecordBrokenShown = false;
   private endlessLastToastWave = -1;
+  // 共鳴詠唱 toast — effect ids already toasted, so a still-fading effect
+  // (ttl>0 across several render() polls) doesn't re-trigger the toast.
+  private seenResonanceFx = new Set<number>();
   private victoryEnteredAt: number | null = null;
 
   constructor(
@@ -357,6 +360,22 @@ export class Hud {
     }
     this.endlessQuit.style.display =
       world.endless && world.status === 'playing' && (this.solo || this.isHost) ? 'block' : 'none';
+
+    // 共鳴詠唱 toast — fires once per resonance effect (rare/celebratory;
+    // reuses the same toast slot as milestones/endless entry).
+    let sawResonanceFx = false;
+    for (const fx of world.effects) {
+      if (fx.kind !== 'resonance') continue;
+      sawResonanceFx = true;
+      if (this.seenResonanceFx.has(fx.id)) continue;
+      this.seenResonanceFx.add(fx.id);
+      this.showToast('共鳴詠唱!全隊獲得祝福', 3000);
+    }
+    if (sawResonanceFx && this.seenResonanceFx.size > 8) {
+      // Prune stale ids so this set doesn't grow unbounded across a long session.
+      const liveIds = new Set(world.effects.filter((e) => e.kind === 'resonance').map((e) => e.id));
+      for (const id of this.seenResonanceFx) if (!liveIds.has(id)) this.seenResonanceFx.delete(id);
+    }
 
     // Player status panels — self first.
     const players = world.players

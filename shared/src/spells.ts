@@ -36,3 +36,9 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   mend:      { id: 'mend',      displayName: '精靈自癒', aliases: ['精靈自癒', '精靈治癒', '自癒', '精靈護佑', 'mend'],  cooldown: 8,   kind: 'heal-self',    directional: false },
   repulse:   { id: 'repulse',   displayName: '鐵砂之劍', aliases: ['鐵砂之劍', '鐵砂劍', '鐵砂', '沙鐵劍', 'ironsand'],  cooldown: 6,   kind: 'aoe-self',     directional: false },
 };
+
+// 共鳴詠唱 (resonance) is not a class spell — see ResonanceCommand in types.ts
+// and CONFIG.resonance/updateResonance in world.ts. It's a shared call-and-
+// response phrase every class can shout regardless of loadout, matched
+// separately from SPELLS/matchSpell via matchesAny().
+export const RESONANCE_ALIASES = ['共鳴詠唱', '共鳴', '同心協力', 'resonance', 'echo'];
