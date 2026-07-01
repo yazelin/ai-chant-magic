@@ -8,6 +8,7 @@ import {
   type EndlessBucket,
   type EndlessRecord,
 } from '../session/endlessRecords';
+import { renderShareCard, shareOrDownloadCard, type ShareCardStats } from './shareCard';
 
 // Short mic-pill labels (the long permission instruction shows as a .note below).
 const MIC_LABEL: Record<VoiceStatus, string> = {
@@ -176,6 +177,20 @@ export class Hud {
     this.levelClearTimer = setTimeout(() => { this.levelClear.style.display = 'none'; }, ms);
   }
 
+  // Self first, same ordering used for the party panel — the roster shown on
+  // the share card.
+  private rosterFor(world: World, selfId: string | null): { name: string; classId: Player['classId'] }[] {
+    return world.players
+      .filter((p) => p.connected)
+      .sort((a, b) => (a.id === selfId ? -1 : b.id === selfId ? 1 : 0))
+      .map((p) => ({ name: p.name, classId: p.classId }));
+  }
+
+  private shareResult(stats: ShareCardStats): void {
+    const canvas = renderShareCard(stats);
+    void shareOrDownloadCard(canvas);
+  }
+
   render(world: World, selfId: string | null = null): void {
     // Game-over banner — built once on the status flip (so its 重來 button keeps
     // a live click handler instead of being recreated every tick).
@@ -190,7 +205,9 @@ export class Hud {
       const hint = this.solo
         ? `<button id="go-restart" style="margin-top:12px;${GOLD_BTN}">重來</button>`
         : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等所有人都倒下…回到房間</div>';
+      const shareBtn = `<div><button id="go-share" style="margin-top:8px;${PLAIN_BTN}">分享戰報</button></div>`;
 
+      let shareStats: ShareCardStats;
       if (world.endless) {
         const bucket = endlessBucket(world);
         const self = world.players.find((p) => p.id === selfId);
@@ -207,11 +224,23 @@ export class Hud {
         }
         this.gameover.innerHTML =
           `無盡深淵・力竭倒下<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}</div>` +
-          `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}`;
+          `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}${shareBtn}`;
+        shareStats = {
+          title: '無盡深淵・力竭倒下',
+          statLine: `撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}`,
+          recordLine: recordLine || undefined,
+          players: this.rosterFor(world, selfId),
+        };
       } else {
-        this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}`;
+        this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}${shareBtn}`;
+        shareStats = {
+          title: '遊戲結束',
+          statLine: `撐到第 ${world.wave} 波 · 擊殺 ${world.score}`,
+          players: this.rosterFor(world, selfId),
+        };
       }
       this.gameover.querySelector('#go-restart')?.addEventListener('click', () => this.onRestart());
+      this.gameover.querySelector('#go-share')?.addEventListener('click', () => this.shareResult(shareStats));
     } else if (world.status !== 'gameover' && this.goShown) {
       this.goShown = false;
       this.gameover.style.display = 'none';
@@ -251,13 +280,21 @@ export class Hud {
           `<span id="victory-countdown">${CONFIG.transition.victoryDecisionSec}</span> 秒內未選擇將自動返回房間</div>`;
       }
 
+      const shareBtn = `<div><button id="victory-share" style="margin-top:8px;${PLAIN_BTN}">分享戰報</button></div>`;
       this.victory.innerHTML =
         `全破!四個世界都已淨化<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">總耗時 ${mins}:${secs} · 擊殺 ${world.score}</div>` +
         `<div style="font-size:12px;color:#ffd24d;margin-top:2px">${recordLine}</div>` +
-        `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${action}`;
+        `<div style="font-size:12px;color:#9aa0b5;margin-top:4px">感謝遊玩——非官方同人二創,非商業作品</div>${action}${shareBtn}`;
       this.victory.querySelector('#victory-endless')?.addEventListener('click', () => this.onEnterEndless());
       this.victory.querySelector('#victory-restart')?.addEventListener('click', () => this.onRestart());
       this.victory.querySelector('#victory-skip')?.addEventListener('click', () => this.onSkipToLobby());
+      const victoryShareStats: ShareCardStats = {
+        title: '全破!四個世界都已淨化',
+        statLine: `總耗時 ${mins}:${secs} · 擊殺 ${world.score}`,
+        recordLine: record ? `無盡模式最佳:第 ${record.wave} 波・擊殺 ${record.score}` : undefined,
+        players: this.rosterFor(world, selfId),
+      };
+      this.victory.querySelector('#victory-share')?.addEventListener('click', () => this.shareResult(victoryShareStats));
     } else if (world.status !== 'victory' && this.victoryShown) {
       this.victoryShown = false;
       this.victoryEnteredAt = null;

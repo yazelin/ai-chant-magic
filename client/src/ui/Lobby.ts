@@ -114,7 +114,16 @@ export class Lobby {
   ) {
     this.root = document.getElementById('lobby')!;
     this.name = randomName(); // a fun default; player can edit or re-roll
-    this.renderSetup();
+    // A friend clicking an invite link (?join=CODE) drops straight into the
+    // room with zero clicks — no code to type or read aloud. They can still
+    // change name/class once inside (the room view's picker already supports
+    // that), so defaults here are fine.
+    const inviteCode = new URLSearchParams(window.location.search).get('join');
+    if (inviteCode && inviteCode.trim()) {
+      this.doJoinByCode(inviteCode.trim().toUpperCase());
+    } else {
+      this.renderSetup();
+    }
   }
 
   // --- Setup screen: name + class pick + action buttons ---------------------
@@ -439,11 +448,16 @@ export class Lobby {
     client.connect();
   }
 
-  private doJoinByCode(): void {
-    const code = window.prompt('輸入房間代碼(4 碼):');
-    if (!code) return;
-    const roomCode = code.trim().toUpperCase();
-    if (!roomCode) return;
+  private doJoinByCode(presetCode?: string): void {
+    let roomCode: string;
+    if (presetCode) {
+      roomCode = presetCode;
+    } else {
+      const code = window.prompt('輸入房間代碼(4 碼):');
+      if (!code) return;
+      roomCode = code.trim().toUpperCase();
+      if (!roomCode) return;
+    }
     const url = resolveServerUrl();
     const client = new NetClient(
       {
@@ -473,6 +487,27 @@ export class Lobby {
     this.client = client;
     this.showConnecting();
     client.connect();
+  }
+
+  // Builds a ?join=CODE link off the current URL (preserving ?server= etc. so
+  // an HTTPS-hosted page's explicit ws server still carries over to whoever
+  // clicks it), copies it, and flashes the button label to confirm.
+  private async copyInviteLink(btn: HTMLButtonElement): Promise<void> {
+    const url = new URL(window.location.href);
+    url.searchParams.set('join', this.roomCode);
+    const link = url.toString();
+    const original = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(link);
+      btn.textContent = '已複製!';
+    } catch {
+      // Clipboard API unavailable (insecure context / permission denied) —
+      // fall back to a manual-copy prompt so the link isn't just lost.
+      window.prompt('複製這個連結給隊友:', link);
+    }
+    setTimeout(() => {
+      btn.textContent = original;
+    }, 1600);
   }
 
   private beginNetGame(client: NetClient): void {
@@ -556,7 +591,9 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>房間大廳</h1>
-      <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)</div>
+      <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)
+        · <button id="btn-copy-invite" class="link-btn" type="button">複製邀請連結</button>
+      </div>
       <div class="room-body">
       <div class="room-grid">${slots.join('')}</div>
       <div class="room-bar">
@@ -583,6 +620,10 @@ export class Lobby {
       </div>
       ${this.practiceModalHtml()}
     `;
+
+    this.root.querySelector('#btn-copy-invite')!.addEventListener('click', (e) => {
+      this.copyInviteLink(e.currentTarget as HTMLButtonElement);
+    });
 
     if (this.isHost) {
       this.root.querySelector('#btn-start')!.addEventListener('click', () => {
