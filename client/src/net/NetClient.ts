@@ -256,15 +256,19 @@ export class NetClient {
     this.send({ type: 'start' });
   }
 
-  // One input per frame: latest move/face + all queued casts (spec §15.1).
-  input(move: Vec2 | null, face: number | null, casts: SpellId[]): void {
-    const msg: { type: 'input'; seq: number; move?: Vec2; face?: number; casts?: SpellId[] } = {
+  // One input per frame: latest move/face + all queued casts (spec §15.1) +
+  // an optional one-shot 共鳴詠唱 call flag.
+  input(move: Vec2 | null, face: number | null, casts: SpellId[], resonance = false): void {
+    const msg: {
+      type: 'input'; seq: number; move?: Vec2; face?: number; casts?: SpellId[]; resonance?: boolean;
+    } = {
       type: 'input',
       seq: this.seq++,
     };
     if (move) msg.move = move;
     if (face !== null) msg.face = face;
     if (casts.length) msg.casts = casts;
+    if (resonance) msg.resonance = true;
     this.send(msg);
   }
 

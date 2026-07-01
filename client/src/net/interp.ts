@@ -186,7 +186,8 @@ export function emptyWorld(): World {
     endless: false,
     endlessKillBase: 0,
     endlessTimeBase: 0,
-    nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0, // sim-only; the client never reads these
+    nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
+    resonanceCalls: [], resonanceCooldownUntil: 0, // sim-only; the client never reads these
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -212,6 +213,7 @@ function snapshotToWorld(s: Snapshot): World {
     endlessKillBase: s.endlessKillBase,
     endlessTimeBase: s.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
+    resonanceCalls: [], resonanceCooldownUntil: 0,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -265,6 +267,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     endlessKillBase: next.endlessKillBase,
     endlessTimeBase: next.endlessTimeBase,
     nextEliteWave: 0, eliteWavesSoFar: 0, eliteQueue: 0,
+    resonanceCalls: [], resonanceCooldownUntil: 0,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,

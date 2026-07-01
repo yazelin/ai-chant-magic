@@ -12,6 +12,7 @@ export class NetSession implements GameSession {
   private latestMove: Vec2 = { x: 0, y: 0 };
   private latestFace: number | null = null;
   private queuedCasts: SpellId[] = [];
+  private resonanceDirty = false;
   private moveDirty = false;
   private faceDirty = false;
   private worldCb: (w: World) => void = () => {};
@@ -39,6 +40,10 @@ export class NetSession implements GameSession {
     this.queuedCasts.push(spell);
   }
 
+  sendResonance(): void {
+    this.resonanceDirty = true;
+  }
+
   getWorld(): World {
     this.lastWorld = this.client.buffer.sample();
     return this.lastWorld;
@@ -59,12 +64,14 @@ export class NetSession implements GameSession {
     const move = this.moveDirty ? this.latestMove : null;
     const face = this.faceDirty ? this.latestFace : null;
     const casts = this.queuedCasts;
-    if (move || face !== null || casts.length) {
-      this.client.input(move, face, casts);
+    const resonance = this.resonanceDirty;
+    if (move || face !== null || casts.length || resonance) {
+      this.client.input(move, face, casts, resonance);
     }
     this.queuedCasts = [];
     this.moveDirty = false;
     this.faceDirty = false;
+    this.resonanceDirty = false;
 
     this.worldCb(this.getWorld());
   }

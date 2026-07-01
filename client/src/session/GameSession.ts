@@ -9,6 +9,10 @@ export interface GameSession {
   sendMove(dir: Vec2): void;
   sendFace(angle: number): void;
   sendCast(spell: SpellId): void;
+  // 共鳴詠唱: call for the group's shared coordination buff. Not a spell (no
+  // SpellId/cooldown/class loadout) — inert unless a teammate calls it too
+  // within a short window (see shared CONFIG.resonance/updateResonance).
+  sendResonance(): void;
   getWorld(): World;
   getSelfId(): string;
   onWorld(cb: (w: World) => void): void;

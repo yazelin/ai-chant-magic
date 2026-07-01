@@ -338,6 +338,13 @@ export function sfxShield(): void {
   try { blip('sine', 400, 800, 0.25, 0.3); blip('triangle', 600, 1000, 0.25, 0.18); } catch { /* ignore */ }
 }
 
+// RESONANCE (共鳴詠唱) — a rare team-coordination reward, not a per-cast
+// spell: a warm ascending 5-note harmony (bigger/longer than sfxShield/
+// sfxHeal) so it reads as "the whole party" rather than a solo buff.
+export function sfxResonance(): void {
+  try { arp([523, 659, 784, 1046, 1318], 0.1, 'sine', 0.34); } catch { /* ignore */ }
+}
+
 // NEW WAVE — bright ascending C-E-G-C arpeggio.
 export function sfxWave(): void {
   try { arp([523, 659, 784, 1046], 0.08, 'square', 0.26); } catch { /* ignore */ }

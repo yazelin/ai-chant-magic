@@ -30,6 +30,10 @@ export class SpectatorSession implements GameSession {
     /* read-only */
   }
 
+  sendResonance(): void {
+    /* read-only — a spectator doesn't join the call-and-response */
+  }
+
   getWorld(): World {
     this.lastWorld = this.client.buffer.sample();
     return this.lastWorld;
