@@ -1166,4 +1166,68 @@ describe('step — 王隨關卡換皮(element/summon)', () => {
     expect(minions.length).toBeGreaterThan(0);
     expect(minions.every((e) => e.wraith === true)).toBe(true);
   });
+
+  it('level 3 (學園都市) regular enemies and boss are all storm-element (dash-and-lunge)', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = 2;
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05); // spawns the boss
+    step(w, [], 0.05); // spawnTimer fires -> a regular enemy joins too
+    expect(w.enemies.length).toBeGreaterThan(1);
+    expect(w.enemies.every((e) => e.element === 'storm')).toBe(true);
+  });
+
+  it('level 3 boss summons storm slimes instead of ice wraiths or normal slimes', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = 2;
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.nextSummonAt = w.time;
+    w.spawnQueue = 0;
+    step(w, [], 0.05);
+    const minions = w.enemies.filter((e) => !e.boss);
+    expect(minions.length).toBeGreaterThan(0);
+    expect(minions.every((e) => e.wraith !== true && e.element === 'storm')).toBe(true);
+  });
+
+  it('level 4 (聖杯戰爭) regular enemies and boss are all holy-element (tanky mutual healers)', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = 3;
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    step(w, [], 0.05);
+    expect(w.enemies.length).toBeGreaterThan(1);
+    expect(w.enemies.every((e) => e.element === 'holy')).toBe(true);
+  });
+
+  it('level 4 boss summons holy slimes', () => {
+    const w = createSoloWorld('storm');
+    w.levelId = 3;
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.nextSummonAt = w.time;
+    w.spawnQueue = 0;
+    step(w, [], 0.05);
+    const minions = w.enemies.filter((e) => !e.boss);
+    expect(minions.length).toBeGreaterThan(0);
+    expect(minions.every((e) => e.element === 'holy')).toBe(true);
+  });
+
+  it('MAX_LEVEL_ID covers all 4 worlds (victory only after level 4)', () => {
+    expect(MAX_LEVEL_ID).toBe(3);
+  });
 });
