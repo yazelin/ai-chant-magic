@@ -39,5 +39,9 @@ export const CONFIG = {
   boss: { every: 5, hpMul: 14, radiusMul: 2.6, speedMul: 0.55, summonInterval: 3.5, summonCount: 3, swarmMul: 0.5 },
   wave: { baseCount: 6, perWave: 3, baseCadence: 1.2, cadenceDecay: 0.05, minCadence: 0.4, breakTime: 2, scaleExp: 1.4,
           spawnRadius: 680, spawnRadiusJitter: 240 }, // enemies appear this far from a player (just off-screen)
+  // 世界2(frostvale)signature enemy — a flicker instead of a walk: holds still,
+  // then blinks blinkDist toward its target every blinkInterval (capped so it
+  // never overshoots past the target).
+  wraith: { blinkInterval: 1.6, blinkDist: 160 },
   effectTtl: { beam: 0.12, chain: 0.18, nova: 0.3, blast: 0.35, aura: 0.4 },
 } as const;

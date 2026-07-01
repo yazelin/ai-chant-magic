@@ -616,9 +616,11 @@ function updateEnemies(world: World, dt: number): void {
     const d = len(toP);
     const frozen = world.time < (e.frozenUntil ?? 0);
 
-    // Movement: storm slimes dash (telegraph → lunge); others walk toward target.
+    // Movement: storm slimes dash (telegraph → lunge), wraiths blink, others
+    // walk toward target.
     if (!frozen) {
-      if (e.element === 'storm') stormMove(world, e, toP, d, dt);
+      if (e.wraith) updateWraith(world, e, toP, d);
+      else if (e.element === 'storm') stormMove(world, e, toP, d, dt);
       else {
         const speed = world.time < e.slowUntil ? e.speed * 0.5 : e.speed;
         if (d > 1) {
@@ -683,6 +685,20 @@ function stormMove(world: World, e: Enemy, toP: Vec2, d: number, dt: number): vo
     e.pos.x += move.x;
     e.pos.y += move.y;
   }
+}
+
+// Ice wraith movement (世界2 signature enemy): holds perfectly still, then
+// blinks blinkDist toward its target every blinkInterval — a flicker, not a
+// walk. Distinct on purpose from every level-1 slime's smooth chase (and from
+// storm's telegraphed lunge). Capped at `d` so it never overshoots the target.
+function updateWraith(world: World, e: Enemy, toP: Vec2, d: number): void {
+  const s = CONFIG.wraith;
+  if (e.nextBlinkAt === undefined) e.nextBlinkAt = world.time + s.blinkInterval;
+  if (world.time < e.nextBlinkAt || d <= 1) return;
+  e.nextBlinkAt = world.time + s.blinkInterval;
+  const jump = Math.min(s.blinkDist, d);
+  e.pos.x += (toP.x / d) * jump;
+  e.pos.y += (toP.y / d) * jump;
 }
 
 // 史萊姆王召喚:每 summonInterval 在自己周圍生 summonCount 隻小史萊姆 + 召喚光環。
@@ -853,8 +869,24 @@ function makeSlime(world: World, pos: Vec2, element: EnemyElement): void {
   });
 }
 
+// 世界2(frostvale)signature enemy — same makeSlime skeleton (hp scales with
+// wave) but ice element + the blink movement in updateWraith. `speed` is set
+// for parity with Enemy's shape but unused (a wraith doesn't walk).
+function makeWraith(world: World, pos: Vec2): void {
+  const hp = CONFIG.enemy.baseHp + (world.wave - 1) * CONFIG.enemy.hpPerWave;
+  const speed = CONFIG.enemy.baseSpeed + (world.wave - 1) * CONFIG.enemy.speedPerWave;
+  world.enemies.push({
+    id: world.nextEntityId++,
+    pos: { x: pos.x, y: pos.y },
+    hp, speed, slowUntil: 0, radius: CONFIG.enemy.radius, targetId: null,
+    element: 'ice', maxHp: hp, wraith: true,
+  });
+}
+
 function spawnEnemy(world: World, rng: () => number): void {
-  makeSlime(world, ringSpawnPos(world, rng), pickElement(world.wave, rng));
+  const pos = ringSpawnPos(world, rng);
+  if (world.levelId === 1) makeWraith(world, pos);
+  else makeSlime(world, pos, pickElement(world.wave, rng));
 }
 
 // 史萊姆王:巨大、肉、慢、週期召喚。Element 'normal'(顏色由客端 boss 旗標決定)。
