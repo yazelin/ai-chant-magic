@@ -12,6 +12,8 @@
 import {
   createWorld,
   step,
+  enterEndlessMode,
+  endEndlessMode,
   SPELLS,
   type World,
   type Command,
@@ -61,6 +63,10 @@ export class Room {
   tickCount = 0;
   hostId: string | null = null;
   gameoverAt: number | null = null; // wall-clock ms when the game ended (for return-to-lobby)
+  // wall-clock ms when the world reached 'victory' — separate from gameoverAt
+  // because victory waits on a much longer decision window (see index.ts's
+  // VICTORY_DECISION_MS) for the host to pick endless mode vs. the lobby.
+  victoryDecisionAt: number | null = null;
 
   private inputs = new Map<string, BufferedInput>();
   private clock: () => number;
@@ -179,12 +185,37 @@ export class Room {
     }
     this.inputs.clear();
     step(this.world, commands, dt, rng);
-    if (this.world.status === 'gameover' || this.world.status === 'victory') {
-      this.status = this.world.status;
+    if (this.world.status === 'gameover') {
+      this.status = 'gameover';
       if (this.gameoverAt === null) this.gameoverAt = this.clockNow();
+    } else if (this.world.status === 'victory') {
+      this.status = 'victory';
+      if (this.victoryDecisionAt === null) this.victoryDecisionAt = this.clockNow();
     }
     this.tickCount += 1;
     return toSnapshot(this.world);
+  }
+
+  // Host chooses to continue past the campaign instead of returning to the
+  // lobby. Only valid from 'victory' — keeps the same World (player hp/pos/
+  // score intact; see enterEndlessMode). Returns false (no-op) otherwise.
+  enterEndless(): boolean {
+    if (this.status !== 'victory' || !this.world) return false;
+    enterEndlessMode(this.world);
+    this.status = 'playing';
+    this.victoryDecisionAt = null;
+    return true;
+  }
+
+  // Ends an active endless run on demand (host gives up, or a "结束本輪"
+  // button) — reuses the same gameover status/flow a party wipe takes, no
+  // bespoke ending screen. Returns false (no-op) if not currently endless.
+  endEndless(): boolean {
+    if (!this.world?.endless) return false;
+    endEndlessMode(this.world);
+    this.status = 'gameover';
+    if (this.gameoverAt === null) this.gameoverAt = this.clockNow();
+    return true;
   }
 
   // After a game ends, send everyone back to the room lobby (keep members + their
@@ -193,6 +224,7 @@ export class Room {
     this.status = 'lobby';
     this.world = null;
     this.gameoverAt = null;
+    this.victoryDecisionAt = null;
     this.tickCount = 0;
     this.inputs.clear();
     for (const m of this.members) m.ready = false;

@@ -78,6 +78,24 @@ export interface ChatMsg {
   text: string;
 }
 
+// Host-only, valid only from room.status 'victory': continue the same run
+// past the campaign instead of returning to the lobby (see Room.enterEndless).
+export interface EnterEndlessMsg {
+  type: 'enterEndless';
+}
+
+// Host-only: skip the victory decision window and return everyone to the
+// lobby immediately, without waiting out VICTORY_DECISION_MS.
+export interface SkipToLobbyMsg {
+  type: 'skipToLobby';
+}
+
+// Host-only: end an in-progress endless run on demand (a "結束本輪" button),
+// same effect as a party wipe (see Room.endEndless).
+export interface EndEndlessMsg {
+  type: 'endEndless';
+}
+
 export type ClientMsg =
   | CreateMsg
   | JoinMsg
@@ -87,7 +105,10 @@ export type ClientMsg =
   | StartMsg
   | InputMsg
   | LeaveMsg
-  | ChatMsg;
+  | ChatMsg
+  | EnterEndlessMsg
+  | SkipToLobbyMsg
+  | EndEndlessMsg;
 
 // ---------------------------------------------------------------------------
 // Server -> Client
@@ -122,7 +143,9 @@ export type ErrorCode =
   | 'server-full'
   | 'bad-message'
   | 'not-in-room'
-  | 'not-host';
+  | 'not-host'
+  | 'not-victory'
+  | 'not-endless';
 
 export interface ErrorMsg {
   type: 'error';
@@ -147,6 +170,13 @@ export interface ReturnToLobbyMsg {
   type: 'returnToLobby';
 }
 
+// Broadcast to every client the instant the host enters endless mode, so a
+// non-host client can react (e.g. show the "無盡模式啟動!" toast) even though
+// it didn't send the enterEndless message itself.
+export interface EndlessStartedMsg {
+  type: 'endlessStarted';
+}
+
 export type ServerMsg =
   | JoinedMsg
   | LobbyUpdateMsg
@@ -155,7 +185,8 @@ export type ServerMsg =
   | ErrorMsg
   | PeerLeftMsg
   | ChatBroadcastMsg
-  | ReturnToLobbyMsg;
+  | ReturnToLobbyMsg
+  | EndlessStartedMsg;
 
 // ---------------------------------------------------------------------------
 // Parsing helper (used by the thin ws wiring in index.ts / B2)
@@ -171,6 +202,9 @@ const CLIENT_MSG_TYPES: ReadonlySet<string> = new Set([
   'input',
   'leave',
   'chat',
+  'enterEndless',
+  'skipToLobby',
+  'endEndless',
 ]);
 
 export function parseClientMsg(raw: string): ClientMsg | null {
