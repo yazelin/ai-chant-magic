@@ -75,9 +75,13 @@ export interface World {
   players: Player[]; enemies: Enemy[]; projectiles: Projectile[]; effects: TransientEffect[];
   nextEntityId: number; wave: number; score: number;
   // Which world/level the room is on (0-based, index into the client's per-level
-  // theme table). Advancing this is the job of level-clear logic (not yet wired
-  // up); for now every world is created at level 0 and stays there.
+  // theme table). Advancing this level-to-level is not wired up yet; for now
+  // every world is created at level 0 and stays there even once cleared.
   levelId: number;
+  // True once the current level's boss has been killed. Freezes wave spawning
+  // (see updateWaves) — existing enemies can still be fought, but no more waves
+  // roll in. Advancing to the next level is a future step.
+  levelCleared: boolean;
   spawnQueue: number; spawnTimer: number; spawnCadence: number; breakTimer: number;
 }
 

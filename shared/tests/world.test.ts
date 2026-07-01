@@ -988,4 +988,40 @@ describe('step — 史萊姆王 boss', () => {
     step(w, [], 0.05);
     expect(w.enemies.length).toBe(before + CONFIG.boss.summonCount);
   });
+
+  it('killing the boss sets levelCleared and removes it', () => {
+    const w = createSoloWorld('storm');
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    expect(w.levelCleared).toBe(false);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.hp = 0;
+    step(w, [], 0.05);
+    expect(w.levelCleared).toBe(true);
+    expect(w.enemies.some((e) => e.boss === true)).toBe(false);
+  });
+
+  it('stops spawning further waves once levelCleared', () => {
+    const w = createSoloWorld('storm');
+    w.wave = CONFIG.boss.every - 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    const boss = w.enemies.find((e) => e.boss === true)!;
+    boss.hp = 0;
+    step(w, [], 0.05); // clears the level, removes the boss corpse
+    expect(w.levelCleared).toBe(true);
+    const waveAtClear = w.wave;
+    // Conditions that would normally roll straight into the next wave.
+    w.enemies = [];
+    w.spawnQueue = 0;
+    w.breakTimer = 0.01;
+    for (let i = 0; i < 20; i++) step(w, [], 0.05);
+    expect(w.wave).toBe(waveAtClear);
+    expect(w.enemies).toEqual([]);
+  });
 });

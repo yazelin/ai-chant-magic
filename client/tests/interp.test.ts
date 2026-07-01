@@ -15,6 +15,7 @@ function snap(over: Partial<Snapshot> = {}): Snapshot {
     wave: 1,
     score: 0,
     levelId: 0,
+    levelCleared: false,
     players: [],
     enemies: [],
     projectiles: [],
@@ -95,6 +96,12 @@ describe('interpolate', () => {
     const prev = snap({ levelId: 0 });
     const next = snap({ levelId: 1 });
     expect(interpolate(prev, next, 0.5).levelId).toBe(1);
+  });
+
+  it('passes through levelCleared from the newer snapshot', () => {
+    const prev = snap({ levelCleared: false });
+    const next = snap({ levelCleared: true });
+    expect(interpolate(prev, next, 0.5).levelCleared).toBe(true);
   });
 
   it('passes through hp/status/wave/score/effects from the newer snapshot', () => {

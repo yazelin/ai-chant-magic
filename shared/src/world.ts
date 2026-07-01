@@ -66,6 +66,7 @@ export function createWorld(seeds: PlayerSeed[]): World {
     wave: 0,
     score: 0,
     levelId: 0,
+    levelCleared: false,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: CONFIG.wave.baseCadence,
@@ -515,6 +516,7 @@ function removeDeadEnemies(world: World): void {
   for (const e of world.enemies) {
     if (e.hp > 0) { survivors.push(e); continue; }
     if (e.element === 'fire') fireDeathExplosion(world, e); // 火史萊姆死亡小爆炸
+    if (e.boss) world.levelCleared = true; // 史萊姆王死 = 這關過了,停止繼續刷怪
   }
   world.score += world.enemies.length - survivors.length;
   world.enemies = survivors;
@@ -875,6 +877,7 @@ function spawnBoss(world: World, rng: () => number): void {
 }
 
 function updateWaves(world: World, dt: number, rng: () => number): void {
+  if (world.levelCleared) return; // boss is down; no more waves until the next level ships
   if (world.breakTimer > 0) {
     world.breakTimer -= dt;
     if (world.breakTimer <= 0) {

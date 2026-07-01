@@ -76,6 +76,7 @@ export interface Snapshot {
   wave: number;
   score: number;
   levelId: number;
+  levelCleared: boolean;
   breakTimer?: number;
   spawnQueue?: number;
   players: SnapshotPlayer[];
@@ -175,6 +176,7 @@ export function emptyWorld(): World {
     wave: 0,
     score: 0,
     levelId: 0,
+    levelCleared: false,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -194,6 +196,7 @@ function snapshotToWorld(s: Snapshot): World {
     wave: s.wave,
     score: s.score,
     levelId: s.levelId,
+    levelCleared: s.levelCleared,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -241,6 +244,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     wave: next.wave,
     score: next.score,
     levelId: next.levelId,
+    levelCleared: next.levelCleared,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
