@@ -65,6 +65,7 @@ export function createWorld(seeds: PlayerSeed[]): World {
     nextEntityId: 1,
     wave: 0,
     score: 0,
+    levelId: 0,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: CONFIG.wave.baseCadence,

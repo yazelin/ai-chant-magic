@@ -74,6 +74,10 @@ export interface World {
   time: number; status: GameStatus;
   players: Player[]; enemies: Enemy[]; projectiles: Projectile[]; effects: TransientEffect[];
   nextEntityId: number; wave: number; score: number;
+  // Which world/level the room is on (0-based, index into the client's per-level
+  // theme table). Advancing this is the job of level-clear logic (not yet wired
+  // up); for now every world is created at level 0 and stays there.
+  levelId: number;
   spawnQueue: number; spawnTimer: number; spawnCadence: number; breakTimer: number;
 }
 

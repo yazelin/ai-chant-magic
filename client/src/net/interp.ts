@@ -75,6 +75,7 @@ export interface Snapshot {
   status: GameStatus;
   wave: number;
   score: number;
+  levelId: number;
   breakTimer?: number;
   spawnQueue?: number;
   players: SnapshotPlayer[];
@@ -173,6 +174,7 @@ export function emptyWorld(): World {
     nextEntityId: 0,
     wave: 0,
     score: 0,
+    levelId: 0,
     spawnQueue: 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -191,6 +193,7 @@ function snapshotToWorld(s: Snapshot): World {
     nextEntityId: 0,
     wave: s.wave,
     score: s.score,
+    levelId: s.levelId,
     spawnQueue: s.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,
@@ -237,6 +240,7 @@ export function interpolate(prev: Snapshot, next: Snapshot, alpha: number): Worl
     nextEntityId: 0,
     wave: next.wave,
     score: next.score,
+    levelId: next.levelId,
     spawnQueue: next.spawnQueue ?? 0,
     spawnTimer: 0,
     spawnCadence: 0,

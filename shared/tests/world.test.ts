@@ -32,6 +32,7 @@ describe('createWorld', () => {
     expect(w.wave).toBe(0);
     expect(w.score).toBe(0);
     expect(w.time).toBe(0);
+    expect(w.levelId).toBe(0);
   });
 
   it('applies class hp modifier to maxHp and starts at full hp, alive, connected', () => {
