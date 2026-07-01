@@ -37,6 +37,12 @@
     <div class="note">需另開伺服器:終端跑 <code>tools/sprite-forge/forge.sh serve</code>,再開 <code>http://127.0.0.1:8799/picker.html?job=&lt;job&gt;</code>(SOP 見該夾 README)</div>
   </div>
 
+  <a class="tool" href="/?dummy=1">
+    <h2>訓練假人(元素反應驗證)</h2>
+    <p>單機開局,身邊放一隻不會動、打不死的假人,可直接灌任一元素殘留 → 用自己職業的招式當第二擊,真實觸發反應(外環/爆發特效/音效/wavehud 反應計數都是正式遊戲的程式碼)。</p>
+    <div class="note">加 <code>&class=cryo</code>(或 storm/warden)選職業;只在 <code>npm run dev</code> 開發模式生效,不進正式部署。</div>
+  </a>
+
   <div class="hint" style="margin-top:20px">
     註:音效實驗室是 Vite dev 頁(<code>npm run dev:client</code>),不會進正式部署。
   </div>

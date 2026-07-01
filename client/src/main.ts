@@ -19,6 +19,7 @@ import { chantsAsExtra } from './customChants';
 import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
 import { MusicEngine } from './audio/music';
+import { setupTrainingDummy } from './dev/trainingDummy';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
 // (connected, already `started`) and hands us a GameSession + the self class id.
@@ -48,6 +49,15 @@ function startGame(
   if (micEl) micEl.style.display = spectator ? 'none' : '';
 
   const scene = new GameScene(session);
+
+  // Dev-only 訓練假人: ?dummy=1 (see Lobby.ts) plants a stationary, unkillable
+  // target next to the solo player and a debug panel to inject any elemental
+  // aura onto it directly — lets a real spell cast be the second, mismatched
+  // hit that triggers a genuine reaction, without hunting a real swarm for two
+  // hits to land on the same enemy. import.meta.env.DEV keeps it out of prod.
+  if (import.meta.env.DEV && solo && new URLSearchParams(location.search).has('dummy')) {
+    setupTrainingDummy(session);
+  }
 
   // RESIZE: the canvas fills the viewport with NO letterbox on any screen.
   // GameScene's camera (bounds = arena, follows the local player, zoom-to-fill)
