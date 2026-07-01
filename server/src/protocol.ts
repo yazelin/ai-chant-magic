@@ -61,12 +61,15 @@ export interface StartMsg {
 }
 
 // Per-tick intent. Server aggregates: latest move / latest face, ALL casts.
+// resonance is a one-shot "共鳴詠唱" call flag, not a spell — no cooldown/
+// loadout gating, just a coordination signal (see Room.applyInput).
 export interface InputMsg {
   type: 'input';
   seq: number;
   move?: Vec2;
   face?: number;
   casts?: SpellId[];
+  resonance?: boolean;
 }
 
 export interface LeaveMsg {

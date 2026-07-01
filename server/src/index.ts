@@ -281,6 +281,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           move: msg.move,
           face: msg.face,
           casts: msg.casts,
+          resonance: msg.resonance,
         });
         break;
       }

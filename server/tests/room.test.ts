@@ -123,6 +123,26 @@ describe('Room.applyInput buffering (spec §15.1)', () => {
     expect(snap.effects.some((fx) => fx.kind === 'aura')).toBe(true);
   });
 
+  it('a resonance flag from 2 distinct players in the same tick triggers the party buff', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.addPlayer(member('p2', 'cryo'));
+    room.start();
+    room.applyInput('host', { resonance: true });
+    room.applyInput('p2', { resonance: true });
+    const snap = room.tick(0.05)!;
+    expect(snap.players.find((p) => p.id === 'host')!.shieldUntil).toBeGreaterThan(snap.time);
+    expect(snap.players.find((p) => p.id === 'p2')!.shieldUntil).toBeGreaterThan(snap.time);
+  });
+
+  it('a resonance flag from only one player does not trigger the buff', () => {
+    const room = new Room('AAAA', member('host', 'pyro'));
+    room.addPlayer(member('p2', 'cryo'));
+    room.start();
+    room.applyInput('host', { resonance: true });
+    const snap = room.tick(0.05)!;
+    expect(snap.players.find((p) => p.id === 'host')!.shieldUntil).toBe(0);
+  });
+
   it('drops a non-finite move so the player position is not poisoned (NaN guard)', () => {
     const room = new Room('AAAA', member('host', 'pyro'));
     room.start();

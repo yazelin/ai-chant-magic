@@ -46,11 +46,13 @@ export interface LobbyMember {
 }
 
 // Per-player buffered input, drained once per tick (spec §15.1):
-// latest move / latest face win; ALL casts are kept.
+// latest move / latest face win; ALL casts are kept. resonance is a one-shot
+// flag (co-op call-and-response "共鳴詠唱", not a spell — no cooldown/loadout).
 interface BufferedInput {
   move?: Vec2;
   face?: number;
   casts: SpellId[];
+  resonance?: boolean;
 }
 
 // A read-only observer: never occupies a player slot (doesn't count toward
@@ -173,7 +175,7 @@ export class Room {
   // only real spell ids ever reach the sim.
   applyInput(
     playerId: string,
-    msg: { move?: Vec2; face?: number; casts?: SpellId[] }
+    msg: { move?: Vec2; face?: number; casts?: SpellId[]; resonance?: boolean }
   ): void {
     let buf = this.inputs.get(playerId);
     if (!buf) {
@@ -195,6 +197,7 @@ export class Room {
         if (isValidSpell(c)) buf.casts.push(c);
       }
     }
+    if (msg.resonance) buf.resonance = true;
   }
 
   // Drain buffered inputs into a flat Command[] and advance the sim one step.
@@ -212,6 +215,9 @@ export class Room {
       }
       for (const spell of buf.casts) {
         commands.push({ kind: 'cast', playerId, spell });
+      }
+      if (buf.resonance) {
+        commands.push({ kind: 'resonance', playerId });
       }
     }
     this.inputs.clear();

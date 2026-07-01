@@ -157,6 +157,8 @@ export function createWorld(seeds: PlayerSeed[]): World {
     nextEliteWave: 0,
     eliteWavesSoFar: 0,
     eliteQueue: 0,
+    resonanceCalls: [],
+    resonanceCooldownUntil: 0,
   };
 }
 
@@ -246,9 +248,11 @@ export function step(
     if (cmd.kind === 'move') moveDirs.set(p.id, cmd.dir);
     else if (cmd.kind === 'face') p.facing = cmd.angle;
     else if (cmd.kind === 'cast') castSpell(world, p, cmd.spell);
+    else if (cmd.kind === 'resonance') world.resonanceCalls.push({ playerId: p.id, at: world.time });
   }
 
   movePlayers(world, moveDirs, dt);
+  updateResonance(world);
   updateWaves(world, dt, rng);
   updateEnemies(world, dt, rng);
   updateRevives(world, dt);
@@ -284,6 +288,46 @@ function movePlayers(world: World, moveDirs: Map<string, Vec2>, dt: number): voi
     p.pos.x = clamp(p.pos.x, r, CONFIG.arenaWidth - r);
     p.pos.y = clamp(p.pos.y, r, CONFIG.arenaHeight - r);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 共鳴詠唱 (resonance): ≥2 DISTINCT players calling within CONFIG.resonance.
+// windowSec of each other grant the whole party a shield + heal-over-time
+// burst — a coordination reward, not a per-caster spell. Trims the rolling
+// call buffer every step; on trigger, clears it and starts the cooldown so
+// it can't be re-triggered back-to-back.
+// ---------------------------------------------------------------------------
+function updateResonance(world: World): void {
+  const cutoff = world.time - CONFIG.resonance.windowSec;
+  world.resonanceCalls = world.resonanceCalls.filter((c) => c.at >= cutoff);
+  if (world.resonanceCalls.length === 0) return;
+  if (world.time < world.resonanceCooldownUntil) return;
+
+  const distinctCallers = new Set(world.resonanceCalls.map((c) => c.playerId));
+  if (distinctCallers.size < 2) return;
+
+  for (const p of world.players) {
+    if (!inFight(p)) continue;
+    p.shieldUntil = Math.max(p.shieldUntil, world.time + CONFIG.resonance.shieldDuration);
+    p.healUntil = Math.max(p.healUntil ?? 0, world.time + CONFIG.resonance.healDuration);
+    p.healRate = Math.max(p.healRate ?? 0, CONFIG.resonance.healRate);
+  }
+
+  // A single shared burst centred on the party's centroid — there's no one
+  // "caster" to anchor it on, unlike every other buff spell.
+  const alive = world.players.filter(inFight);
+  const cx = alive.reduce((s, p) => s + p.pos.x, 0) / alive.length;
+  const cy = alive.reduce((s, p) => s + p.pos.y, 0) / alive.length;
+  pushEffect(world, {
+    kind: 'resonance',
+    a: { x: cx, y: cy },
+    radius: 220,
+    ttl: CONFIG.effectTtl.resonance,
+    colorHint: '#ffd24d',
+  });
+
+  world.resonanceCalls = [];
+  world.resonanceCooldownUntil = world.time + CONFIG.resonance.cooldownSec;
 }
 
 // ---------------------------------------------------------------------------
