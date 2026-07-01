@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LocalSession } from '../src/session/LocalSession';
+import { mulberry32 } from '@acm/shared';
 
 describe('LocalSession', () => {
   it('builds a solo world for the chosen class with one self player', () => {
@@ -122,5 +123,63 @@ describe('LocalSession', () => {
     const afterEnter = calls;
     s.endEndless();
     expect(calls).toBeGreaterThan(afterEnter);
+  });
+
+  it('two sessions built with the same seeded rng spawn identical enemies (週挑戰 fairness)', () => {
+    const s1 = new LocalSession('pyro', mulberry32(42));
+    s1.start();
+    for (let i = 0; i < 300; i++) s1.tick(0.05);
+
+    const s2 = new LocalSession('pyro', mulberry32(42));
+    s2.start();
+    for (let i = 0; i < 300; i++) s2.tick(0.05);
+
+    const summarize = (s: LocalSession) =>
+      s.getWorld().enemies.map((e) => ({ x: e.pos.x, y: e.pos.y, element: e.element }));
+    expect(summarize(s1)).toEqual(summarize(s2));
+    expect(s1.getWorld().enemies.length).toBeGreaterThan(0); // sanity: something actually spawned
+  });
+
+  it('a different seed produces a different enemy layout (not a no-op parameter)', () => {
+    const s1 = new LocalSession('pyro', mulberry32(1));
+    s1.start();
+    for (let i = 0; i < 300; i++) s1.tick(0.05);
+
+    const s2 = new LocalSession('pyro', mulberry32(2));
+    s2.start();
+    for (let i = 0; i < 300; i++) s2.tick(0.05);
+
+    const summarize = (s: LocalSession) => s.getWorld().enemies.map((e) => e.pos.x);
+    expect(summarize(s1)).not.toEqual(summarize(s2));
+  });
+
+  it('defaults to Math.random when no rng is passed (backward compatible)', () => {
+    const s = new LocalSession('pyro');
+    s.start();
+    expect(() => s.tick(0.05)).not.toThrow();
+  });
+
+  it('an optional startInEndless flag begins directly in endless mode (skips the campaign unlock gate)', () => {
+    const s = new LocalSession('pyro', Math.random, true);
+    s.start();
+    const w = s.getWorld();
+    expect(w.endless).toBe(true);
+    expect(w.status).toBe('playing');
+    expect(w.wave).toBe(0);
+  });
+
+  it('startInEndless also re-applies after restart() (週挑戰 retry stays in endless, not back to campaign)', () => {
+    const s = new LocalSession('pyro', Math.random, true);
+    s.start();
+    s.restart('cryo');
+    const w = s.getWorld();
+    expect(w.endless).toBe(true);
+    expect(w.players[0].classId).toBe('cryo');
+  });
+
+  it('without startInEndless (default), a fresh session/restart is the normal campaign', () => {
+    const s = new LocalSession('pyro');
+    s.start();
+    expect(s.getWorld().endless).toBe(false);
   });
 });

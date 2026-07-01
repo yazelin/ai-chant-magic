@@ -24,8 +24,13 @@ export class LocalSession implements GameSession {
   private resonanceQueued = false;
   private worldCb: (w: World) => void = () => {};
 
-  constructor(classId: ClassId = 'pyro') {
+  constructor(
+    classId: ClassId = 'pyro',
+    private rng: () => number = Math.random,
+    private startInEndless: boolean = false,
+  ) {
     this.world = createSoloWorld(classId);
+    if (this.startInEndless) enterEndlessMode(this.world);
   }
 
   start(): void {
@@ -79,13 +84,14 @@ export class LocalSession implements GameSession {
       this.resonanceQueued = false;
     }
 
-    step(this.world, commands, dt);
+    step(this.world, commands, dt, this.rng);
     this.worldCb(this.world);
   }
 
   // Build a fresh world for the same class (used by the restart key).
   restart(classId: ClassId): void {
     this.world = createSoloWorld(classId);
+    if (this.startInEndless) enterEndlessMode(this.world);
     this.latestMove = { x: 0, y: 0 };
     this.latestFace = 0;
     this.queuedCasts = [];

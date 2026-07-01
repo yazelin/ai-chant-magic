@@ -6,6 +6,7 @@ export * from './classes';
 export * from './world';
 export * from './matcher';
 export * from './recognizer-policy';
+export * from './weekly';
 
 // Both ./vec and ./matcher export a `normalize` (vector vs. text). The barrel
 // surfaces the text normalizer; the vector one stays importable from './vec'.

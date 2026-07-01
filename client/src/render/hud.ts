@@ -9,6 +9,7 @@ import {
   type EndlessRecord,
 } from '../session/endlessRecords';
 import { renderShareCard, shareOrDownloadCard, type ShareCardStats } from './shareCard';
+import { fetchLeaderboard } from '../session/weeklyChallenge';
 
 // Short mic-pill labels (the long permission instruction shows as a .note below).
 const MIC_LABEL: Record<VoiceStatus, string> = {
@@ -104,6 +105,7 @@ export class Hud {
     private onSkipToLobby: () => void = () => {},
     private isHost = false,
     private onEndEndless: () => void = () => {},
+    private weeklyChallenge = false,
   ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
@@ -194,6 +196,25 @@ export class Hud {
     void shareOrDownloadCard(canvas);
   }
 
+  // 週挑戰: fetch this week's top 10 for the run's class and render it into
+  // the gameover banner's placeholder. Fire-and-forget from render() — if the
+  // banner has already been dismissed/rebuilt by the time this resolves, the
+  // querySelector below simply finds nothing and no-ops.
+  private async loadWeeklyLeaderboard(classId: Player['classId']): Promise<void> {
+    const entries = await fetchLeaderboard(classId);
+    const box = this.gameover.querySelector('#go-leaderboard');
+    if (!box) return;
+    if (entries.length === 0) {
+      box.innerHTML = '本週排行榜:目前還沒有紀錄,你是第一個!';
+      return;
+    }
+    const rows = entries
+      .slice(0, 10)
+      .map((e, i) => `<div>${i + 1}. ${esc(e.name)} — 第 ${e.wave} 波(擊殺 ${e.kills})</div>`)
+      .join('');
+    box.innerHTML = `<div style="font-weight:700;color:#ffd24d;margin-bottom:2px">本週排行榜 Top ${Math.min(10, entries.length)}</div>${rows}`;
+  }
+
   render(world: World, selfId: string | null = null): void {
     // Game-over banner — built once on the status flip (so its 重來 button keeps
     // a live click handler instead of being recreated every tick).
@@ -225,15 +246,23 @@ export class Hud {
           else if (saved) recordLine = `新紀錄!超越前次第 ${prior.wave} 波`;
           else recordLine = `本次第 ${runWave} 波,尚未超越最佳第 ${prior.wave} 波(差 ${prior.wave - runWave} 波)`;
         }
+        // 週挑戰: same run/gameover shape as regular endless (both start via
+        // enterEndless), just with a leaderboard section appended — fetched
+        // async after the innerHTML is set, so a slow/offline request never
+        // blocks the game-over screen itself from showing immediately.
+        const leaderboardBox = this.weeklyChallenge
+          ? '<div id="go-leaderboard" style="margin-top:10px;font-size:12px;color:#9aa0b5;text-align:left;max-width:220px">本週排行榜載入中…</div>'
+          : '';
         this.gameover.innerHTML =
           `無盡深淵・力竭倒下<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}</div>` +
-          `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}${shareBtn}`;
+          `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}${shareBtn}${leaderboardBox}`;
         shareStats = {
           title: '無盡深淵・力竭倒下',
           statLine: `撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}`,
           recordLine: recordLine || undefined,
           players: this.rosterFor(world, selfId),
         };
+        if (this.weeklyChallenge && self) this.loadWeeklyLeaderboard(self.classId);
       } else {
         this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}${shareBtn}`;
         shareStats = {

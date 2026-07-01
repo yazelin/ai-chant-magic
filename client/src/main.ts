@@ -20,6 +20,7 @@ import { WebSpeechVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
 import { MusicEngine } from './audio/music';
 import { setupTrainingDummy } from './dev/trainingDummy';
+import { submitScore } from './session/weeklyChallenge';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
 // (connected, already `started`) and hands us a GameSession + the self class id.
@@ -31,6 +32,8 @@ function startGame(
   solo = false,
   isHost = false,
   spectator = false,
+  weeklyChallenge = false,
+  playerName = '',
 ): void {
   // Reveal the in-game chrome (HUD / mode / mic) now that we are leaving lobby.
   // NOTE: '' would fall back to the stylesheet's `#game-chrome{display:none}`,
@@ -97,6 +100,7 @@ function startGame(
     () => session.skipToLobby(),
     isHost,
     () => session.endEndless(),
+    weeklyChallenge,
   );
   // A spectator has no local player, so a skill bar / chant-charge overlay
   // would just show nothing useful — skip creating them entirely.
@@ -127,7 +131,20 @@ function startGame(
       if (prevWave >= 0 && w.wave > prevWave && w.status === 'playing') sfxWave();
       prevWave = w.wave;
       // Game-over sting on the transition into gameover.
-      if (w.status === 'gameover' && prevStatus !== 'gameover') sfxDeath();
+      if (w.status === 'gameover' && prevStatus !== 'gameover') {
+        sfxDeath();
+        // 週挑戰: submit this run's result the moment the run ends. Best-effort
+        // (submitScore swallows its own errors) — a failed/offline submission
+        // must never block or alter the normal game-over screen.
+        if (weeklyChallenge && self) {
+          void submitScore({
+            classId,
+            name: playerName || self.name,
+            wave: w.wave,
+            kills: w.score - w.endlessKillBase,
+          });
+        }
+      }
       prevStatus = w.status;
       // Adaptive music intensity: calm early, escalates with the wave; calm again
       // once the run has ended, win or lose. (Bar-aligned switch inside MusicEngine.)

@@ -16,6 +16,7 @@ import {
   needsServerSetup,
 } from '../net/NetClient';
 import { loadRecord, isEndlessUnlocked } from '../session/endlessRecords';
+import { weeklyRng } from '../session/weeklyChallenge';
 
 const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 
@@ -121,6 +122,8 @@ export class Lobby {
       solo: boolean,
       isHost: boolean,
       spectator?: boolean,
+      weeklyChallenge?: boolean,
+      playerName?: string,
     ) => void,
   ) {
     this.root = document.getElementById('lobby')!;
@@ -174,6 +177,7 @@ export class Lobby {
             <button id="btn-join">輸入代碼加入</button>
             <button id="btn-quick">快速加入</button>
             <button id="btn-solo">單機</button>
+            <button id="btn-weekly" title="本週固定種子,人人遇到一樣的怪,擊敗後看排行榜">本週挑戰</button>
           </div>
           <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}</div>
           ${
@@ -210,6 +214,7 @@ export class Lobby {
     this.root.querySelector('#btn-join')!.addEventListener('click', () => this.doJoinByCode());
     this.root.querySelector('#btn-quick')!.addEventListener('click', () => this.doNet('quickJoin'));
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
+    this.root.querySelector('#btn-weekly')!.addEventListener('click', () => this.startWeeklyChallenge());
   }
 
   // Practice lives in a FLOATING modal (position:fixed) — on a fixed no-scroll
@@ -434,6 +439,16 @@ export class Lobby {
     const session = new LocalSession(this.classId);
     this.hide();
     this.onStart(session, this.classId, true, true); // solo is always its own host
+  }
+
+  // 週挑戰: same solo path, but seeded from THIS week's id (weeklyRng()) and
+  // starting directly in endless mode (enterEndless via startInEndless) so
+  // it's not gated behind clearing the campaign first — everyone can jump
+  // straight into a fair, comparable "how far this week" run.
+  private startWeeklyChallenge(): void {
+    const session = new LocalSession(this.classId, weeklyRng(), true);
+    this.hide();
+    this.onStart(session, this.classId, true, true, false, true, this.effectiveName());
   }
 
   // --- Net: create / quickJoin ---------------------------------------------
