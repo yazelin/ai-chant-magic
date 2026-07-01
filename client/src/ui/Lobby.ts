@@ -712,6 +712,7 @@ export class Lobby {
         </div>
         <div class="hint">小技巧:遊戲中和隊友一起喊「共鳴」(或按 4),同步呼喚可觸發全隊祝福</div>
         <div class="hint">小技巧:不同職業組隊有羈絆加成,職業越多元加成越高,四職業全上陣加成最大</div>
+        <div class="hint">小技巧:同一隻怪連續被不同元素命中會觸發反應(蒸發/過載/超導/淨化),隊友輪流打同一目標傷害更高</div>
         <div class="btns">
           ${
             this.isHost
