@@ -28,7 +28,7 @@ import {
   type LobbyPlayerView,
   type ErrorCode,
 } from './protocol';
-import { CLASSES, type ClassId } from '@acm/shared';
+import { CLASSES, CONFIG, type ClassId } from '@acm/shared';
 
 // The server is public: a hostile/buggy client can send any string as `classId`.
 // An unknown class is stored unvalidated by setClass/create/join/quickJoin and
@@ -43,6 +43,9 @@ const HOST = '0.0.0.0';
 const TICK_MS = 50;
 const TICK_DT = TICK_MS / 1000;
 const GAMEOVER_RETURN_MS = 4500; // pause on the game-over screen before returning to the room lobby
+// Victory gets a much longer window than gameover — it's a real decision (host
+// picks endless mode vs. lobby), not just a "read the score" pause.
+const VICTORY_DECISION_MS = CONFIG.transition.victoryDecisionSec * 1000;
 
 // Handle returned by startServer: the bound port (after `listening` resolves),
 // the underlying http/ws objects and registry (for assertions/inspection), and
@@ -266,6 +269,58 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         sessions.delete(ws);
         break;
       }
+      case 'enterEndless': {
+        const { room, playerId } = session;
+        if (!room || !playerId) {
+          sendError(ws, 'not-in-room', 'no room');
+          return;
+        }
+        if (room.hostId !== playerId) {
+          sendError(ws, 'not-host', 'only the host can start endless mode');
+          return;
+        }
+        if (!room.enterEndless()) {
+          sendError(ws, 'not-victory', 'endless mode can only be entered from victory');
+          return;
+        }
+        broadcast(room, { type: 'endlessStarted' });
+        break;
+      }
+      case 'skipToLobby': {
+        const { room, playerId } = session;
+        if (!room || !playerId) {
+          sendError(ws, 'not-in-room', 'no room');
+          return;
+        }
+        if (room.hostId !== playerId) {
+          sendError(ws, 'not-host', 'only the host can return to the lobby');
+          return;
+        }
+        if (room.status !== 'victory') {
+          sendError(ws, 'not-victory', 'nothing to skip');
+          return;
+        }
+        room.returnToLobby();
+        broadcast(room, { type: 'returnToLobby' });
+        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        break;
+      }
+      case 'endEndless': {
+        const { room, playerId } = session;
+        if (!room || !playerId) {
+          sendError(ws, 'not-in-room', 'no room');
+          return;
+        }
+        if (room.hostId !== playerId) {
+          sendError(ws, 'not-host', 'only the host can end endless mode');
+          return;
+        }
+        if (!room.endEndless()) {
+          sendError(ws, 'not-endless', 'not currently in an endless run');
+          return;
+        }
+        break;
+      }
       default:
         sendError(ws, 'bad-message', 'unhandled message type');
     }
@@ -324,16 +379,27 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           broadcast(room, { type: 'snapshot', tick: room.tickCount, world: snap });
         }
       }
-      // Empty (everyone disconnected) → reap. A finished game (loss OR full
-      // campaign clear) with players still connected → after a short pause
-      // (they see the game-over/victory banner), send the room back to its
-      // lobby so they can re-ready and play again.
+      // Empty (everyone disconnected) → reap. A finished game with players
+      // still connected → after a pause (they see the banner), send the room
+      // back to its lobby so they can re-ready and play again. Victory gets
+      // the much longer VICTORY_DECISION_MS window (a real choice: endless
+      // mode vs. lobby) instead of gameover's short GAMEOVER_RETURN_MS —
+      // enterEndless()/skipToLobby() (host-triggered) can also short-circuit
+      // this wait from either state.
       if (room.isEmpty) {
         registry.remove(room.code);
       } else if (
-        (room.status === 'gameover' || room.status === 'victory') &&
+        room.status === 'gameover' &&
         room.gameoverAt !== null &&
         Date.now() - room.gameoverAt > GAMEOVER_RETURN_MS
+      ) {
+        room.returnToLobby();
+        broadcast(room, { type: 'returnToLobby' });
+        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+      } else if (
+        room.status === 'victory' &&
+        room.victoryDecisionAt !== null &&
+        Date.now() - room.victoryDecisionAt > VICTORY_DECISION_MS
       ) {
         room.returnToLobby();
         broadcast(room, { type: 'returnToLobby' });

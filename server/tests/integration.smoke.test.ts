@@ -345,7 +345,7 @@ describe('two-client ws integration smoke (B3)', () => {
       const room = handle.registry.get(code)!;
       const returned = waitFor(a, 'returnToLobby');
       room.status = 'victory';
-      room.gameoverAt = Date.now() - 60_000;
+      room.victoryDecisionAt = Date.now() - 60_000;
 
       await returned;
       await waitUntil(() => room.status === 'lobby');
@@ -534,6 +534,154 @@ describe('two-client ws integration smoke (B3)', () => {
       expect(snapA.tick).toBe(snapB.tick);
       expect(snapA.world.wave).toBe(snapB.world.wave);
       expect(snapA.world.time).toBe(snapB.world.time);
+    },
+    10000
+  );
+
+  it(
+    'enterEndless (host, from victory) flips the room to an endless playing state and broadcasts endlessStarted',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const b = await connect();
+      const joinedB = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'warden', roomCode: code });
+      await joinedB;
+
+      const startedA = waitFor(a, 'started');
+      const startedB = waitFor(b, 'started');
+      sendMsg(a, { type: 'start' });
+      await Promise.all([startedA, startedB]);
+      await Promise.all([waitFor(a, 'snapshot'), waitFor(b, 'snapshot')]);
+
+      const room = handle.registry.get(code)!;
+      room.world!.status = 'victory';
+      await waitUntil(() => room.status === 'victory');
+
+      const endlessA = waitFor(a, 'endlessStarted');
+      const endlessB = waitFor(b, 'endlessStarted');
+      sendMsg(a, { type: 'enterEndless' }); // a is the host (created the room)
+      await Promise.all([endlessA, endlessB]);
+
+      expect(room.status).toBe('playing');
+      expect(room.world!.endless).toBe(true);
+      expect(room.victoryDecisionAt).toBeNull();
+    },
+    10000
+  );
+
+  it(
+    'enterEndless from a non-host is rejected (not-host); the room stays on victory',
+    async () => {
+      const a = await connect();
+      const joinedA = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const code = (await joinedA).roomCode;
+
+      const b = await connect();
+      const joinedB = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'warden', roomCode: code });
+      await joinedB;
+
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+
+      const room = handle.registry.get(code)!;
+      room.world!.status = 'victory';
+      await waitUntil(() => room.status === 'victory');
+
+      const err = waitFor(b, 'error');
+      sendMsg(b, { type: 'enterEndless' }); // b is not the host
+      expect((await err).code).toBe('not-host');
+      expect(room.status).toBe('victory');
+      expect(room.world!.endless).toBe(false);
+    },
+    10000
+  );
+
+  it(
+    'enterEndless while not in victory is rejected (not-victory)',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      await joinedPromise;
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+      await waitFor(a, 'snapshot'); // status is 'playing', not 'victory'
+
+      const err = waitFor(a, 'error');
+      sendMsg(a, { type: 'enterEndless' });
+      expect((await err).code).toBe('not-victory');
+    },
+    10000
+  );
+
+  it(
+    'endEndless (host, mid endless run) ends it the same way a wipe does (status gameover)',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedPromise).roomCode;
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+      await waitFor(a, 'snapshot');
+
+      const room = handle.registry.get(code)!;
+      room.world!.status = 'victory';
+      await waitUntil(() => room.status === 'victory');
+      sendMsg(a, { type: 'enterEndless' });
+      await waitFor(a, 'endlessStarted');
+      expect(room.world!.endless).toBe(true);
+
+      sendMsg(a, { type: 'endEndless' });
+      await waitUntil(() => room.status === 'gameover');
+      expect(room.gameoverAt).not.toBeNull();
+    },
+    10000
+  );
+
+  it(
+    'endEndless while not in an endless run is rejected (not-endless)',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      await joinedPromise;
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+      await waitFor(a, 'snapshot');
+
+      const err = waitFor(a, 'error');
+      sendMsg(a, { type: 'endEndless' });
+      expect((await err).code).toBe('not-endless');
+    },
+    10000
+  );
+
+  it(
+    'skipToLobby (host, from victory) returns everyone to the lobby immediately, without waiting out the decision window',
+    async () => {
+      const a = await connect();
+      const joinedPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Solo', classId: 'pyro' });
+      const code = (await joinedPromise).roomCode;
+      sendMsg(a, { type: 'start' });
+      await waitFor(a, 'started');
+      await waitFor(a, 'snapshot');
+
+      const room = handle.registry.get(code)!;
+      room.world!.status = 'victory';
+      await waitUntil(() => room.status === 'victory');
+
+      const returned = waitFor(a, 'returnToLobby');
+      sendMsg(a, { type: 'skipToLobby' });
+      await returned; // no back-dating needed — this is immediate, not the 30s auto-timer
+      expect(room.status).toBe('lobby');
     },
     10000
   );

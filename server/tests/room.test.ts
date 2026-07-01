@@ -250,3 +250,71 @@ describe('Room with injected clock', () => {
     expect(room.clockNow()).toBe(1050);
   });
 });
+
+describe('Room — endless mode (victory vs gameover use separate wall-clock fields)', () => {
+  it('tick() sets victoryDecisionAt (not gameoverAt) when the world reaches victory', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    room.world!.status = 'victory';
+    room.tick(0.05);
+    expect(room.status).toBe('victory');
+    expect(room.victoryDecisionAt).not.toBeNull();
+    expect(room.gameoverAt).toBeNull();
+  });
+
+  it('tick() sets gameoverAt (not victoryDecisionAt) when the world reaches gameover', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    room.world!.status = 'gameover';
+    room.tick(0.05);
+    expect(room.status).toBe('gameover');
+    expect(room.gameoverAt).not.toBeNull();
+    expect(room.victoryDecisionAt).toBeNull();
+  });
+
+  it('enterEndless() is a no-op returning false when the room is not in victory', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start(); // status: playing
+    expect(room.enterEndless()).toBe(false);
+    expect(room.status).toBe('playing');
+    expect(room.world!.endless).toBe(false);
+  });
+
+  it('enterEndless() from victory flips back to playing, sets world.endless, clears victoryDecisionAt', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    room.world!.status = 'victory';
+    room.tick(0.05);
+    expect(room.enterEndless()).toBe(true);
+    expect(room.status).toBe('playing');
+    expect(room.world!.endless).toBe(true);
+    expect(room.victoryDecisionAt).toBeNull();
+  });
+
+  it('endEndless() is a no-op returning false when not in an endless run', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    expect(room.endEndless()).toBe(false);
+  });
+
+  it('endEndless() ends an active endless run the same way a wipe does (status gameover)', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    room.world!.status = 'victory';
+    room.tick(0.05);
+    room.enterEndless();
+    expect(room.endEndless()).toBe(true);
+    expect(room.status).toBe('gameover');
+    expect(room.gameoverAt).not.toBeNull();
+  });
+
+  it('returnToLobby() clears victoryDecisionAt as well as gameoverAt', () => {
+    const room = new Room('AAAA', member('host'));
+    room.start();
+    room.world!.status = 'victory';
+    room.tick(0.05);
+    room.returnToLobby();
+    expect(room.victoryDecisionAt).toBeNull();
+    expect(room.status).toBe('lobby');
+  });
+});
