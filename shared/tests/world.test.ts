@@ -1025,3 +1025,59 @@ describe('step — 史萊姆王 boss', () => {
     expect(w.enemies).toEqual([]);
   });
 });
+
+describe('step — 世界2 冰靈(ice wraith,level 2 signature enemy)', () => {
+  it('spawns an ice wraith (not a random-element slime) when world.levelId is 1', () => {
+    const w = createSoloWorld('cryo');
+    w.levelId = 1;
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05); // breakTimer -> 0 -> beginWave (sets spawnQueue, spawnTimer=0)
+    step(w, [], 0.05); // spawnTimer <= 0 -> spawnEnemy
+    expect(w.enemies.length).toBeGreaterThan(0);
+    expect(w.enemies.every((e) => e.wraith === true && e.element === 'ice')).toBe(true);
+  });
+
+  it('still spawns regular random-element slimes on level 0 (unchanged)', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 0.02;
+    w.spawnQueue = 0;
+    w.enemies = [];
+    step(w, [], 0.05);
+    step(w, [], 0.05);
+    expect(w.enemies.length).toBeGreaterThan(0);
+    expect(w.enemies.every((e) => e.wraith === undefined)).toBe(true);
+  });
+
+  it('holds still then blinks a fixed distance toward the player, rather than walking smoothly', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999; // isolate from wave spawning
+    const p = w.players[0];
+    const startX = p.pos.x - 300;
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 9999, element: 'ice', wraith: true,
+      pos: { x: startX, y: p.pos.y }, nextBlinkAt: 0,
+    }));
+    step(w, [], 0.05); // nextBlinkAt due immediately -> blinks CONFIG.wraith.blinkDist toward the player
+    const afterBlink = w.enemies.find((e) => e.id === 1)!.pos.x;
+    expect(afterBlink - startX).toBeCloseTo(CONFIG.wraith.blinkDist);
+    // holds perfectly still between blinks (well under the next blinkInterval)
+    for (let i = 0; i < 5; i++) step(w, [], 0.05);
+    expect(w.enemies.find((e) => e.id === 1)!.pos.x).toBeCloseTo(afterBlink);
+  });
+
+  it('never blinks past the player (caps the step at the remaining distance)', () => {
+    const w = createSoloWorld('cryo');
+    w.breakTimer = 999;
+    const p = w.players[0];
+    const closeX = p.pos.x - CONFIG.wraith.blinkDist / 2; // closer than one full blink
+    w.enemies.push(makeEnemy({
+      id: 1, hp: 9999, element: 'ice', wraith: true,
+      pos: { x: closeX, y: p.pos.y }, nextBlinkAt: 0,
+    }));
+    step(w, [], 0.05);
+    const after = w.enemies.find((e) => e.id === 1)!;
+    expect(after.pos.x).toBeCloseTo(p.pos.x); // lands on the player, doesn't fly past
+  });
+});

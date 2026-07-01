@@ -52,6 +52,9 @@ export interface Enemy {
   // net snapshot; positions are server-authoritative, so the client renders the
   // freeze via the stalled positions (and the existing slowUntil blue tint).
   frozenUntil?: number;
+  // 世界2(frostvale)signature enemy: holds still, then blinks CONFIG.wraith.blinkDist
+  // toward its target every blinkInterval, instead of walking. Sim-only schedule.
+  wraith?: boolean; nextBlinkAt?: number;
 }
 
 export interface Projectile {
