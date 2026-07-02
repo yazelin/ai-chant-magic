@@ -14,6 +14,7 @@ import {
   ErrorCode,
   resolveServerUrl,
   needsServerSetup,
+  prewarmServer,
 } from '../net/NetClient';
 import { loadRecord, isEndlessUnlocked } from '../session/endlessRecords';
 import { weeklyRng } from '../session/weeklyChallenge';
@@ -128,6 +129,10 @@ export class Lobby {
   ) {
     this.root = document.getElementById('lobby')!;
     this.name = randomName(); // a fun default; player can edit or re-roll
+    // Fire the moment the page loads, well before anyone clicks a multiplayer
+    // button — gives Render's free-tier cold start (measured 90-200+s) a head
+    // start against however long a visitor spends reading the lobby first.
+    prewarmServer();
     // A friend clicking an invite link (?join=CODE) drops straight into the
     // room with zero clicks — no code to type or read aloud. They can still
     // change name/class once inside (the room view's picker already supports
@@ -662,11 +667,22 @@ export class Lobby {
   }
 
   private handleDisconnect(): void {
+    // hide() (called on entering an active match) sets display:none on this
+    // root — a disconnect while actually playing must undo that (and tear
+    // down the running game, same teardown returnFromGame() already uses for
+    // the graceful "everyone died" path), or the freshly-rendered error
+    // message renders into an invisible DOM node behind a frozen game canvas,
+    // and the player just sees what looks like a crash with no explanation.
+    if (this.returnFn) {
+      this.returnFn();
+      this.returnFn = null;
+    }
+    this.root.style.display = '';
     // If we never made it into a room, this is a failed connection.
     if (!this.roomCode) {
       this.renderSetup('無法連線到伺服器(請確認網址 / 伺服器是否啟動)。你仍可選擇「單機」。');
     } else {
-      // Lost connection while in the lobby (not yet started).
+      // Lost connection (in the lobby, or mid-match — both land here).
       this.renderSetup('與伺服器的連線中斷。你仍可選擇「單機」。');
       this.roomCode = '';
     }
@@ -680,13 +696,27 @@ export class Lobby {
   }
 
   // --- Connecting / Room screens -------------------------------------------
+  // The free-tier server's cold start has been measured at 90-200+s in
+  // practice — not the "數秒" the copy used to claim. Under-promising here
+  // plus a live elapsed counter matters more than shortening the actual wait:
+  // a visible, honestly-labelled ticking number reads as "working", a static
+  // "should be quick" message that blows past its own estimate reads as
+  // "broken", even though the underlying wait is identical either way.
   private showConnecting(): void {
     this.root.innerHTML = `
       <h1>連線中…</h1>
-      <div class="sub">正在喚醒伺服器(免費伺服器冷啟動可能需要數秒)…</div>
+      <div class="sub">正在喚醒免費伺服器,冷啟動可能要 1-2 分鐘,請耐心等候…(已等待 <span id="connect-elapsed">0</span> 秒)</div>
       <div class="btns"><button id="btn-cancel">取消</button></div>
     `;
     this.root.querySelector('#btn-cancel')!.addEventListener('click', () => this.renderSetup());
+    const startedAt = Date.now();
+    const tick = (): void => {
+      const el = document.getElementById('connect-elapsed');
+      if (!el) return; // navigated away from this screen — self-clear
+      el.textContent = String(Math.floor((Date.now() - startedAt) / 1000));
+      setTimeout(tick, 1000);
+    };
+    setTimeout(tick, 1000);
   }
 
   private renderRoom(): void {

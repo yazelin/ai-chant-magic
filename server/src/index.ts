@@ -399,7 +399,13 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
 
   const httpServer = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/healthz') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
+      // 'access-control-allow-origin: *' is safe here — a public, no-data
+      // health probe (Render's own uptime checks already hit it cross-origin
+      // implicitly). Needed so the client's fire-and-forget prewarmServer()
+      // ping (see net/NetClient.ts) doesn't error in the browser console —
+      // the request itself would still reach the server and wake it either
+      // way, but a same-origin-policy error on every page load is bad hygiene.
+      res.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
       res.end('ok');
       return;
     }

@@ -1,4 +1,4 @@
-import { World, Player, CLASSES, CONFIG } from '@acm/shared';
+import { World, Player, CLASSES, CONFIG, SPELLS, ClassId } from '@acm/shared';
 import { VoiceStatus } from '../voice/recognizer';
 import { skillIconSvg } from '../ui/skillIcons';
 import {
@@ -97,6 +97,11 @@ export class Hud {
   // (ttl>0 across several render() polls) doesn't re-trigger the toast.
   private seenResonanceFx = new Set<number>();
   private victoryEnteredAt: number | null = null;
+  // Player ids seen connected so far — lets render() detect a connected→
+  // disconnected transition (a teammate's tab closed/crashed mid-match) and
+  // toast it once, instead of the player just silently vanishing from the
+  // party panel with zero explanation.
+  private seenConnected = new Set<string>();
 
   constructor(
     private solo = false,
@@ -152,6 +157,16 @@ export class Hud {
       if (window.confirm('確定要結束這輪無盡模式嗎?')) this.onEndEndless();
     });
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.endlessQuit);
+  }
+
+  // First-match onboarding: without this, a player who reaches for 1/2/3 out
+  // of muscle memory (very common instinct from any other action game) can
+  // finish an entire session — even in a room with friends — without ever
+  // discovering this is a voice game. main.ts calls this once per browser
+  // (see session/onboarding.ts's hasSeenVoiceHint gate), not once per match.
+  showVoiceHint(classId: ClassId): void {
+    const spells = CLASSES[classId].spells.map((id) => `「${SPELLS[id].displayName}」`).join('/');
+    this.showToast(`喊出 ${spells} 施法(或按 1/2/3)`, 6000);
   }
 
   setMicStatus(s: VoiceStatus, message?: string): void {
@@ -406,16 +421,28 @@ export class Hud {
       for (const id of this.seenResonanceFx) if (!liveIds.has(id)) this.seenResonanceFx.delete(id);
     }
 
-    // Player status panels — self first.
-    const players = world.players
-      .filter((p) => p.connected)
-      .sort((a, b) => (a.id === selfId ? -1 : b.id === selfId ? 1 : 0));
+    // Player status panels — self first. A disconnected teammate is kept
+    // (not filtered out) and shown as "已離開" instead of just vanishing —
+    // silently dropping the panel read as "did the game break?" with zero
+    // explanation. The first render() that observes a connected→disconnected
+    // transition also fires a toast (self is never toasted for their own
+    // connection — that's the "連線中斷" screen's job, not this one's).
+    for (const p of world.players) {
+      if (p.connected) this.seenConnected.add(p.id);
+      else if (p.id !== selfId && this.seenConnected.delete(p.id)) {
+        this.showToast(`${p.name} 已離開`, 3000);
+      }
+    }
+    const players = world.players.sort((a, b) => (a.id === selfId ? -1 : b.id === selfId ? 1 : 0));
     this.hud.innerHTML = players.map((p) => this.panel(p, p.id === selfId, world.time)).join('');
   }
 
   private panel(p: Player, isSelf: boolean, now: number): string {
     const def = CLASSES[p.classId];
     const head = `<div class="pname">${isSelf ? '★ ' : ''}${esc(p.name)} <span class="prole">${def.displayName}</span></div>`;
+    if (!p.connected) {
+      return `<div class="pstat dim" style="border-left-color:${def.color}"><div class="pbody">${head}<div class="prole">已離開</div></div></div>`;
+    }
     if (!p.alive) {
       return `<div class="pstat dim" style="border-left-color:${def.color}"><div class="pbody">${head}<div class="prole">已陣亡</div></div></div>`;
     }

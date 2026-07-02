@@ -142,6 +142,12 @@ describe('two-client ws integration smoke (B3)', () => {
     expect(await res.text()).toBe('ok');
   });
 
+  it("healthz allows cross-origin requests (so the client's prewarm ping never errors)", async () => {
+    const port = handle.port();
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
   it(
     'create -> join -> start -> snapshot, then a pyro cast yields a projectile or effect',
     async () => {
