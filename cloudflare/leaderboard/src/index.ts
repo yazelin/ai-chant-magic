@@ -10,6 +10,7 @@
 // server-side simulation to check submissions against. parseSubmitPayload's
 // validation is a sanity backstop against malformed data, not anti-cheat.
 import { parseSubmitPayload, isValidWeekId, isValidClassId } from './validate';
+import { checkRateLimit } from './rateLimit';
 
 export interface Env {
   LEADERBOARD: KVNamespace;
@@ -58,7 +59,18 @@ function json(data: unknown, status: number, headers: Record<string, string>): R
   });
 }
 
+// Generous enough for real use (retrying after a run, several people behind
+// the same NAT) while still stopping a flood script from silently burning
+// through the free tier's daily KV write quota (shared with other projects
+// on this account) in well under a minute.
+const SUBMIT_RATE_LIMIT = 20;
+const SUBMIT_RATE_WINDOW_SEC = 60;
+
 async function handleSubmit(req: Request, env: Env, headers: Record<string, string>): Promise<Response> {
+  const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
+  const allowed = await checkRateLimit(env.LEADERBOARD, `ratelimit:submit:${ip}`, SUBMIT_RATE_LIMIT, SUBMIT_RATE_WINDOW_SEC);
+  if (!allowed) return json({ error: 'rate limited' }, 429, headers);
+
   let body: unknown;
   try {
     body = await req.json();
