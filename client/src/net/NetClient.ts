@@ -306,6 +306,16 @@ export class NetClient {
 
   close(): void {
     if (this.ws) {
+      // Unbind BEFORE closing: WebSocket.close() fires 'close' asynchronously
+      // (the closing handshake), and without this, an intentional close (e.g.
+      // Lobby's handleNetError() tearing the client down right after handling
+      // an 'already-started' error) still fires onClose a moment later —
+      // which calls handleDisconnect() and clobbers whatever screen
+      // handleNetError() just rendered with a generic "無法連線到伺服器".
+      this.ws.onopen = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
       try {
         this.ws.close();
       } catch {

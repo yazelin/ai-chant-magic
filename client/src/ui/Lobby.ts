@@ -17,7 +17,7 @@ import {
   prewarmServer,
 } from '../net/NetClient';
 import { loadRecord, isEndlessUnlocked } from '../session/endlessRecords';
-import { weeklyRng } from '../session/weeklyChallenge';
+import { weeklyRng, daysUntilWeeklyReset } from '../session/weeklyChallenge';
 
 const CLASS_ORDER: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 
@@ -119,6 +119,11 @@ export class Lobby {
   // updates this callback + the modal's text, so repeated calls never stack
   // up duplicate listeners.
   private inputModalSubmit: ((value: string) => void) | null = null;
+  // The room code from the most recent join attempt — lets handleNetError's
+  // 'already-started' case offer a one-click switch to spectating that same
+  // room instead of just dead-ending (this.roomCode itself is only set on a
+  // SUCCESSFUL join, so it's already empty by the time the error fires).
+  private lastJoinAttemptCode = '';
   // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
   private voice: WebSpeechVoiceInput | null = null;
   private practicing = false;
@@ -168,7 +173,11 @@ export class Lobby {
   }
 
   // --- Setup screen: name + class pick + action buttons ---------------------
-  private renderSetup(errorMsg?: string): void {
+  // errorAction: an optional actionable follow-up next to the error text —
+  // e.g. a stale ?join=CODE link for a room that already started used to just
+  // dead-end here with "該房間已經開始遊戲" and nothing else to do; offering
+  // ?watch=CODE's spectate flow instead turns that dead end into a real path.
+  private renderSetup(errorMsg?: string, errorAction?: { label: string; onClick: () => void }): void {
     this.teardownClient();
     this.isSpectating = false;
     const showSetupHint = needsServerSetup();
@@ -190,9 +199,13 @@ export class Lobby {
             <button id="btn-join">輸入代碼加入</button>
             <button id="btn-quick">快速加入</button>
             <button id="btn-solo">單機</button>
-            <button id="btn-weekly" title="本週固定種子,人人遇到一樣的怪,擊敗後看排行榜">本週挑戰</button>
+            <button id="btn-weekly" title="本週固定種子,人人遇到一樣的怪,擊敗後看排行榜(還剩 ${daysUntilWeeklyReset()} 天更新)">本週挑戰</button>
           </div>
-          <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}</div>
+          <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}${
+            errorAction
+              ? ` · <button id="lobby-error-action" class="link-btn" type="button">${escapeHtml(errorAction.label)}</button>`
+              : ''
+          }</div>
           ${
             showSetupHint
               ? `<div class="hint">此頁面為 HTTPS 但未設定伺服器。請以 <code>?server=wss://…</code> 指定伺服器,或直接「單機」遊玩。</div>`
@@ -230,6 +243,9 @@ export class Lobby {
     this.root.querySelector('#btn-quick')!.addEventListener('click', () => this.doNet('quickJoin'));
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
     this.root.querySelector('#btn-weekly')!.addEventListener('click', () => this.startWeeklyChallenge());
+    if (errorAction) {
+      this.root.querySelector('#lobby-error-action')!.addEventListener('click', errorAction.onClick);
+    }
   }
 
   // Practice lives in a FLOATING modal (position:fixed) — on a fixed no-scroll
@@ -599,6 +615,7 @@ export class Lobby {
   }
 
   private joinRoomByCode(roomCode: string): void {
+    this.lastJoinAttemptCode = roomCode;
     const url = resolveServerUrl();
     const client = new NetClient(
       {
@@ -772,6 +789,11 @@ export class Lobby {
     // Otherwise a real lobby/room error: drop back to setup; solo stays available.
     this.teardownClient();
     this.roomCode = '';
+    if (code === 'already-started' && this.lastJoinAttemptCode) {
+      const watchCode = this.lastJoinAttemptCode;
+      this.renderSetup(ERROR_TEXT[code], { label: '改為旁觀這場遊戲', onClick: () => this.doSpectate(watchCode) });
+      return;
+    }
     this.renderSetup(ERROR_TEXT[code] ?? '發生未知錯誤');
   }
 
