@@ -174,9 +174,9 @@ describe('toSnapshot', () => {
     const w = pyroSolo();
     w.effects.push({
       id: 2, kind: 'reaction', a: { x: 1, y: 1 }, radius: 48,
-      ttl: 0.3, colorHint: '#ffb27a', reactionName: '蒸發',
+      ttl: 0.3, colorHint: '#ffb27a', reactionName: '沸騰',
     });
-    expect(toSnapshot(w).effects[0].reactionName).toBe('蒸發');
+    expect(toSnapshot(w).effects[0].reactionName).toBe('沸騰');
   });
 
   it('is a structural clone that survives JSON round-trip (no functions/refs)', () => {
