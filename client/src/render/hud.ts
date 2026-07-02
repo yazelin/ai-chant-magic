@@ -9,7 +9,7 @@ import {
   type EndlessRecord,
 } from '../session/endlessRecords';
 import { renderShareCard, shareOrDownloadCard, type ShareCardStats } from './shareCard';
-import { fetchLeaderboard } from '../session/weeklyChallenge';
+import { fetchLeaderboard, currentWeekId } from '../session/weeklyChallenge';
 
 // Short mic-pill labels (the long permission instruction shows as a .note below).
 const MIC_LABEL: Record<VoiceStatus, string> = {
@@ -111,6 +111,7 @@ export class Hud {
     private isHost = false,
     private onEndEndless: () => void = () => {},
     private weeklyChallenge = false,
+    private getVoiceCasts: () => number = () => 0,
   ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
@@ -206,6 +207,15 @@ export class Hud {
       .map((p) => ({ name: p.name, classId: p.classId }));
   }
 
+  // The share card previously had zero reference to the game's own voice
+  // hook — the one artifact designed to travel into a friend's chat had no
+  // sign this was a voice game at all. 0 casts (keyboard-only run) omits the
+  // clause rather than showing a deflating "語音咏唱 0 次".
+  private voiceCastSuffix(): string {
+    const n = this.getVoiceCasts();
+    return n > 0 ? ` · 語音咏唱 ${n} 次` : '';
+  }
+
   private shareResult(stats: ShareCardStats): void {
     const canvas = renderShareCard(stats);
     void shareOrDownloadCard(canvas);
@@ -273,7 +283,9 @@ export class Hud {
           `<div style="font-size:13px;font-weight:700;color:#ffd24d;margin-top:2px">${recordLine}</div>${hint}${shareBtn}${leaderboardBox}`;
         shareStats = {
           title: '無盡深淵・力竭倒下',
-          statLine: `撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}`,
+          statLine:
+            `撐到第 ${runWave} 波 · 擊殺 ${runScore} · 存活 ${survived}${this.voiceCastSuffix()}` +
+            (this.weeklyChallenge ? ` · 本週挑戰 ${currentWeekId()}` : ''),
           recordLine: recordLine || undefined,
           players: this.rosterFor(world, selfId),
         };
@@ -282,7 +294,7 @@ export class Hud {
         this.gameover.innerHTML = `遊戲結束<div style="font-size:14px;font-weight:600;color:#c7cbdb;margin:6px 0">撐到第 ${world.wave} 波 · 擊殺 ${world.score}</div>${hint}${shareBtn}`;
         shareStats = {
           title: '遊戲結束',
-          statLine: `撐到第 ${world.wave} 波 · 擊殺 ${world.score}`,
+          statLine: `撐到第 ${world.wave} 波 · 擊殺 ${world.score}${this.voiceCastSuffix()}`,
           players: this.rosterFor(world, selfId),
         };
       }
@@ -337,7 +349,7 @@ export class Hud {
       this.victory.querySelector('#victory-skip')?.addEventListener('click', () => this.onSkipToLobby());
       const victoryShareStats: ShareCardStats = {
         title: '全破!四個世界都已淨化',
-        statLine: `總耗時 ${mins}:${secs} · 擊殺 ${world.score}`,
+        statLine: `總耗時 ${mins}:${secs} · 擊殺 ${world.score}${this.voiceCastSuffix()}`,
         recordLine: record ? `無盡模式最佳:第 ${record.wave} 波・擊殺 ${record.score}` : undefined,
         players: this.rosterFor(world, selfId),
       };
