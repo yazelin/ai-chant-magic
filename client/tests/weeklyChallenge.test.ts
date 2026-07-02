@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getClientId, currentWeekId, weeklyRng } from '../src/session/weeklyChallenge';
+import { getClientId, currentWeekId, weeklyRng, daysUntilWeeklyReset } from '../src/session/weeklyChallenge';
 
 // vitest's client config runs under Node (no jsdom) — stub the minimal
 // Storage surface getClientId() uses (same pattern as endlessRecords.test.ts).
@@ -38,6 +38,22 @@ describe('getClientId', () => {
 describe('currentWeekId', () => {
   it('matches the ISO week-id shape (YYYY-Wnn)', () => {
     expect(currentWeekId()).toMatch(/^\d{4}-W\d{2}$/);
+  });
+});
+
+describe('daysUntilWeeklyReset', () => {
+  // ISO weeks reset Monday 00:00 UTC — days remaining counts calendar days
+  // until that next boundary (7 on a Monday itself, 1 on a Sunday).
+  it('is 7 on a Monday (the reset day itself — a full week until the next one)', () => {
+    expect(daysUntilWeeklyReset(new Date('2026-06-29T12:00:00Z'))).toBe(7); // a Monday
+  });
+
+  it('is 1 on a Sunday (resets tomorrow)', () => {
+    expect(daysUntilWeeklyReset(new Date('2026-07-05T23:00:00Z'))).toBe(1); // a Sunday
+  });
+
+  it('is 4 on a Thursday', () => {
+    expect(daysUntilWeeklyReset(new Date('2026-07-02T00:00:00Z'))).toBe(4); // a Thursday
   });
 });
 

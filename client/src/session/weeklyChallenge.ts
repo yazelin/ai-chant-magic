@@ -23,6 +23,14 @@ export function currentWeekId(): string {
   return isoWeekId(new Date());
 }
 
+// Calendar days until the next ISO week boundary (Monday 00:00 UTC) — lets
+// the UI show "本週還剩 N 天" instead of currentWeekId() being computed but
+// never surfaced anywhere a player would notice a reset is coming.
+export function daysUntilWeeklyReset(now: Date = new Date()): number {
+  const day = (now.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  return 7 - day;
+}
+
 // A fresh PRNG seeded from THIS week's id — every player who starts the
 // challenge this week gets the identical enemy-spawn sequence (see
 // shared/src/weekly.ts).
