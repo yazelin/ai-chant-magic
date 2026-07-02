@@ -66,11 +66,16 @@ const WORLD_BG_IMAGE: Record<ClassId, string> = {
   storm: new URL('../assets/lobby-bg-storm.png', import.meta.url).href,
   warden: new URL('../assets/lobby-bg-warden.png', import.meta.url).href,
 };
+// Lightened from an earlier, heavier pass (linear-gradient's darkest stop was
+// ~0.72-0.74) — that read as "just a dark gradient" rather than the actual
+// illustrated world art underneath, especially on the room view's larger
+// cards. text-shadow on the text elements does the legibility work now
+// instead of the overlay alone.
 const WORLD_BG_OVERLAY: Record<ClassId, string> = {
-  pyro: 'radial-gradient(100% 70% at 50% 0%, rgba(255,170,60,0.32), transparent 60%), linear-gradient(165deg,rgba(34,48,26,0.58),rgba(18,22,12,0.72))',
-  cryo: 'radial-gradient(100% 70% at 50% 0%, rgba(120,200,255,0.32), transparent 60%), linear-gradient(165deg,rgba(22,39,58,0.56),rgba(12,20,32,0.74))',
-  storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.34), transparent 60%), linear-gradient(165deg,rgba(34,26,58,0.56),rgba(16,12,30,0.74))',
-  warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.30), transparent 60%), linear-gradient(165deg,rgba(42,36,24,0.58),rgba(20,18,12,0.74))',
+  pyro: 'radial-gradient(100% 70% at 50% 0%, rgba(255,170,60,0.24), transparent 60%), linear-gradient(165deg,rgba(34,48,26,0.42),rgba(18,22,12,0.56))',
+  cryo: 'radial-gradient(100% 70% at 50% 0%, rgba(120,200,255,0.24), transparent 60%), linear-gradient(165deg,rgba(22,39,58,0.40),rgba(12,20,32,0.58))',
+  storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.26), transparent 60%), linear-gradient(165deg,rgba(34,26,58,0.40),rgba(16,12,30,0.58))',
+  warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.22), transparent 60%), linear-gradient(165deg,rgba(42,36,24,0.42),rgba(20,18,12,0.58))',
 };
 const worldBackground = (id: ClassId): string => `${WORLD_BG_OVERLAY[id]}, url("${WORLD_BG_IMAGE[id]}")`;
 
@@ -184,9 +189,9 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>真。AI。咏唱魔法</h1>
-      <div class="sub"><b class="voice-hook">對著麥克風喊出技能名稱施法</b> · 2–4 人連線 co-op · 點四角的角色卡選擇,中央查看技能</div>
+      <div class="sub"><b class="voice-hook">對著麥克風喊出技能名稱施法</b> · 2–4 人連線 co-op · 點角色卡選擇,下方查看技能</div>
       <div class="showcase">
-        <div id="lobby-showcase" style="display:contents"></div>
+        <div id="lobby-showcase" class="char-row"></div>
         <div class="center-panel">
           <div id="center-skills" class="center-skills"></div>
           <label for="lobby-name" class="name-label">你的名字(隊友會看到)</label>
@@ -458,7 +463,6 @@ export class Lobby {
     const host = this.root.querySelector('#lobby-showcase');
     if (!host) return;
     host.innerHTML = '';
-    const AREA: Record<ClassId, string> = { pyro: 'a', cryo: 'b', storm: 'c', warden: 'd' };
     for (const id of CLASS_ORDER) {
       const def = CLASSES[id];
       const sw = SHEET_WALKERS[id];
@@ -466,7 +470,6 @@ export class Lobby {
       card.className = 'char-card' + (id === this.classId ? ' selected' : '');
       card.dataset.cls = id;
       card.style.color = def.color;
-      card.style.gridArea = AREA[id];
       card.style.backgroundImage = worldBackground(id);
       card.style.backgroundSize = 'cover, cover, cover';
       card.style.backgroundPosition = 'center, center, center';
@@ -1041,11 +1044,15 @@ export class Lobby {
       const dur = (sw.frames / 9).toFixed(2);
       sprite = `background-image:url(${sw.url});background-size:${sw.frames * 96}px 96px;animation:walk${sw.frames} ${dur}s steps(${sw.frames}) infinite`;
     }
+    // title = a native hover tooltip with the effect/stats — the room view
+    // never had ANY way to see a skill's actual detail (only the chant word),
+    // unlike the homepage's click-to-expand panel. A real tooltip UI would be
+    // nicer but a native one costs zero new markup/CSS for this secondary view.
     const skills = def.spells
-      .map(
-        (s) =>
-          `<span class="ps-skill"><span class="skill-ico" style="color:${def.color};width:16px;height:16px;display:inline-block">${skillIconSvg(s)}</span>${escapeHtml(chantFor(s, SKILL_INFO[s].name))}</span>`
-      )
+      .map((s) => {
+        const info = SKILL_INFO[s];
+        return `<span class="ps-skill" title="${escapeHtml(info.effect)} · ${escapeHtml(info.stats)}"><span class="skill-ico" style="color:${def.color};width:18px;height:18px;display:inline-block">${skillIconSvg(s)}</span>${escapeHtml(chantFor(s, info.name))}</span>`;
+      })
       .join('');
     const badge = isHostMember
       ? '<span class="badge host">房主</span>'

@@ -119,19 +119,24 @@
       #lobby .error:empty { display: none; }
       #lobby .hint { color: #ffd24d; font-size: 13px; margin-top: 12px; }
 
-      /* --- Home showcase: 4 character cards in the corners + center panel - */
+      /* --- Home showcase: a single row of 4 character cards + panel below ---
+         Previously a 2x2 grid in the 4 corners with the panel in the middle —
+         on a wide screen that left a large, oddly empty center gap once the
+         panel's own content (a handful of short lines) didn't need nearly
+         that much width. One row keeps all 4 identities visible up front
+         (the illustrated portraits are this page's best hook) with the
+         selection/skill panel given the full width below instead. */
       .showcase {
         flex: 1; min-height: 0;
-        display: grid; gap: 10px; align-items: stretch;
-        grid-template-columns: minmax(220px, 0.85fr) minmax(360px, 1.7fr) minmax(220px, 0.85fr);
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-        grid-template-areas: "a center b" "c center d";
+        display: flex; flex-direction: column; gap: 12px;
       }
+      .char-row { flex: 0 0 auto; display: flex; gap: 10px; justify-content: center; }
       .char-card {
         background: var(--panel); border: 2px solid var(--edge); border-radius: 12px;
         padding: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: 3px; min-height: 0; overflow: hidden; transition: all 0.12s;
+        justify-content: center; gap: 3px; overflow: hidden; transition: all 0.12s;
         text-shadow: 0 1px 3px rgba(0,0,0,0.78);
+        flex: 1 1 0; min-width: 0; max-width: 230px; height: 176px;
       }
       /* Compact identity cards: sprite + name + world only. The selected
          character's skills + chant editors render in the center panel. */
@@ -141,9 +146,6 @@
       .char-card .cworld { font-size: 11px; color: currentColor; opacity: 0.85; font-style: italic;
         margin-bottom: 4px; letter-spacing: 0.5px; }
       .char-card .crecord { font-size: 10px; color: #ffd24d; opacity: 0.9; }
-      @media (orientation: landscape) {
-        .char-card { align-self: center; height: min(100%, 240px); }
-      }
       /* Home footer: social bar (GitHub / Facebook / Buy Me a Coffee) + disclaimer,
          one compact non-scrolling strip at the bottom. */
       .foot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -165,27 +167,34 @@
         .room-body { flex-direction: column; }
         .room-bar { width: 100% !important; flex: 0 0 auto !important; }
       }
-      .pslot { border: 2px solid var(--edge); border-radius: 12px; padding: 8px; display: flex;
-        flex-direction: column; align-items: center; gap: 2px; min-height: 0; overflow: hidden;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.78); }
+      /* justify-content:center — a filled seat's content used to pack to the
+         top of the cell, leaving a large dead gap below on any desktop-sized
+         grid cell (cells are 1fr 1fr, easily 250px+ tall). Centering plus the
+         bigger sprite/text sizes below actually use that space instead. */
+      .pslot { border: 2px solid var(--edge); border-radius: 12px; padding: 10px; display: flex;
+        flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0;
+        overflow: hidden; text-shadow: 0 1px 3px rgba(0,0,0,0.78); }
       .pslot.self { box-shadow: 0 0 0 1px currentColor, 0 0 18px -6px currentColor; }
       .pslot.empty { color: var(--muted); border-style: dashed; justify-content: center;
         background: rgba(255,255,255,0.02); font-size: 13px; gap: 6px; }
       .pslot .empty-mark { font-size: 30px; opacity: 0.4; }
-      .pslot-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; }
-      .pslot-name { font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden;
+      .pslot-top { position: absolute; top: 10px; left: 10px; right: 10px;
+        display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+      .pslot { position: relative; }
+      .pslot-name { font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden;
         text-overflow: ellipsis; white-space: nowrap; }
       .pslot .badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
       .pslot .badge.host { background: var(--accent); color: #1a1030; }
       .pslot .badge.ready { background: #2e7d46; color: #d6ffe0; }
       .pslot .badge.wait { background: #33334a; color: #aab; }
-      .pslot .sprite-box { width: 72px; height: 72px; overflow: hidden; }
-      .pslot .walk-sprite { width: 96px; height: 96px; transform: scale(0.75); transform-origin: top left;
+      .pslot .sprite-box { width: 108px; height: 108px; overflow: hidden; }
+      .pslot .walk-sprite { width: 96px; height: 96px; transform: scale(1.12); transform-origin: top left;
         image-rendering: pixelated; background-repeat: no-repeat; }
-      .pslot .cname { font-size: 15px; font-weight: 700; }
-      .pslot .crole { font-size: 10px; color: var(--muted); text-align: center; }
-      .pslot-skills { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; width: 100%; }
-      .ps-skill { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink); }
+      .pslot .cname { font-size: 19px; font-weight: 700; }
+      .pslot .crole { font-size: 12px; color: var(--muted); text-align: center; }
+      .pslot-skills { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; width: 100%; max-width: 220px; }
+      .ps-skill { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--ink);
+        cursor: help; }
       .room-bar { flex: 0 0 320px; width: 320px; display: flex; flex-direction: column; gap: 6px;
         justify-content: center; }
       .picker { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 0; }
@@ -266,9 +275,13 @@
       .char-card .skill .edit-chant:hover { color: var(--ink); border-color: var(--accent); }
       .char-card .skill .se { font-size: 13px; color: var(--muted); margin-top: 3px; }
       .char-card .skill .ss { font-size: 12px; color: #8fb7ff; font-family: ui-monospace, monospace; margin-top: 4px; }
-      /* `safe center` centers the column when it fits but top-aligns when it would
-         overflow — so the skills (top) are NEVER clipped off-screen on short phones. */
-      .center-panel { grid-area: center; display: flex; flex-direction: column; justify-content: safe center;
+      /* Top-aligned: on a tall desktop viewport this keeps the leftover empty
+         space in one predictable place (below the buttons) instead of split
+         above AND below the content — `safe center`'s top-align-on-overflow
+         fallback means switching to plain flex-start here never re-introduces
+         the short-screen clipping `safe center` was added to prevent (both
+         behave identically once content doesn't fit). */
+      .center-panel { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-start;
         gap: 8px; min-height: 0; overflow: hidden; }
       /* Selected character's 3 skills + chant editors, shown in the center. */
       /* flex:0 0 auto — keep the skills at their content height; never let the
@@ -352,21 +365,54 @@
       @keyframes walk5 { to { background-position-x: -480px; } }
       @keyframes walk6 { to { background-position-x: -576px; } }
       @keyframes walk8 { to { background-position-x: -768px; } }
+      /* A short landscape phone (e.g. 640x360 — the exact case the portrait
+         media query below's own comment warns about re: a width-only
+         breakpoint) can't afford the row layout's fixed-height character row
+         PLUS the full skill panel PLUS the footer all at once; compact
+         everything and drop the least-essential parts (footer, full skill
+         description) so the actually-clickable action buttons stay reachable.
+         Placed after every base rule it touches (char-card, center-skills,
+         .foot, etc.) so it reliably wins on source order — an early insertion
+         point here previously lost to those later same-specificity rules. */
+      @media (orientation: landscape) and (max-height: 480px) {
+        #lobby { gap: 3px; }
+        #lobby h1 { font-size: 15px; margin-bottom: 0; }
+        #lobby .sub { font-size: 10px; margin-bottom: 0; }
+        .foot { display: none; }
+        .showcase { gap: 4px; }
+        .char-card { height: 44px; padding: 2px; gap: 0; }
+        .char-card .sprite-box { width: 24px; height: 24px; }
+        .char-card .walk-sprite { transform: scale(0.25); }
+        .char-card .cname { font-size: 11px; }
+        .char-card .cworld { font-size: 8px; margin-bottom: 0; }
+        .char-card .crecord { display: none; }
+        .center-panel { gap: 2px; }
+        .center-skills { gap: 1px; }
+        .center-skills .cs-head { font-size: 10px; }
+        .center-skills .skills { gap: 2px; }
+        .center-skills .skill { padding: 1px 7px; }
+        .center-skills .chant { font-size: 12px; }
+        .center-skills .skill-detail { display: none; }
+        .name-label { margin: 0; }
+        .name-row input { padding: 6px 10px; }
+        .btns button { padding: 5px 10px; }
+      }
       /* Reflow only in true PORTRAIT. The app is landscape-locked, so small
-         landscape phones (e.g. 640x360) must keep the corner-card layout — a
-         width<=680 breakpoint wrongly fired the portrait reflow and collapsed
-         the center panel, hiding the skills. */
+         landscape phones (e.g. 640x360) get the media query just above
+         instead — this one only ever matches a genuinely rotated phone. */
       @media (orientation: portrait) {
         #lobby h1 { font-size: 18px; margin-bottom: 2px; }
         #lobby .sub { margin-bottom: 10px; font-size: 12px; }
         /* Action first: name + start buttons at the top (reachable), then a
-           compact 2x2 character grid; practice warm-up sits last. */
-        .showcase {
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
-          grid-template-areas: "center center" "a b" "c d";
-          gap: 10px;
-        }
+           compact 2x2 character grid (char-row wraps instead of a single row —
+           4 cards side by side would be too cramped on a narrow phone); practice
+           warm-up sits last. */
+        .showcase { gap: 6px; }
+        .center-panel { order: 1; gap: 4px; }
+        .center-skills { gap: 2px; }
+        .center-skills .skill { padding: 2px 9px; }
+        .char-row { order: 2; flex-wrap: wrap; }
+        .char-card { flex: 1 1 calc(50% - 5px); max-width: none; }
         .center-panel .name-label { order: 1; }
         .center-panel .name-row { order: 1; }
         .center-panel .btns { order: 2; margin-top: 8px; }
@@ -374,16 +420,21 @@
         .center-panel .code-banner { order: 3; }
         .center-panel .practice { order: 4; margin-top: 6px; }
         .btns { margin-top: 6px; }
-        .btns button { flex: 1 1 42%; }
+        /* 6 buttons now (無盡模式 joined the row later) — tighter padding so
+           3 wrapped rows of 2 still fit under the skill panel above without
+           the bottom row (本週挑戰/無盡模式) clipping off outside center-panel's
+           overflow:hidden box, same failure shape the short-landscape-phone
+           media query above had to work around too. */
+        .btns button { flex: 1 1 calc(50% - 4px); padding: 7px 8px; font-size: 13px; }
         /* compact cards: character + world only (full skills are in the room/practice) */
         .char-card { padding: 6px; gap: 1px; }
         .char-card { align-self: stretch; height: auto; }
-        .char-card .sprite-box { width: 82px; height: 82px; }
-        .char-card .walk-sprite { transform: scale(0.85); }
+        .char-card .sprite-box { width: 62px; height: 62px; }
+        .char-card .walk-sprite { transform: scale(0.64); }
         .char-card .cname { font-size: 17px; }
         .char-card .cworld { font-size: 10px; }
-        .center-skills .skill-detail { padding: 6px 9px; }
-        .center-skills .sd-body { font-size: 11px; line-height: 1.35; }
+        .center-skills .skill-detail { padding: 5px 9px; }
+        .center-skills .sd-body { display: none; }
         .char-card .skills,
         .char-card .chant-hint { display: none; }
         .char-card .cworld { margin-bottom: 0; }
