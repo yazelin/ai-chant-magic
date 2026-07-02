@@ -111,6 +111,14 @@ export class Lobby {
   private chatLog: { from: string; text: string }[] = []; // room chat history
   private chatVoice: WebSpeechVoiceInput | null = null; // one-shot dictation for chat
   private returnFn: (() => void) | null = null; // main.ts game teardown (net return-to-lobby)
+  // Generic input-modal (join-by-code / edit-chant) — replaces window.prompt()
+  // for the two highest-value first-time actions, matching the rest of this
+  // UI's custom dark theme instead of dropping into an unstyled OS dialog.
+  // The DOM's click/keydown handlers are wired ONCE per screen render
+  // (wireInputModal(), same pattern as wirePractice()); showInputModal() just
+  // updates this callback + the modal's text, so repeated calls never stack
+  // up duplicate listeners.
+  private inputModalSubmit: ((value: string) => void) | null = null;
   // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
   private voice: WebSpeechVoiceInput | null = null;
   private practicing = false;
@@ -167,7 +175,7 @@ export class Lobby {
 
     this.root.innerHTML = `
       <h1>真。AI。咏唱魔法</h1>
-      <div class="sub">語音咏唱 · 2–4 人連線 co-op · 點四角的角色卡選擇,中央查看技能</div>
+      <div class="sub"><b class="voice-hook">對著麥克風喊出技能名稱施法</b> · 2–4 人連線 co-op · 點四角的角色卡選擇,中央查看技能</div>
       <div class="showcase">
         <div id="lobby-showcase" style="display:contents"></div>
         <div class="center-panel">
@@ -193,6 +201,7 @@ export class Lobby {
         </div>
       </div>
       ${this.practiceModalHtml()}
+      ${this.inputModalHtml()}
       <div class="foot">
       <div class="social">
         <a href="https://github.com/yazelin/ai-chant-magic" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>GitHub</a>
@@ -214,6 +223,7 @@ export class Lobby {
 
     this.renderShowcase();
     this.wirePractice();
+    this.wireInputModal();
 
     this.root.querySelector('#btn-create')!.addEventListener('click', () => this.doNet('create'));
     this.root.querySelector('#btn-join')!.addEventListener('click', () => this.doJoinByCode());
@@ -225,6 +235,75 @@ export class Lobby {
   // Practice lives in a FLOATING modal (position:fixed) — on a fixed no-scroll
   // page an inline/expanding panel gets clipped off short phones, so it must
   // overlay the viewport instead. Shared markup for home + room.
+  // Generic small input modal — join-by-code / edit-chant word both used
+  // window.prompt() before, an unstyled OS dialog jarring next to this
+  // otherwise fully custom dark UI (worse on mobile). Same shell (.practice-
+  // modal/.pm-card) as the practice modal above. Static handlers wired once
+  // by wireInputModal(); showInputModal() only updates text + the callback.
+  private inputModalHtml(): string {
+    return `
+      <div id="input-modal" class="practice-modal" hidden>
+        <div class="pm-card">
+          <button id="im-close" class="pm-close" type="button" aria-label="關閉">×</button>
+          <div class="pm-title" id="im-title"></div>
+          <div class="pm-sub" id="im-sub"></div>
+          <input id="im-input" type="text" maxlength="24" />
+          <div class="btns">
+            <button id="im-cancel" type="button">取消</button>
+            <button id="im-ok" class="primary" type="button">確定</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  private wireInputModal(): void {
+    const modal = this.root.querySelector<HTMLElement>('#input-modal');
+    const input = this.root.querySelector<HTMLInputElement>('#im-input');
+    const ok = this.root.querySelector<HTMLButtonElement>('#im-ok');
+    const cancel = this.root.querySelector<HTMLButtonElement>('#im-cancel');
+    const close = this.root.querySelector<HTMLButtonElement>('#im-close');
+    if (!modal || !input || !ok || !cancel || !close) return;
+    const shut = () => { modal.hidden = true; };
+    const submit = () => {
+      const fn = this.inputModalSubmit;
+      shut();
+      fn?.(input.value);
+    };
+    ok.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      else if (e.key === 'Escape') shut();
+    });
+    cancel.addEventListener('click', shut);
+    close.addEventListener('click', shut);
+    modal.addEventListener('click', (e) => { if (e.target === modal) shut(); });
+  }
+
+  private showInputModal(opts: {
+    title: string;
+    sub: string;
+    placeholder: string;
+    initial: string;
+    submitLabel: string;
+    onSubmit: (value: string) => void;
+  }): void {
+    const modal = this.root.querySelector<HTMLElement>('#input-modal');
+    const input = this.root.querySelector<HTMLInputElement>('#im-input');
+    const title = this.root.querySelector<HTMLElement>('#im-title');
+    const sub = this.root.querySelector<HTMLElement>('#im-sub');
+    const ok = this.root.querySelector<HTMLButtonElement>('#im-ok');
+    if (!modal || !input || !title || !sub || !ok) return;
+    title.textContent = opts.title;
+    sub.textContent = opts.sub;
+    input.placeholder = opts.placeholder;
+    input.value = opts.initial;
+    ok.textContent = opts.submitLabel;
+    this.inputModalSubmit = opts.onSubmit;
+    modal.hidden = false;
+    input.focus();
+    input.select();
+  }
+
   private practiceModalHtml(): string {
     return `
       <div id="practice-modal" class="practice-modal" hidden>
@@ -426,10 +505,17 @@ export class Lobby {
         e.stopPropagation();
         const sid = b.dataset.edit as SpellId;
         const cur = chantFor(sid, SKILL_INFO[sid].name);
-        const next = window.prompt(`設定「${SKILL_INFO[sid].name}」的詠唱詞(留空=還原預設):`, cur);
-        if (next === null) return; // cancelled
-        setChant(sid, next);
-        this.renderCenterSkills();
+        this.showInputModal({
+          title: `設定「${SKILL_INFO[sid].name}」的詠唱詞`,
+          sub: '留空 = 還原預設',
+          placeholder: SKILL_INFO[sid].name,
+          initial: cur,
+          submitLabel: '儲存',
+          onSubmit: (next) => {
+            setChant(sid, next);
+            this.renderCenterSkills();
+          },
+        });
       });
     });
   }
@@ -495,15 +581,24 @@ export class Lobby {
   }
 
   private doJoinByCode(presetCode?: string): void {
-    let roomCode: string;
     if (presetCode) {
-      roomCode = presetCode;
-    } else {
-      const code = window.prompt('輸入房間代碼(4 碼):');
-      if (!code) return;
-      roomCode = code.trim().toUpperCase();
-      if (!roomCode) return;
+      this.joinRoomByCode(presetCode);
+      return;
     }
+    this.showInputModal({
+      title: '輸入房間代碼',
+      sub: '跟隊友要 4 碼房間代碼',
+      placeholder: '例如 A1B2',
+      initial: '',
+      submitLabel: '加入',
+      onSubmit: (value) => {
+        const roomCode = value.trim().toUpperCase();
+        if (roomCode) this.joinRoomByCode(roomCode);
+      },
+    });
+  }
+
+  private joinRoomByCode(roomCode: string): void {
     const url = resolveServerUrl();
     const client = new NetClient(
       {
@@ -553,6 +648,20 @@ export class Lobby {
     url.searchParams.set(param, this.roomCode);
     const link = url.toString();
     const original = btn.textContent;
+    const label = param === 'join' ? '一起玩' : '觀戰';
+    // Native share sheet first (one tap straight to any chat app on mobile —
+    // same pattern shareCard.ts's shareOrDownloadCard() already uses for the
+    // post-run result card). navigator.share cancelling/erroring falls
+    // through to the plain clipboard-copy path, same as before.
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({ url: link, title: '真。AI。咏唱魔法', text: `來${label}!對著麥克風喊出技能名稱施法` });
+        return;
+      } catch {
+        // cancelled or unsupported for this data shape — fall through to copy.
+      }
+    }
     try {
       await navigator.clipboard.writeText(link);
       btn.textContent = '已複製!';
@@ -740,7 +849,7 @@ export class Lobby {
     this.root.innerHTML = `
       <h1>房間大廳</h1>
       <div class="sub">代碼 <b class="code-inline">${escapeHtml(this.roomCode)}</b> · 把代碼給隊友,加入後會即時出現在席位(${this.members.length}/4)
-        · <button id="btn-copy-invite" class="link-btn" type="button">複製邀請連結</button>
+        · <button id="btn-copy-invite" class="link-btn promote" type="button">分享邀請連結</button>
         · <button id="btn-copy-watch" class="link-btn" type="button">複製旁觀連結</button>
       </div>
       <div class="room-body">
@@ -771,6 +880,7 @@ export class Lobby {
       </div>
       </div>
       ${this.practiceModalHtml()}
+      ${this.inputModalHtml()}
     `;
 
     this.root.querySelector('#btn-copy-invite')!.addEventListener('click', (e) => {
@@ -828,6 +938,7 @@ export class Lobby {
 
     // Keep the chant-practice mic so a waiting player can warm up.
     this.wirePractice();
+    this.wireInputModal();
   }
 
   private chatLogHtml(): string {
