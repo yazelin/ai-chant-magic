@@ -112,6 +112,7 @@ export class Hud {
     private onEndEndless: () => void = () => {},
     private weeklyChallenge = false,
     private getVoiceCasts: () => number = () => 0,
+    private onReturnHome: () => void = () => {},
   ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
@@ -251,8 +252,14 @@ export class Hud {
       this.levelClearShown = false;
 
       this.gameover.style.display = 'block';
+      // Solo previously only offered "重來" here — restarting an endless/週挑戰
+      // run (startInEndless stays true across restart()) just re-entered
+      // endless immediately, so there was NO way back to the home screen once
+      // a solo endless run had ever started. "回到首頁" fixes that dead end.
       const hint = this.solo
-        ? `<button id="go-restart" style="margin-top:12px;${GOLD_BTN}">重來</button>`
+        ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">` +
+          `<button id="go-restart" style="${GOLD_BTN}">重來</button>` +
+          `<button id="go-home" style="${PLAIN_BTN}">回到首頁</button></div>`
         : '<div style="font-size:13px;color:#9aa0b5;margin-top:10px">等所有人都倒下…回到房間</div>';
       const shareBtn = `<div><button id="go-share" style="margin-top:8px;${PLAIN_BTN}">分享戰報</button></div>`;
 
@@ -299,6 +306,7 @@ export class Hud {
         };
       }
       this.gameover.querySelector('#go-restart')?.addEventListener('click', () => this.onRestart());
+      this.gameover.querySelector('#go-home')?.addEventListener('click', () => this.onReturnHome());
       this.gameover.querySelector('#go-share')?.addEventListener('click', () => this.shareResult(shareStats));
     } else if (world.status !== 'gameover' && this.goShown) {
       this.goShown = false;
@@ -324,10 +332,13 @@ export class Hud {
 
       let action: string;
       if (this.solo) {
+        // Same dead-end as the gameover screen: solo previously had no way
+        // back to the home screen from here either.
         action =
-          `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">` +
+          `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">` +
           `<button id="victory-endless" style="${GOLD_BTN}">挑戰無盡模式</button>` +
-          `<button id="victory-restart" style="${PLAIN_BTN}">重來</button></div>`;
+          `<button id="victory-restart" style="${PLAIN_BTN}">重來</button>` +
+          `<button id="victory-home" style="${PLAIN_BTN}">回到首頁</button></div>`;
       } else if (this.isHost) {
         action =
           `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px">` +
@@ -347,6 +358,7 @@ export class Hud {
       this.victory.querySelector('#victory-endless')?.addEventListener('click', () => this.onEnterEndless());
       this.victory.querySelector('#victory-restart')?.addEventListener('click', () => this.onRestart());
       this.victory.querySelector('#victory-skip')?.addEventListener('click', () => this.onSkipToLobby());
+      this.victory.querySelector('#victory-home')?.addEventListener('click', () => this.onReturnHome());
       const victoryShareStats: ShareCardStats = {
         title: '全破!四個世界都已淨化',
         statLine: `總耗時 ${mins}:${secs} · 擊殺 ${world.score}${this.voiceCastSuffix()}`,

@@ -110,6 +110,10 @@ function startGame(
     () => session.endEndless(),
     weeklyChallenge,
     () => voiceCastCount,
+    () => {
+      teardownGame();
+      lobby.returnHome();
+    },
   );
   // A spectator has no local player, so a skill bar / chant-charge overlay
   // would just show nothing useful — skip creating them entirely.
@@ -215,20 +219,25 @@ function startGame(
     { once: true },
   );
 
-  // Net play: when the server sends everyone back to the room lobby (all died),
-  // tear the game down cleanly (loop / music / mic / Phaser / overlay DOM) and
-  // hand control back to the Lobby's room view — same room, ws kept alive.
+  // Shared teardown (loop / music / mic / Phaser / overlay DOM) — used both by
+  // net play's server-driven "everyone back to the room lobby" event, and by
+  // solo's "回到首頁" button (added because solo previously had NO way back to
+  // the home screen once an endless/週挑戰 run had ever started: restart()
+  // re-enters endless immediately when startInEndless is set, and skipToLobby()
+  // is a no-op for LocalSession).
+  function teardownGame(): void {
+    clearInterval(loopId);
+    music.stop();
+    voice?.stop();
+    game.destroy(true);
+    chrome?.classList.remove('playing');
+    ['skillbar', 'wavehud', 'gameover', 'victory', 'level-clear-toast', 'endless-quit', 'incantation'].forEach(
+      (id) => document.getElementById(id)?.remove(),
+    );
+  }
+
   if (!solo) {
-    lobby.setReturn(() => {
-      clearInterval(loopId);
-      music.stop();
-      voice?.stop();
-      game.destroy(true);
-      chrome?.classList.remove('playing');
-      ['skillbar', 'wavehud', 'gameover', 'victory', 'level-clear-toast', 'endless-quit', 'incantation'].forEach(
-        (id) => document.getElementById(id)?.remove(),
-      );
-    });
+    lobby.setReturn(teardownGame);
   }
 }
 

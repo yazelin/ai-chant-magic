@@ -797,6 +797,20 @@ export class Lobby {
     else this.renderSetup();
   }
 
+  // "回到首頁" from a solo game's gameover/victory banner — unlike
+  // returnFromGame() there's no room to go back to (solo never had one), so
+  // this always lands on the plain setup screen. main.ts calls its own
+  // teardown (Phaser/loop/music/mic) first, then this just un-hides the
+  // lobby root and resets any leftover client/room state (harmless no-ops
+  // for solo, since neither is ever set).
+  returnHome(): void {
+    this.teardownClient();
+    this.roomCode = '';
+    this.isSpectating = false;
+    this.root.style.display = '';
+    this.renderSetup();
+  }
+
   private handleNetError(code: ErrorCode): void {
     // A 'bad-message' while already in a room is non-fatal (e.g. an older server
     // that doesn't understand 'chat') — ignore it instead of kicking the player
