@@ -91,6 +91,13 @@ function startGame(
     }
   });
 
+  // Counts voice-recognized casts/resonance this run (incremented below,
+  // where the transcript recognizer actually matches one) — the share card
+  // had zero reference to this being a voice game at all; read via a getter
+  // (not passed as a value) since the recognizer callback that increments it
+  // is wired up further down, after `hud` already exists.
+  let voiceCastCount = 0;
+
   // Solo gets a 重來 button on the game-over banner (mobile has no R key).
   // Endless mode's decision buttons (victory screen) are host-gated for net
   // play; solo is always its own host (see Lobby.startSolo).
@@ -102,6 +109,7 @@ function startGame(
     isHost,
     () => session.endEndless(),
     weeklyChallenge,
+    () => voiceCastCount,
   );
   // A spectator has no local player, so a skill bar / chant-charge overlay
   // would just show nothing useful — skip creating them entirely.
@@ -184,11 +192,15 @@ function startGame(
     if (matchesAny(text, RESONANCE_ALIASES)) {
       hud.setHeard(text, '共鳴詠唱');
       session.sendResonance();
+      voiceCastCount++;
       return;
     }
     const spell = matchSpell(text, { allowed, extra: chantsAsExtra() });
     hud.setHeard(text, spell ? SPELLS[spell].displayName : null);
-    if (spell) session.sendCast(spell);
+    if (spell) {
+      session.sendCast(spell);
+      voiceCastCount++;
+    }
   });
 
   // Browsers require a user gesture before mic access AND before audio can
