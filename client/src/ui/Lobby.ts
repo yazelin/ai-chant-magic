@@ -200,6 +200,11 @@ export class Lobby {
             <button id="btn-quick">快速加入</button>
             <button id="btn-solo">單機</button>
             <button id="btn-weekly" title="本週固定種子,人人遇到一樣的怪,擊敗後看排行榜(還剩 ${daysUntilWeeklyReset()} 天更新)">本週挑戰</button>
+            ${
+              isEndlessUnlocked()
+                ? '<button id="btn-endless" title="直接開始無盡模式,不用重打一次4章戰役">無盡模式</button>'
+                : ''
+            }
           </div>
           <div class="error" id="lobby-error">${errorMsg ? escapeHtml(errorMsg) : ''}${
             errorAction
@@ -243,6 +248,7 @@ export class Lobby {
     this.root.querySelector('#btn-quick')!.addEventListener('click', () => this.doNet('quickJoin'));
     this.root.querySelector('#btn-solo')!.addEventListener('click', () => this.startSolo());
     this.root.querySelector('#btn-weekly')!.addEventListener('click', () => this.startWeeklyChallenge());
+    this.root.querySelector('#btn-endless')?.addEventListener('click', () => this.startEndless());
     if (errorAction) {
       this.root.querySelector('#lobby-error-action')!.addEventListener('click', errorAction.onClick);
     }
@@ -556,6 +562,16 @@ export class Lobby {
     const session = new LocalSession(this.classId, weeklyRng(), true);
     this.hide();
     this.onStart(session, this.classId, true, true, false, true, this.effectiveName());
+  }
+
+  // Direct solo endless (unseeded, unlike the weekly challenge) — once a
+  // player has cleared the campaign once, re-clearing all 4 chapters every
+  // session just to reach endless was a repeating tax on returning players.
+  // Only ever shown once isEndlessUnlocked() (gated in renderSetup's markup).
+  private startEndless(): void {
+    const session = new LocalSession(this.classId, Math.random, true);
+    this.hide();
+    this.onStart(session, this.classId, true, true);
   }
 
   // --- Net: create / quickJoin ---------------------------------------------
