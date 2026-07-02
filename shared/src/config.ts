@@ -82,12 +82,19 @@ export const CONFIG = {
   // the SAME enemy (bounds proc frequency under multi-player focus-fire).
   // Bonus multipliers are on top of the triggering hit's already skillDamage()'d
   // number (stacks with aegis/classBond, same shape aegis's own 2x already does).
+  // Display names (沸騰/爆燃/凍鎖/聖光淨化) are deliberately original, NOT
+  // Genshin Impact's reaction terminology (蒸發/超載/感電/超導/etc.) even
+  // where a pairing happens to coincide (e.g. our Ice×Storm and Genshin's
+  // Cryo×Electro are the same element pair) — internal config keys below
+  // keep their English mechanic-concept names (vaporize/overload/
+  // superconduct) since those are generic physics terms, not the thing that
+  // needed changing.
   reaction: {
     auraDuration: 4, perEnemyCooldownSec: 2,
-    vaporizeBonusMul: 0.5,        // 蒸發 (Fire×Ice): +50% dmg (total 1.5x)
-    overloadBonusMul: 1.2,        // 過載 (Fire×Storm): +120% dmg (total 2.2x)
+    vaporizeBonusMul: 0.5,        // 沸騰 (Fire×Ice): +50% dmg (total 1.5x)
+    overloadBonusMul: 1.2,        // 爆燃 (Fire×Storm): +120% dmg (total 2.2x)
     overloadSplashRadius: 70, overloadSplashMul: 0.5, overloadKnockback: 90,
-    superconductBonusMul: 0.4,    // 超導 (Ice×Storm): +40% dmg (total 1.4x)
+    superconductBonusMul: 0.4,    // 凍鎖 (Ice×Storm): +40% dmg (total 1.4x)
     superconductRootSec: 1.2,     // freeze granted on proc (writes frozenUntil/slowUntil)
     purifyShieldDuration: 1.5, purifyRadius: 120, // 聖光淨化 (any×Holy): ally shield, no dmg change
   },

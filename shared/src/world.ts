@@ -296,7 +296,7 @@ function triggerReaction(world: World, e: Enemy, a: ReactionElement, b: Reaction
     return dmg;
   }
   if (key === 'fire+ice') {
-    fx(48, '#ffb27a', '蒸發');
+    fx(48, '#ffb27a', '沸騰');
     return dmg * (1 + CONFIG.reaction.vaporizeBonusMul);
   }
   if (key === 'fire+storm') {
@@ -316,13 +316,13 @@ function triggerReaction(world: World, e: Enemy, a: ReactionElement, b: Reaction
       e.pos.x = clamp(e.pos.x + ux * r.overloadKnockback, 0, CONFIG.arenaWidth);
       e.pos.y = clamp(e.pos.y + uy * r.overloadKnockback, 0, CONFIG.arenaHeight);
     }
-    fx(48, '#ffcc33', '過載');
+    fx(48, '#ffcc33', '爆燃');
     return dmg * (1 + r.overloadBonusMul);
   }
   // key === 'ice+storm'
   e.frozenUntil = Math.max(e.frozenUntil ?? 0, world.time + CONFIG.reaction.superconductRootSec);
   e.slowUntil = Math.max(e.slowUntil, world.time + CONFIG.reaction.superconductRootSec);
-  fx(48, '#7fd6ff', '超導');
+  fx(48, '#7fd6ff', '凍鎖');
   return dmg * (1 + CONFIG.reaction.superconductBonusMul);
 }
 

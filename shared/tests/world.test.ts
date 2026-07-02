@@ -1443,7 +1443,7 @@ describe('元素反應 (elemental reactions) — 附著/節流規則', () => {
   });
 });
 
-describe('元素反應 (elemental reactions) — 蒸發 (Fire×Ice)', () => {
+describe('元素反應 (elemental reactions) — 沸騰 (Fire×Ice)', () => {
   it('triggers on a fire-aura enemy hit by ice: 1.5x dmg, both elements consumed, reactionCount++, fx pushed', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'pyro' },
@@ -1464,11 +1464,11 @@ describe('元素反應 (elemental reactions) — 蒸發 (Fire×Ice)', () => {
     expect(e.auraElement).toBeUndefined();
     expect(e.auraUntil).toBe(0);
     expect(w.reactionCount).toBe(1);
-    expect(w.effects.some((fx) => fx.kind === 'reaction' && fx.reactionName === '蒸發')).toBe(true);
+    expect(w.effects.some((fx) => fx.kind === 'reaction' && fx.reactionName === '沸騰')).toBe(true);
   });
 });
 
-describe('元素反應 (elemental reactions) — 過載 (Fire×Storm)', () => {
+describe('元素反應 (elemental reactions) — 爆燃 (Fire×Storm)', () => {
   it('triggers on a fire-aura enemy hit by storm: 2.2x dmg on target, 0.5x splash on a nearby second enemy, knockback', () => {
     const w = createWorld([
       { id: 'a', name: 'Ana', classId: 'pyro' },
@@ -1495,10 +1495,11 @@ describe('元素反應 (elemental reactions) — 過載 (Fire×Storm)', () => {
     expect(t.pos.x).toBeCloseTo(c.pos.x + 30 + CONFIG.reaction.overloadKnockback);
     expect(t.pos.y).toBeCloseTo(c.pos.y);
     expect(w.reactionCount).toBe(1);
+    expect(w.effects.some((fx) => fx.kind === 'reaction' && fx.reactionName === '爆燃')).toBe(true);
   });
 });
 
-describe('元素反應 (elemental reactions) — 超導 (Ice×Storm)', () => {
+describe('元素反應 (elemental reactions) — 凍鎖 (Ice×Storm)', () => {
   it('triggers on an ice-aura enemy hit by storm: 1.4x dmg + grants its own freeze/slow when none existed', () => {
     const w = createWorld([
       { id: 'b', name: 'Bo', classId: 'cryo' },
@@ -1519,6 +1520,7 @@ describe('元素反應 (elemental reactions) — 超導 (Ice×Storm)', () => {
     expect(e.frozenUntil).toBeCloseTo(w.time + CONFIG.reaction.superconductRootSec);
     expect(e.slowUntil).toBeCloseTo(w.time + CONFIG.reaction.superconductRootSec);
     expect(w.reactionCount).toBe(1);
+    expect(w.effects.some((fx) => fx.kind === 'reaction' && fx.reactionName === '凍鎖')).toBe(true);
   });
 
   it('does not clip a pre-existing LONGER freeze (e.g. from frostnova) shorter', () => {

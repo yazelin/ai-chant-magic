@@ -152,10 +152,10 @@ describe('interpolate', () => {
   it('passes a reaction effect\'s reactionName through', () => {
     const prev = snap();
     const next = snap({
-      effects: [{ id: 9, kind: 'reaction', a: { x: 1, y: 1 }, ttl: 0.3, colorHint: '#ffb27a', reactionName: '蒸發' }],
+      effects: [{ id: 9, kind: 'reaction', a: { x: 1, y: 1 }, ttl: 0.3, colorHint: '#ffb27a', reactionName: '沸騰' }],
     });
     const w = interpolate(prev, next, 0.5);
-    expect(w.effects[0].reactionName).toBe('蒸發');
+    expect(w.effects[0].reactionName).toBe('沸騰');
   });
 });
 
