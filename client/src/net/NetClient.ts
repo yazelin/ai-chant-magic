@@ -133,6 +133,20 @@ export function needsServerSetup(): boolean {
   return secure && !hasQuery && !hasEnv;
 }
 
+// Fire-and-forget: ping the server's /healthz the moment the page loads (well
+// before any multiplayer button is clicked), so a Render free-tier cold start
+// (measured 90-200+s in practice, far past the old "數秒" copy) has a head
+// start by the time a player actually decides to connect. Never awaited,
+// never surfaces an error — worst case it's a no-op wasted request.
+export function prewarmServer(): void {
+  try {
+    const url = resolveServerUrl().replace(/^ws/, 'http');
+    void fetch(`${url}/healthz`).catch(() => {});
+  } catch {
+    /* ignore — best effort only */
+  }
+}
+
 export class NetClient {
   private ws: WebSocket | null = null;
   private seq = 0;
