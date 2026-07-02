@@ -189,6 +189,7 @@ export class Lobby {
         <div id="lobby-showcase" style="display:contents"></div>
         <div class="center-panel">
           <div id="center-skills" class="center-skills"></div>
+          <label for="lobby-name" class="name-label">你的名字(隊友會看到)</label>
           <div class="name-row">
             <input id="lobby-name" type="text" maxlength="16" placeholder="輸入你的名字" value="${escapeHtml(this.name)}" />
             <button id="btn-reroll" title="隨機換一個名字">換一個</button>
@@ -382,7 +383,7 @@ export class Lobby {
       .map((s) => {
         const phrase = chantFor(s, SKILL_INFO[s].name);
         const ico = `<span class="pm-chip-ico" style="color:${def.color}">${skillIconSvg(s)}</span>`;
-        return `<span class="pm-chip">${ico}「${escapeHtml(phrase)}」</span>`;
+        return `<span class="pm-chip" data-spell="${s}">${ico}「${escapeHtml(phrase)}」</span>`;
       })
       .join('');
     host.innerHTML = `<div class="pm-skills-head" style="color:${def.color}">${escapeHtml(CHAR_NAMES[id])} 的招式</div><div class="pm-chips">${chips}</div>`;
@@ -428,8 +429,14 @@ export class Lobby {
       void fx.offsetWidth; // reflow so the animation restarts
       fx.classList.add('go');
     }
-    // Highlight the center skill row when it's the selected character's spell.
-    const rows = this.root.querySelectorAll<HTMLElement>(`#center-skills .skill[data-spell="${id}"]`);
+    // Highlight the center skill row AND the practice modal's own chip (the
+    // modal is a full-viewport overlay — center-skills sits behind it, so
+    // without this the modal itself never showed any hit feedback beyond the
+    // small "命中" text, even though the flash was firing the whole time on
+    // now-hidden elements).
+    const rows = this.root.querySelectorAll<HTMLElement>(
+      `#center-skills .skill[data-spell="${id}"], #pm-skills .pm-chip[data-spell="${id}"]`,
+    );
     rows.forEach((e) => e.classList.add('hit'));
     if (this.hitTimer) clearTimeout(this.hitTimer);
     this.hitTimer = setTimeout(() => {

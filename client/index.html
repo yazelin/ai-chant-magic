@@ -298,6 +298,7 @@
       .center-skills .sd-body { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.45; }
       .center-skills .se { font-size: 11px; color: var(--muted); margin-top: 2px; }
       .center-skills .skill.hit { animation: skill-hit 0.9s ease-out; }
+      .name-label { display: block; font-size: 11px; color: var(--muted); margin: 0 0 3px; }
       .name-row { display: flex; gap: 8px; }
       .name-row input { flex: 1 1 auto; }
       .name-row #btn-reroll {
@@ -329,6 +330,7 @@
       .pm-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
       .pm-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px;
         background: #0d0d1c; border: 1px solid var(--edge); color: var(--ink); font-size: 14px; font-weight: 700; }
+      .pm-chip.hit { animation: skill-hit 0.9s ease-out; }
       .pm-chip-ico { display: inline-flex; width: 16px; height: 16px; }
       .pm-chip-ico svg { width: 16px; height: 16px; }
       .pm-card #btn-mic {
@@ -365,6 +367,7 @@
           grid-template-areas: "center center" "a b" "c d";
           gap: 10px;
         }
+        .center-panel .name-label { order: 1; }
         .center-panel .name-row { order: 1; }
         .center-panel .btns { order: 2; margin-top: 8px; }
         .center-panel .error { order: 3; }
