@@ -21,7 +21,13 @@ export function resolveVoiceProxyUrl(): string {
 // than an arbitrary fixed-length chunk clock would, and it costs one Groq
 // call per actual utterance instead of one per tick regardless of silence.
 const SPEECH_RMS_THRESHOLD = 0.02;
-const SILENCE_MS_TO_CUT = 700;
+// Short spell names (2-6 characters) are said as one fluent burst — unlike a
+// full sentence, there's no natural mid-phrase pause to wait out, so the
+// instant speech stops is already very likely the end of the whole word.
+// Shorter cuts latency (this game's whole pitch is instant-cast) without
+// much risk of chopping a real phrase, since there's nothing "in the middle"
+// to chop.
+const SILENCE_MS_TO_CUT = 350;
 const MAX_UTTERANCE_MS = 8000; // safety cap — never buffer forever even if VAD never sees silence
 
 // Web Speech API and any cloud STT both require network — this is the
