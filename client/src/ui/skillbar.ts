@@ -3,8 +3,14 @@ import { skillIconSvg } from './skillIcons';
 
 // Bottom-centre skill bar for the LOCAL player: one slot per loadout spell, each
 // showing its glyph icon, hotkey, a radial cooldown sweep + remaining seconds,
-// greyscale when unavailable, and (惠惠) a charge badge. Non-blocking overlay so
-// touch passes through to the canvas. Built once per class, updated each tick.
+// greyscale when unavailable, and (惠惠) a charge badge. Tappable — this is the
+// only way to cast at all when voice is unavailable for any reason (unsupported
+// browser, denied mic permission, or genuinely offline — Web Speech API and any
+// cloud STT fallback both need network, so a tap/click path is the one thing
+// that works regardless of why voice isn't). Individual slots opt into
+// pointer-events so a tap lands on a slot precisely; gaps between slots (and
+// the bar's own container) stay pass-through so the joystick/aim touch areas
+// underneath aren't blocked. Built once per class, updated each tick.
 interface Slot {
   root: HTMLElement;
   icon: HTMLElement;
@@ -19,7 +25,9 @@ const STYLE = `
 #skillbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
   display: flex; gap: 12px; z-index: 60; pointer-events: none; }
 #skillbar .slot { position: relative; width: 58px; height: 58px; border-radius: 12px;
-  background: rgba(20,20,38,0.78); border: 1px solid #33335a; box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+  background: rgba(20,20,38,0.78); border: 1px solid #33335a; box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#skillbar .slot:active { filter: brightness(1.3); }
 #skillbar .slot.ready { border-color: currentColor; box-shadow: 0 0 10px -2px currentColor; }
 #skillbar .icon { position: absolute; inset: 9px; transition: filter .12s; }
 #skillbar .slot.cooling .icon, #skillbar .slot.locked .icon { filter: grayscale(1) brightness(0.6); }
@@ -30,14 +38,20 @@ const STYLE = `
 #skillbar .badge { position: absolute; right: -5px; top: -6px; min-width: 20px; height: 20px; padding: 0 4px;
   border-radius: 10px; background: #ff8c1a; color: #1a1208; font: 800 13px system-ui, sans-serif;
   display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+#skillbar .slot.resonance { display: flex; align-items: center; justify-content: center;
+  color: #ffd24d; font: 800 11px system-ui, sans-serif; text-align: center; line-height: 1.2; }
 `;
 
 export class SkillBar {
   private root: HTMLElement;
   private slots: Slot[] = [];
   private cls: ClassId | null = null;
+  private resonanceSlot: HTMLElement;
 
-  constructor() {
+  constructor(
+    private onCast: (spell: SpellId) => void = () => {},
+    private onResonance: () => void = () => {},
+  ) {
     if (!document.getElementById('skillbar-style')) {
       const s = document.createElement('style');
       s.id = 'skillbar-style';
@@ -48,6 +62,17 @@ export class SkillBar {
     this.root.id = 'skillbar';
     // Live inside the in-game chrome so it only shows during play (hidden in lobby).
     (document.getElementById('game-chrome') ?? document.body).appendChild(this.root);
+
+    // 共鳴詠唱 — not class-specific (matches the keyboard '4' key), so it's
+    // built once here rather than per-class in build(). No cooldown ring:
+    // resonance's own cooldown/no-op-when-solo behaviour is server/sim-side,
+    // same as the keyboard path — tapping when it's not useful just no-ops.
+    this.resonanceSlot = document.createElement('div');
+    this.resonanceSlot.className = 'slot resonance';
+    this.resonanceSlot.textContent = '共鳴';
+    this.resonanceSlot.addEventListener('click', () => this.onResonance());
+
+    this.root.appendChild(this.resonanceSlot);
   }
 
   private build(cls: ClassId): void {
@@ -61,6 +86,10 @@ export class SkillBar {
         `<div class="icon">${skillIconSvg(spell)}</div>` +
         `<div class="cd"></div><div class="num"></div>` +
         `<div class="key">${i + 1}</div><div class="badge"></div>`;
+      root.addEventListener('click', () => {
+        if (root.classList.contains('cooling') || root.classList.contains('locked')) return;
+        this.onCast(spell);
+      });
       this.root.appendChild(root);
       this.slots.push({
         root,
@@ -72,6 +101,7 @@ export class SkillBar {
         total: SPELLS[spell].cooldown || 1,
       });
     });
+    this.root.appendChild(this.resonanceSlot); // after the 3 spells, matching key '4'
     this.cls = cls;
   }
 
