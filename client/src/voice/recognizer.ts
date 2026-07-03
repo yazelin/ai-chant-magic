@@ -4,6 +4,7 @@ import {
   classifyEnd,
   GIVE_UP_MESSAGE,
 } from '@acm/shared';
+import { GroqVoiceInput, resolveVoiceProxyUrl } from './groqRecognizer';
 
 export type { VoiceStatus } from '@acm/shared';
 
@@ -185,5 +186,74 @@ export class WebSpeechVoiceInput implements VoiceInput {
   onStatusChange(cb: (s: VoiceStatus, message?: string) => void): void {
     this.statusCb = cb;
     cb(this._status);
+  }
+}
+
+// Wraps WebSpeechVoiceInput, transparently switching to GroqVoiceInput when
+// the browser's own recognizer is unsupported OR (per the give-up heuristic
+// above) present-but-non-functional (e.g. snap Chromium's missing speech
+// backend). 'denied' is deliberately NOT a trigger — mic permission is a
+// browser-level gate shared by getUserMedia regardless of which recognizer
+// calls it, so no fallback can route around an explicit denial; both
+// implementations would just hit the same wall. main.ts uses this in place
+// of constructing WebSpeechVoiceInput directly — everything else (HUD status
+// pill, transcript matching) is unaffected, since it's the same VoiceInput
+// interface either way.
+export class FallbackVoiceInput implements VoiceInput {
+  private primary: WebSpeechVoiceInput;
+  private fallback: GroqVoiceInput | null = null;
+  private active: VoiceInput;
+  private transcriptCb: (t: string) => void = () => {};
+  private statusCb: (s: VoiceStatus, message?: string) => void = () => {};
+  private wantOn = false;
+
+  constructor(lang: string, private promptHint: string) {
+    this.primary = new WebSpeechVoiceInput(lang);
+    this.active = this.primary;
+    this.primary.onTranscript((t) => this.transcriptCb(t));
+    this.primary.onStatusChange((s, message) => {
+      if (this.active !== this.primary) return; // already switched
+      if (s === 'unsupported' || (s === 'error' && message === GIVE_UP_MESSAGE)) {
+        this.switchToFallback();
+        return;
+      }
+      this.statusCb(s, message);
+    });
+  }
+
+  private switchToFallback(): void {
+    if (!this.fallback) {
+      this.fallback = new GroqVoiceInput(resolveVoiceProxyUrl(), this.promptHint);
+      this.fallback.onTranscript((t) => this.transcriptCb(t));
+      this.fallback.onStatusChange((s, message) => {
+        if (this.active === this.fallback) this.statusCb(s, message);
+      });
+    }
+    this.active = this.fallback;
+    if (this.wantOn) this.fallback.start();
+    else this.statusCb(this.fallback.status);
+  }
+
+  get status(): VoiceStatus {
+    return this.active.status;
+  }
+
+  start(): void {
+    this.wantOn = true;
+    this.active.start();
+  }
+
+  stop(): void {
+    this.wantOn = false;
+    this.active.stop();
+  }
+
+  onTranscript(cb: (text: string) => void): void {
+    this.transcriptCb = cb;
+  }
+
+  onStatusChange(cb: (s: VoiceStatus, message?: string) => void): void {
+    this.statusCb = cb;
+    cb(this.active.status);
   }
 }

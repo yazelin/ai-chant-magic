@@ -9,14 +9,15 @@ import {
   ClassId,
   classSpellSet,
   SPELLS,
+  CLASSES,
 } from '@acm/shared';
 import { GameSession } from './session/GameSession';
 import { Lobby } from './ui/Lobby';
 import { SkillBar } from './ui/skillbar';
 import { WaveHud } from './render/wavehud';
 import { initPwaInstall, hidePwaInstall } from './pwaInstall';
-import { chantsAsExtra } from './customChants';
-import { WebSpeechVoiceInput } from './voice/recognizer';
+import { chantsAsExtra, chantFor } from './customChants';
+import { FallbackVoiceInput } from './voice/recognizer';
 import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
 import { MusicEngine } from './audio/music';
 import { setupTrainingDummy } from './dev/trainingDummy';
@@ -213,7 +214,13 @@ function startGame(
   // spectator has no class/spells of their own, so skip the recognizer
   // entirely rather than requesting a mic permission for nothing.
   const allowed = classSpellSet(classId);
-  const voice = spectator ? null : new WebSpeechVoiceInput('zh-TW');
+  // Vocabulary hint for the Groq fallback (see voice/groqRecognizer.ts) —
+  // default + custom chants for THIS class, biasing Whisper toward these
+  // specific short phrases (and toward Traditional script generally, since
+  // the hint text itself already is). Web Speech API ignores this entirely;
+  // it's only read if/when FallbackVoiceInput actually switches to Groq.
+  const promptHint = CLASSES[classId].spells.map((s) => chantFor(s, SPELLS[s].displayName)).join(',');
+  const voice = spectator ? null : new FallbackVoiceInput('zh-TW', promptHint);
   voice?.onStatusChange((s, message) => hud.setMicStatus(s, message));
   voice?.onTranscript((text) => {
     // 共鳴詠唱 is checked first — it's not a class spell (no loadout/cooldown
