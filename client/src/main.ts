@@ -76,6 +76,16 @@ function startGame(
     scale: { mode: Phaser.Scale.RESIZE },
     scene,
   });
+  // Scale.RESIZE listens to the window 'resize' event, but a phone rotation
+  // sometimes fires that event with the browser chrome/viewport still mid-
+  // transition (stale dimensions) — Phaser can end up sized for the old
+  // orientation and never re-check. orientationchange fires once the OS has
+  // committed to the new orientation; a short delay past that lets the
+  // browser settle its own layout before forcing Phaser to recompute against
+  // whatever the DOM actually reports at that point.
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => game.scale.refresh(), 300);
+  });
 
   // Fullscreen button: request fullscreen on the WHOLE chrome container (canvas +
   // all DOM overlays), NOT the canvas — so the HUD/skill bar/etc. stay visible.
@@ -114,10 +124,25 @@ function startGame(
       teardownGame();
       lobby.returnHome();
     },
+    // `voice` is declared further down (closure, same pattern as
+    // teardownGame/voiceCastCount above) — this only ever runs on a button
+    // click well after it's initialized. A denied permission that the player
+    // has since fixed in browser settings just needs another start()
+    // attempt, not a full page reload.
+    () => voice?.start(),
   );
   // A spectator has no local player, so a skill bar / chant-charge overlay
   // would just show nothing useful — skip creating them entirely.
-  const skillbar = spectator ? null : new SkillBar();
+  // Tappable — the only way to cast at all when voice is unavailable for any
+  // reason (unsupported/broken recognizer, denied mic permission, or genuinely
+  // offline, since Web Speech API and any cloud STT fallback both require
+  // network either way).
+  const skillbar = spectator
+    ? null
+    : new SkillBar(
+        (spell) => session.sendCast(spell),
+        () => session.sendResonance(),
+      );
   const wavehud = new WaveHud();
   const incantation = spectator ? null : new IncantationOverlay();
   const music = new MusicEngine();

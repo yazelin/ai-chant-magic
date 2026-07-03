@@ -490,6 +490,14 @@
       #mic-status .note { display: none; margin-top: 5px; max-width: 280px; font-size: 11px; line-height: 1.5;
         color: var(--ink); background: rgba(40,16,24,0.9); border: 1px solid #6a3340; border-radius: 8px; padding: 6px 9px; }
       #mic-status.denied .note, #mic-status.unsupported .note { display: block; }
+      /* #mic-status inherits pointer-events:none from the glass-overlay rule
+         above (same reason #fs-btn needs its own pointer-events:auto) — this
+         button needs the same explicit opt-in or taps on it would silently
+         do nothing. */
+      #mic-status .mic-retry { display: block; margin-top: 5px; pointer-events: auto; cursor: pointer;
+        background: rgba(255,255,255,0.08); color: var(--ink); border: 1px solid #6a3340; border-radius: 6px;
+        padding: 4px 9px; font: 700 11px system-ui, sans-serif; }
+      #mic-status .mic-retry:hover { background: rgba(255,255,255,0.16); }
       /* Heard toast (bottom-center) */
       #heard:empty { display: none; }
       #heard { font-size: 13px; color: var(--ink); background: rgba(16,16,34,0.72); border: 1px solid var(--edge);

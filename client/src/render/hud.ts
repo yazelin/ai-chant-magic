@@ -113,10 +113,16 @@ export class Hud {
     private weeklyChallenge = false,
     private getVoiceCasts: () => number = () => 0,
     private onReturnHome: () => void = () => {},
+    private onRetryMic: () => void = () => {},
   ) {
     this.hud = document.getElementById('hud')!;
     this.mic = document.getElementById('mic-status')!;
     this.heard = document.getElementById('heard')!;
+    // Delegated (setMicStatus() rebuilds this.mic's innerHTML on every status
+    // change, so a listener bound directly to the button would be lost).
+    this.mic.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.mic-retry')) this.onRetryMic();
+    });
     // Centred game-over banner (hidden until status flips).
     this.gameover = document.createElement('div');
     this.gameover.id = 'gameover';
@@ -151,8 +157,12 @@ export class Hud {
     this.endlessQuit = document.createElement('button');
     this.endlessQuit.id = 'endless-quit';
     this.endlessQuit.textContent = '結束挑戰';
+    // right:52px, not the same top-right corner as #fs-btn (which sits at
+    // right:10px, 34px wide) — they used to share almost the exact same spot,
+    // so this button sat on top of (and blocked clicks on) the fullscreen
+    // toggle whenever an endless/週挑戰 run was active.
     this.endlessQuit.style.cssText =
-      'position:fixed;top:8px;right:8px;z-index:61;display:none;pointer-events:auto;cursor:pointer;' +
+      'position:fixed;top:9px;right:52px;z-index:61;display:none;pointer-events:auto;cursor:pointer;' +
       'background:rgba(16,16,34,0.82);color:#c7cbdb;border:1px solid #666;border-radius:8px;' +
       'padding:5px 10px;font:700 12px system-ui;';
     this.endlessQuit.addEventListener('click', () => {
@@ -173,9 +183,17 @@ export class Hud {
 
   setMicStatus(s: VoiceStatus, message?: string): void {
     this.mic.className = s; // CSS colours the pill/dot by state
+    // 'denied' used to only ever say "go allow it in the address bar, then
+    // reload the whole page" — a player who's already fixed it in browser
+    // settings shouldn't need a full reload just to have the recognizer try
+    // again. The retry button re-attempts start(); if the permission is
+    // still actually denied it'll just land back on 'denied' with the same
+    // message, no harm done.
+    const retryBtn =
+      s === 'denied' ? '<button class="mic-retry" type="button">重新嘗試麥克風</button>' : '';
     const note =
       (s === 'denied' || s === 'unsupported') && message
-        ? `<div class="note">${esc(message)}</div>`
+        ? `<div class="note">${esc(message)}${retryBtn}</div>`
         : '';
     this.mic.innerHTML = `<span class="pill"><span class="dot"></span>${MIC_LABEL[s]}</span>${note}`;
   }
