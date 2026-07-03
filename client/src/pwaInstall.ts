@@ -1,7 +1,13 @@
-// In-page PWA install affordance. Chrome/Android no longer shows an automatic
-// install banner — it fires `beforeinstallprompt`, which we capture to show our
-// own "安裝 App" button. iOS Safari has no such event, so we show an
-// "加到主畫面" hint with manual instructions. Hidden once installed / in-game.
+// In-page PWA install affordance. Chrome/Android fires `beforeinstallprompt`
+// when ITS OWN internal engagement heuristics (visit count/time-on-site) are
+// satisfied — a real player reported never once seeing this button on
+// mobile, because that condition was never met for their browsing session.
+// Rather than gate the whole button's visibility on that event, the button
+// is now always shown (once not standalone); clicking it uses the native
+// prompt when available, and otherwise falls back to manual instructions —
+// iOS Safari always did this (no beforeinstallprompt event exists there at
+// all), Chrome/Android/desktop now gets the same fallback instead of an
+// invisible button. Hidden once installed / in-game.
 type BeforeInstallPromptEvent = Event & {
   prompt: () => void;
   userChoice: Promise<{ outcome: string }>;
@@ -33,10 +39,9 @@ export function initPwaInstall(): void {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferred = e as BeforeInstallPromptEvent;
-    show();
   });
   window.addEventListener('appinstalled', () => { btn.style.display = 'none'; });
-  if (isIOSSafari) { btn.textContent = '加到主畫面'; show(); }
+  show(); // always visible up front — no longer waiting on beforeinstallprompt
 
   btn.addEventListener('click', () => {
     if (deferred) {
@@ -44,6 +49,13 @@ export function initPwaInstall(): void {
       void deferred.userChoice.then(() => { deferred = null; btn.style.display = 'none'; });
     } else if (isIOSSafari) {
       alert('在 Safari 點底部「分享」→「加入主畫面」,即可像 App 一樣全螢幕開啟。');
+    } else {
+      alert(
+        '安裝方法:\n' +
+          'Chrome/Edge:網址列右側的安裝圖示,或右上角選單→「安裝應用程式」\n' +
+          'Android Chrome:右上角選單→「新增至主畫面」\n' +
+          '(有些瀏覽器要瀏覽幾次後才會顯示原生安裝提示,用上面的手動方式一樣有效)',
+      );
     }
   });
 }
