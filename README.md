@@ -10,7 +10,7 @@
 
 - 首頁就是**詠唱練習場**:四角色卡列出技能效果/數值(hover 看詳細),開麥克風對著它練喊;每招**詠唱詞可自訂**(改了練習 + 遊戲都生效)
 - 客戶端純前端(GitHub Pages),多人連線靠一台 Node WebSocket 伺服器 —— 已部署在 Render(本機開發則連 `localhost`)
-- 語音用瀏覽器內建 Web Speech API —— **請用 Google Chrome 或 Edge**(Linux 的 snap 版 Chromium 沒有語音後端;遊戲會誠實提示;沒麥克風可按 1/2/3)
+- 語音用瀏覽器內建 Web Speech API —— **請用 Google Chrome 或 Edge**;不支援/辨識失效時自動切到 Groq(whisper-large-v3-turbo)備援(`cloudflare/voice-proxy/`),兩者都需要網路。沒有語音時,畫面下方技能按鈕可直接點按施法(這也是唯一離線可用的施法方式)
 
 ## 快速開始(本機,含兩分頁連線試玩)
 

@@ -1,0 +1,14 @@
+name = "ai-chant-magic-voice-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+
+# Same KV namespace the leaderboard Worker uses — KV namespaces aren't
+# exclusive to one Worker, and this avoids needing to provision a new one.
+# Keys are prefixed (voiceproxy:...) so they never collide with the
+# leaderboard's own scores:... keys.
+[[kv_namespaces]]
+binding = "VOICE_KV"
+id = "6fdc32e40a6d49049676497c5aa530f4"
+
+[vars]
+ALLOWED_ORIGINS = "https://yazelin.github.io,http://localhost:5173"

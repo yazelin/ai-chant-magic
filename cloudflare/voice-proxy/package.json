@@ -1,0 +1,17 @@
+{
+  "name": "ai-chant-magic-voice-proxy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250510.0",
+    "typescript": "^5.5.4",
+    "vitest": "^1.6.1",
+    "wrangler": "^4.0.0"
+  }
+}

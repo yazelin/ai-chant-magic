@@ -31,10 +31,14 @@ jobs:
       # players can still override per-session with ?server=wss://...
       # VITE_LEADERBOARD_URL bakes in the 週挑戰 leaderboard Worker (see
       # cloudflare/leaderboard/) — a separate, independently-deployed backend.
+      # VITE_VOICE_PROXY_URL bakes in the Groq voice-recognition fallback
+      # Worker (see cloudflare/voice-proxy/) — used only when a browser's own
+      # Web Speech API is unsupported or non-functional.
       - run: npm run build:client
         env:
           VITE_SERVER_URL: wss://ai-chant-magic-server.onrender.com
           VITE_LEADERBOARD_URL: https://ai-chant-magic-leaderboard.yazelinj303.workers.dev
+          VITE_VOICE_PROXY_URL: https://ai-chant-magic-voice-proxy.yazelinj303.workers.dev
       - uses: actions/upload-pages-artifact@v3
         with:
           path: client/dist
