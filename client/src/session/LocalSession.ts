@@ -28,8 +28,9 @@ export class LocalSession implements GameSession {
     classId: ClassId = 'pyro',
     private rng: () => number = Math.random,
     private startInEndless: boolean = false,
+    private name: string = 'You',
   ) {
-    this.world = createSoloWorld(classId);
+    this.world = createSoloWorld(classId, this.name);
     if (this.startInEndless) enterEndlessMode(this.world);
   }
 
@@ -90,7 +91,7 @@ export class LocalSession implements GameSession {
 
   // Build a fresh world for the same class (used by the restart key).
   restart(classId: ClassId): void {
-    this.world = createSoloWorld(classId);
+    this.world = createSoloWorld(classId, this.name);
     if (this.startInEndless) enterEndlessMode(this.world);
     this.latestMove = { x: 0, y: 0 };
     this.latestFace = 0;

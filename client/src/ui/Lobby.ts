@@ -562,9 +562,9 @@ export class Lobby {
 
   // --- Solo ----------------------------------------------------------------
   private startSolo(): void {
-    const session = new LocalSession(this.classId);
+    const session = new LocalSession(this.classId, Math.random, false, this.effectiveName());
     this.hide();
-    this.onStart(session, this.classId, true, true); // solo is always its own host
+    this.onStart(session, this.classId, true, true, false, false, this.effectiveName()); // solo is always its own host
   }
 
   // 週挑戰: same solo path, but seeded from THIS week's id (weeklyRng()) and
@@ -572,7 +572,7 @@ export class Lobby {
   // it's not gated behind clearing the campaign first — everyone can jump
   // straight into a fair, comparable "how far this week" run.
   private startWeeklyChallenge(): void {
-    const session = new LocalSession(this.classId, weeklyRng(), true);
+    const session = new LocalSession(this.classId, weeklyRng(), true, this.effectiveName());
     this.hide();
     this.onStart(session, this.classId, true, true, false, true, this.effectiveName());
   }
@@ -582,9 +582,9 @@ export class Lobby {
   // session just to reach endless was a repeating tax on returning players.
   // Only ever shown once isEndlessUnlocked() (gated in renderSetup's markup).
   private startEndless(): void {
-    const session = new LocalSession(this.classId, Math.random, true);
+    const session = new LocalSession(this.classId, Math.random, true, this.effectiveName());
     this.hide();
-    this.onStart(session, this.classId, true, true);
+    this.onStart(session, this.classId, true, true, false, false, this.effectiveName());
   }
 
   // --- Net: create / quickJoin ---------------------------------------------

@@ -163,8 +163,8 @@ export function createWorld(seeds: PlayerSeed[]): World {
   };
 }
 
-export function createSoloWorld(classId: ClassId = 'pyro'): World {
-  return createWorld([{ id: 'local', name: 'You', classId }]);
+export function createSoloWorld(classId: ClassId = 'pyro', name = 'You'): World {
+  return createWorld([{ id: 'local', name, classId }]);
 }
 
 // Unlocked only from a 'victory' world: the same World continues instead of
