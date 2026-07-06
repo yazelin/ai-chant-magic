@@ -278,5 +278,13 @@ export class Room {
       const p = this.world.players.find((pl) => pl.id === id);
       if (p) p.connected = false;
     }
+    // The host leaving/disconnecting must not orphan the room — hand the role
+    // to the next still-connected member (array order = join order) so the
+    // lobby always has someone who can press "開始". A room every member has
+    // left has no one left to promote; isEmpty catches that case for reaping.
+    if (this.hostId === id) {
+      const next = this.members.find((mm) => mm.connected);
+      this.hostId = next ? next.id : null;
+    }
   }
 }

@@ -109,6 +109,13 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
     }));
   }
 
+  // The `lobby` broadcast's shape is identical everywhere it's sent — factored
+  // out so hostId (reassigned on host disconnect, see Room.removePlayer) can
+  // never be forgotten at a call site.
+  function lobbyMsg(room: Room): { type: 'lobby'; players: LobbyPlayerView[]; hostId: string | null } {
+    return { type: 'lobby', players: lobbyViews(room), hostId: room.hostId };
+  }
+
   // Broadcast a ServerMsg to every still-connected member AND spectator of a
   // room — spectators get the exact same snapshot/lobby/chat/etc. traffic,
   // just never send back anything that mutates the room.
@@ -175,6 +182,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
             roomCode: room.code,
             selfId: member.id,
             players: lobbyViews(room),
+            hostId: room.hostId,
           });
         } catch (e) {
           if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
@@ -196,8 +204,9 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
             roomCode: room.code,
             selfId: member.id,
             players: lobbyViews(room),
+            hostId: room.hostId,
           });
-          broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+          broadcast(room, lobbyMsg(room));
         } catch (e) {
           if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
           else throw e;
@@ -218,8 +227,9 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
             roomCode: room.code,
             selfId: member.id,
             players: lobbyViews(room),
+            hostId: room.hostId,
           });
-          broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+          broadcast(room, lobbyMsg(room));
         } catch (e) {
           if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
           else throw e;
@@ -233,7 +243,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           return;
         }
         room.setReady(playerId, msg.value);
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        broadcast(room, lobbyMsg(room));
         break;
       }
       case 'setClass': {
@@ -253,7 +263,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           return;
         }
         room.setClass(playerId, msg.classId);
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        broadcast(room, lobbyMsg(room));
         break;
       }
       case 'start': {
@@ -301,6 +311,12 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
           } else {
             room.removePlayer(playerId);
             broadcast(room, { type: 'peerLeft', id: playerId });
+            // peerLeft alone never refreshes a client's roster/host UI (onPeerLeft
+            // is a no-op everywhere on the client, by design deferring to this) —
+            // without it, a promoted host (see Room.removePlayer) never actually
+            // learns they're host until some unrelated lobby broadcast happens to
+            // follow.
+            broadcast(room, lobbyMsg(room));
           }
         }
         sessions.delete(ws);
@@ -329,6 +345,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
             selfId: id,
             status: room.status,
             players: lobbyViews(room),
+            hostId: room.hostId,
           });
         } catch (e) {
           if (e instanceof RoomError) sendError(ws, e.code as ErrorCode, e.message);
@@ -369,7 +386,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         }
         room.returnToLobby();
         broadcast(room, { type: 'returnToLobby' });
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        broadcast(room, lobbyMsg(room));
         break;
       }
       case 'endEndless': {
@@ -432,6 +449,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
         } else {
           s.room.removePlayer(s.playerId);
           broadcast(s.room, { type: 'peerLeft', id: s.playerId });
+          broadcast(s.room, lobbyMsg(s.room));
         }
       }
       sessions.delete(ws);
@@ -472,7 +490,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
       ) {
         room.returnToLobby();
         broadcast(room, { type: 'returnToLobby' });
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        broadcast(room, lobbyMsg(room));
       } else if (
         room.status === 'victory' &&
         room.victoryDecisionAt !== null &&
@@ -480,7 +498,7 @@ export function startServer(port: number = DEFAULT_PORT, host: string = HOST): S
       ) {
         room.returnToLobby();
         broadcast(room, { type: 'returnToLobby' });
-        broadcast(room, { type: 'lobby', players: lobbyViews(room) });
+        broadcast(room, lobbyMsg(room));
       }
     }
   }, TICK_MS);

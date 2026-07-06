@@ -115,6 +115,12 @@ export class Lobby {
   private members: LobbyPlayerView[] = [];
   private roomCode = '';
   private isHost = false;
+  // Authoritative host id from the server (see Room.hostId) — reassigned to
+  // the next connected member when the host leaves/disconnects, so this must
+  // never be re-derived client-side from array position (that was the bug:
+  // a disconnected-but-not-spliced host at index 0 meant nobody could ever
+  // become host again, and the room silently died).
+  private hostId: string | null = null;
   private isSpectating = false;
   private selfReady = false;
   private chatLog: { from: string; text: string }[] = []; // room chat history
@@ -604,13 +610,13 @@ export class Lobby {
           this.client = client;
           this.roomCode = m.roomCode;
           this.members = m.players;
-          // Host = the first player in the room (i.e. self created it). Server
-          // enforces not-host on start; we just gate the button UX here.
-          this.isHost = m.players.length > 0 && m.players[0].id === m.selfId;
+          this.hostId = m.hostId;
+          this.isHost = m.hostId === m.selfId;
           this.renderRoom();
         },
-        onLobby: (players) => {
+        onLobby: (players, hostId) => {
           this.members = players;
+          this.hostId = hostId;
           if (this.roomCode) this.renderRoom();
         },
         onStarted: () => this.beginNetGame(client),
@@ -657,11 +663,13 @@ export class Lobby {
           this.client = client;
           this.roomCode = m.roomCode;
           this.members = m.players;
-          this.isHost = m.players.length > 0 && m.players[0].id === m.selfId;
+          this.hostId = m.hostId;
+          this.isHost = m.hostId === m.selfId;
           this.renderRoom();
         },
-        onLobby: (players) => {
+        onLobby: (players, hostId) => {
           this.members = players;
+          this.hostId = hostId;
           if (this.roomCode) this.renderRoom();
         },
         onStarted: () => this.beginNetGame(client),
@@ -741,12 +749,14 @@ export class Lobby {
           this.client = client;
           this.roomCode = m.roomCode;
           this.members = m.players;
+          this.hostId = m.hostId;
           this.isSpectating = true;
           if (m.status === 'lobby') this.renderSpectateWaiting();
           else this.beginSpectateGame(client);
         },
-        onLobby: (players) => {
+        onLobby: (players, hostId) => {
           this.members = players;
+          this.hostId = hostId;
           if (this.roomCode) this.renderSpectateWaiting();
         },
         onStarted: () => this.beginSpectateGame(client),
@@ -772,7 +782,7 @@ export class Lobby {
     for (let i = 0; i < 4; i++) {
       const m = this.members[i];
       slots.push(
-        m ? this.playerSlot(m, i === 0, false) : '<div class="pslot empty"><div class="empty-mark">＋</div>等待玩家加入…</div>',
+        m ? this.playerSlot(m, m.id === this.hostId, false) : '<div class="pslot empty"><div class="empty-mark">＋</div>等待玩家加入…</div>',
       );
     }
     this.root.innerHTML = `
@@ -905,7 +915,7 @@ export class Lobby {
       const m = this.members[i];
       slots.push(
         m
-          ? this.playerSlot(m, i === 0, m.id === selfId)
+          ? this.playerSlot(m, m.id === this.hostId, m.id === selfId)
           : '<div class="pslot empty"><div class="empty-mark">＋</div>等待玩家加入…</div>'
       );
     }
@@ -1061,11 +1071,16 @@ export class Lobby {
         return `<span class="ps-skill" title="${escapeHtml(info.effect)} · ${escapeHtml(info.stats)}"><span class="skill-ico" style="color:${def.color};width:18px;height:18px;display:inline-block">${skillIconSvg(s)}</span>${escapeHtml(chantFor(s, info.name))}</span>`;
       })
       .join('');
-    const badge = isHostMember
-      ? '<span class="badge host">房主</span>'
-      : m.ready
-        ? '<span class="badge ready">已準備</span>'
-        : '<span class="badge wait">等待中</span>';
+    // Disconnected takes priority over host/ready — a departed host's seat
+    // must never keep showing "房主" as if they're still around to start the
+    // game (hostId itself gets reassigned server-side; this is just the badge).
+    const badge = !m.connected
+      ? '<span class="badge wait">已離線</span>'
+      : isHostMember
+        ? '<span class="badge host">房主</span>'
+        : m.ready
+          ? '<span class="badge ready">已準備</span>'
+          : '<span class="badge wait">等待中</span>';
     return `<div class="pslot${isSelf ? ' self' : ''}" style="background-image:${worldBackground(m.classId)};background-size:cover,cover,cover;background-position:center,center,center;background-repeat:no-repeat;color:${def.color}">
       <div class="pslot-top"><span class="pslot-name">${escapeHtml(m.name)}${isSelf ? ' (你)' : ''}</span>${badge}</div>
       <div class="sprite-box"><div class="walk-sprite" style="${sprite}"></div></div>

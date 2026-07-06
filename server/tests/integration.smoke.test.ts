@@ -252,6 +252,40 @@ describe('two-client ws integration smoke (B3)', () => {
   );
 
   it(
+    'host leaving the lobby promotes the next connected member, who can then start the room',
+    async () => {
+      // A creates (host), B joins.
+      const a = await connect();
+      const joinedAPromise = waitFor(a, 'joined');
+      sendMsg(a, { type: 'create', name: 'Alice', classId: 'pyro' });
+      const joinedA = await joinedAPromise;
+      const code = joinedA.roomCode;
+      expect(joinedA.hostId).toBe(joinedA.selfId);
+
+      const b = await connect();
+      const joinedBPromise = waitFor(b, 'joined');
+      sendMsg(b, { type: 'join', name: 'Bob', classId: 'warden', roomCode: code });
+      const joinedB = await joinedBPromise;
+      expect(joinedB.hostId).toBe(joinedA.selfId); // A is still host from B's POV too
+
+      // The host (A) leaves. B must be promoted — without this, hostId would
+      // stay pinned to A's now-disconnected member forever (the bug this test
+      // guards against: nobody left could ever press "開始" again).
+      const bSeesNewHost = waitForMatch(b, 'lobby', (m) => m.hostId === joinedB.selfId);
+      sendMsg(a, { type: 'leave' });
+      const lobbyAfterLeave = await bSeesNewHost;
+      expect(lobbyAfterLeave.hostId).toBe(joinedB.selfId);
+      expect(handle.registry.get(code)!.hostId).toBe(joinedB.selfId);
+
+      // B (now host) can actually start the room — must NOT be rejected not-host.
+      const startedB = waitFor(b, 'started');
+      sendMsg(b, { type: 'start' });
+      await expect(startedB).resolves.toMatchObject({ type: 'started' });
+    },
+    15000
+  );
+
+  it(
     'ignores setClass once the game has started (no mid-game class change)',
     async () => {
       const a = await connect();

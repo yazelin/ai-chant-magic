@@ -133,11 +133,13 @@ export interface JoinedMsg {
   roomCode: string;
   selfId: string;
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 
 export interface LobbyUpdateMsg {
   type: 'lobby';
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 
 export interface StartedMsg {
@@ -202,6 +204,7 @@ export interface SpectatingMsg {
   selfId: string;
   status: RoomStatus;
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 
 export type ServerMsg =

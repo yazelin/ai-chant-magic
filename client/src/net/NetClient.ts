@@ -41,10 +41,12 @@ interface JoinedMsg {
   roomCode: string;
   selfId: string;
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 interface LobbyUpdateMsg {
   type: 'lobby';
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 interface StartedMsg {
   type: 'started';
@@ -80,6 +82,7 @@ interface SpectatingMsg {
   selfId: string;
   status: RoomStatus;
   players: LobbyPlayerView[];
+  hostId: string | null;
 }
 type ServerMsg =
   | JoinedMsg
@@ -95,7 +98,7 @@ type ServerMsg =
 
 export interface NetCallbacks {
   onJoined?: (m: JoinedMsg) => void;
-  onLobby?: (players: LobbyPlayerView[]) => void;
+  onLobby?: (players: LobbyPlayerView[], hostId: string | null) => void;
   onStarted?: () => void;
   onSnapshot?: (snap: Snapshot, tick: number) => void;
   onError?: (code: ErrorCode, msg: string) => void;
@@ -196,7 +199,7 @@ export class NetClient {
         this.cb.onJoined?.(m);
         break;
       case 'lobby':
-        this.cb.onLobby?.(m.players);
+        this.cb.onLobby?.(m.players, m.hostId);
         break;
       case 'started':
         this.cb.onStarted?.();
