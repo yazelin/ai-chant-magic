@@ -38,10 +38,10 @@ function lead(barIndex: number, count: number, dur: number, oct: number, type: O
 
 // Intensity 0..3, escalating 微焰 → 星火 → 燎原 → 焚天 (denser + faster).
 const TRACKS: Track[] = [
-  { name: '微焰', bar: 2.0, build: (i) => [...bass(2, 1.0, 0.22), ...lead(i, 4, 0.5, 0, 'triangle', 0.16)] },
-  { name: '星火', bar: 1.2, build: (i) => [...bass(4, 0.3, 0.24), ...lead(i, 8, 0.15, 0, 'square', 0.13)] },
-  { name: '燎原', bar: 1.6, build: (i) => [...bass(4, 0.4, 0.26), ...lead(i, 8, 0.2, -12, 'square', 0.13), ...lead(i + 1, 4, 0.4, 7, 'triangle', 0.1)] },
-  { name: '焚天', bar: 0.9, build: (i) => [...bass(6, 0.15, 0.26), ...lead(i, 12, 0.075, 12, 'square', 0.11)] },
+  { name: '微焰', bar: 2.0, build: (i) => [...bass(2, 1.0, 0.4), ...lead(i, 4, 0.5, 0, 'triangle', 0.3)] },
+  { name: '星火', bar: 1.2, build: (i) => [...bass(4, 0.3, 0.42), ...lead(i, 8, 0.15, 0, 'square', 0.26)] },
+  { name: '燎原', bar: 1.6, build: (i) => [...bass(4, 0.4, 0.44), ...lead(i, 8, 0.2, -12, 'square', 0.26), ...lead(i + 1, 4, 0.4, 7, 'triangle', 0.22)] },
+  { name: '焚天', bar: 0.9, build: (i) => [...bass(6, 0.15, 0.46), ...lead(i, 12, 0.075, 12, 'square', 0.24)] },
 ];
 
 export class MusicEngine {
@@ -61,7 +61,7 @@ export class MusicEngine {
     const master = getMaster();
     if (!ctx || !master || this.timer) return;
     this.bus = ctx.createGain();
-    this.bus.gain.value = 0.5; // music sits under the SFX
+    this.bus.gain.value = 0.85; // was 0.5 — too far under the SFX to be heard at all
     this.bus.connect(master);
     this.nextBar = ctx.currentTime + 0.15;
     this.barIndex = 0;
