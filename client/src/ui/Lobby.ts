@@ -77,7 +77,11 @@ const WORLD_BG_OVERLAY: Record<ClassId, string> = {
   storm: 'radial-gradient(100% 70% at 50% 0%, rgba(176,108,255,0.26), transparent 60%), linear-gradient(165deg,rgba(34,26,58,0.40),rgba(16,12,30,0.58))',
   warden: 'radial-gradient(100% 70% at 50% 0%, rgba(255,210,77,0.22), transparent 60%), linear-gradient(165deg,rgba(42,36,24,0.42),rgba(20,18,12,0.58))',
 };
-const worldBackground = (id: ClassId): string => `${WORLD_BG_OVERLAY[id]}, url("${WORLD_BG_IMAGE[id]}")`;
+// Single-quoted url() — this string gets embedded inside a double-quoted
+// style="..." HTML attribute in playerSlot()'s template; a double-quoted
+// url() there would prematurely close the attribute and silently drop the
+// image (and everything after it in the same attribute).
+const worldBackground = (id: ClassId): string => `${WORLD_BG_OVERLAY[id]}, url('${WORLD_BG_IMAGE[id]}')`;
 
 const ERROR_TEXT: Record<ErrorCode, string> = {
   'not-found': '找不到該房間代碼',

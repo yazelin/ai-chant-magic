@@ -42,6 +42,18 @@ const CARD_W = 1200;
 const CARD_H = 630;
 const GAME_URL = 'yazelin.github.io/ai-chant-magic';
 
+// Manual rounded-rect path (not the newer native ctx.roundRect) for wider
+// browser/webview compatibility.
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
 function hexWithAlpha(hex: string, alpha: number): string {
   const h = hex.replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
@@ -96,31 +108,29 @@ export async function renderShareCard(stats: ShareCardStats): Promise<HTMLCanvas
     ctx.fillText(stats.recordLine, 60, 296);
   }
 
-  const rosterY = 420;
-  const AVATAR_R = 40;
+  const rosterY = 400;
+  const BOX = 128; // draw the cast frame at native size — full body, no crop
   const slotW = (CARD_W - 120) / Math.max(1, stats.players.length);
   ctx.textAlign = 'center';
   const sprites = await Promise.all(stats.players.map((p) => loadClassSprite(p.classId)));
   stats.players.forEach((p, i) => {
     const cx = 60 + slotW * i + slotW / 2;
     const color = CLASSES[p.classId].color;
-    ctx.beginPath();
-    ctx.arc(cx, rosterY, AVATAR_R, 0, Math.PI * 2);
-    ctx.fillStyle = color;
+    const boxX = cx - BOX / 2;
+    const boxY = rosterY - BOX / 2;
+
+    ctx.fillStyle = hexWithAlpha(color, 0.18);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    roundRect(ctx, boxX, boxY, BOX, BOX, 12);
     ctx.fill();
+    ctx.stroke();
 
     const img = sprites[i];
     if (img) {
-      // castUrl is already a single 128x128 pose frame — no cropping needed,
-      // just scale it to fill the circle, clipped so it reads as a round
-      // portrait rather than a square.
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, rosterY, AVATAR_R, 0, Math.PI * 2);
-      ctx.clip();
-      const size = AVATAR_R * 2.5; // slightly oversized so the character isn't cropped too tight
-      ctx.drawImage(img, 0, 0, 128, 128, cx - size / 2, rosterY - size / 2, size, size);
-      ctx.restore();
+      // castUrl is already a single 128x128 pose frame — draw it whole (no
+      // crop, no circle clip) so the full body is visible, not just a headshot.
+      ctx.drawImage(img, 0, 0, 128, 128, boxX, boxY, BOX, BOX);
     } else {
       // Fallback (sprite failed to load): initial letter, same as before.
       ctx.fillStyle = '#1a1030';
@@ -130,10 +140,10 @@ export async function renderShareCard(stats: ShareCardStats): Promise<HTMLCanvas
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 22px system-ui, sans-serif';
-    ctx.fillText(truncate(p.name, 8), cx, rosterY + 66);
+    ctx.fillText(truncate(p.name, 8), cx, boxY + BOX + 30);
     ctx.fillStyle = '#9aa0b5';
     ctx.font = '500 16px system-ui, sans-serif';
-    ctx.fillText(CLASSES[p.classId].displayName, cx, rosterY + 90);
+    ctx.fillText(CLASSES[p.classId].displayName, cx, boxY + BOX + 54);
   });
 
   ctx.textAlign = 'left';
