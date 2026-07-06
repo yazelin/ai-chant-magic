@@ -211,14 +211,13 @@ describe('Room.tick (one 50ms step + snapshot)', () => {
   });
 });
 
-describe('Room.removePlayer — mark connected=false, NEVER splice (spec §15.1)', () => {
-  it('in lobby: marks the member disconnected but keeps the entry', () => {
+describe('Room.removePlayer — lobby splices, mid-game marks connected=false without splicing (spec §15.1)', () => {
+  it('in lobby: splices the member out entirely (no simulation index to protect yet, and a ghosted seat must free up for a real player)', () => {
     const room = new Room('AAAA', member('host'));
     room.addPlayer(member('guest'));
     room.removePlayer('guest');
-    // Entry is NOT spliced; index correspondence preserved.
-    expect(room.members.map((m) => m.id)).toEqual(['host', 'guest']);
-    expect(room.getMember('guest')?.connected).toBe(false);
+    expect(room.members.map((m) => m.id)).toEqual(['host']);
+    expect(room.getMember('guest')).toBeUndefined();
     expect(room.getMember('host')?.connected).toBe(true);
   });
 

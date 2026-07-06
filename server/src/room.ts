@@ -268,9 +268,17 @@ export class Room {
   }
 
   // Disconnect: mark connected=false on the lobby member AND (if a world exists)
-  // its world player. NEVER splice either array — splicing would break the
-  // snapshot index/id correspondence the client interpolation relies on
-  // (spec §15.1). isEmpty then reaps the room once everyone has left.
+  // its world player. Mid-game (world already running) NEVER splice `members`
+  // — splicing would break the snapshot index/id correspondence the client
+  // interpolation relies on (spec §15.1). isEmpty then reaps the room once
+  // everyone has left.
+  //
+  // Pre-game (still in the lobby) is different: there is no simulation yet
+  // for any index/id correspondence to protect, so a disconnected member is
+  // spliced out entirely below. Without this, a departed/ghosted lobby member
+  // permanently occupied a seat — isFull counted them forever (a room with 1
+  // real host + 3 long-gone ghosts reads as "full", rejecting real players
+  // who try to join), and their seat never freed up for someone else to take.
   removePlayer(id: string): void {
     const m = this.getMember(id);
     if (m) m.connected = false;
@@ -285,6 +293,10 @@ export class Room {
     if (this.hostId === id) {
       const next = this.members.find((mm) => mm.connected);
       this.hostId = next ? next.id : null;
+    }
+    if (this.status === 'lobby') {
+      const idx = this.members.findIndex((mm) => mm.id === id);
+      if (idx !== -1) this.members.splice(idx, 1);
     }
   }
 }

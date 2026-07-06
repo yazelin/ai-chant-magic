@@ -111,6 +111,27 @@ describe('RoomRegistry.joinByCode', () => {
     }
   });
 
+  it('a disconnected lobby member frees their seat, so a real player can join a "full" room', () => {
+    // Regression test: room.members used to never splice a disconnected
+    // member (even pre-game), so isFull kept counting long-gone ghosts —
+    // a room with 1 real host + 3 ghosted joiners read as permanently full,
+    // rejecting every real player who tried to join.
+    const reg = new RoomRegistry(() => 0);
+    const room = reg.create(member('host'));
+    for (let i = 1; i < MAX_PLAYERS; i++) {
+      reg.joinByCode(room.code, member('ghost' + i));
+    }
+    expect(room.members).toHaveLength(MAX_PLAYERS);
+    // All 3 ghosts vanish without ever sending 'leave' (abrupt disconnect).
+    for (let i = 1; i < MAX_PLAYERS; i++) {
+      room.removePlayer('ghost' + i);
+    }
+    expect(room.members.map((m) => m.id)).toEqual(['host']);
+    // A real player must now be able to join — not rejected as 'full'.
+    expect(() => reg.joinByCode(room.code, member('realPlayer'))).not.toThrow();
+    expect(room.members.map((m) => m.id)).toEqual(['host', 'realPlayer']);
+  });
+
   it('throws already-started when the room is playing', () => {
     const reg = new RoomRegistry(() => 0);
     const room = reg.create(member('host'));
