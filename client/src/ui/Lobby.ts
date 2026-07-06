@@ -3,7 +3,7 @@ import { SKILL_INFO } from './skillInfo';
 import { skillIconSvg } from './skillIcons';
 import { chantFor, setChant, chantsAsExtra } from '../customChants';
 import { SHEET_WALKERS } from '../render/walkSheets';
-import { WebSpeechVoiceInput } from '../voice/recognizer';
+import { FallbackVoiceInput } from '../voice/recognizer';
 import { GameSession } from '../session/GameSession';
 import { LocalSession } from '../session/LocalSession';
 import { NetSession } from '../session/NetSession';
@@ -114,7 +114,7 @@ export class Lobby {
   private isSpectating = false;
   private selfReady = false;
   private chatLog: { from: string; text: string }[] = []; // room chat history
-  private chatVoice: WebSpeechVoiceInput | null = null; // one-shot dictation for chat
+  private chatVoice: FallbackVoiceInput | null = null; // one-shot dictation for chat
   private returnFn: (() => void) | null = null; // main.ts game teardown (net return-to-lobby)
   // Generic input-modal (join-by-code / edit-chant) — replaces window.prompt()
   // for the two highest-value first-time actions, matching the rest of this
@@ -130,7 +130,7 @@ export class Lobby {
   // SUCCESSFUL join, so it's already empty by the time the error fires).
   private lastJoinAttemptCode = '';
   // Chant-practice voice input (lazy; lives across re-renders of the setup screen)
-  private voice: WebSpeechVoiceInput | null = null;
+  private voice: FallbackVoiceInput | null = null;
   private practicing = false;
   private hitTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -396,7 +396,10 @@ export class Lobby {
 
   private togglePractice(): void {
     if (!this.voice) {
-      this.voice = new WebSpeechVoiceInput('zh-TW');
+      const promptHint = CLASSES[this.classId].spells
+        .map((s) => chantFor(s, SKILL_INFO[s].name))
+        .join(',');
+      this.voice = new FallbackVoiceInput('zh-TW', promptHint);
       this.voice.onStatusChange((s, msg) => {
         const el = this.root.querySelector('#mic-state');
         if (el) el.textContent = msg ?? (s === 'listening' ? '聆聽中…喊出招式名' : s);
@@ -1026,7 +1029,7 @@ export class Lobby {
   private dictateChat(): void {
     this.stopPractice();
     const input = this.root.querySelector<HTMLInputElement>('#chat-input');
-    if (!this.chatVoice) this.chatVoice = new WebSpeechVoiceInput('zh-TW');
+    if (!this.chatVoice) this.chatVoice = new FallbackVoiceInput('zh-TW', '');
     this.chatVoice.onTranscript((text) => {
       if (input) { input.value = text; input.focus(); }
       this.chatVoice?.stop();
