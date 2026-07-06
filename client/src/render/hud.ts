@@ -235,8 +235,8 @@ export class Hud {
     return n > 0 ? ` · 語音咏唱 ${n} 次` : '';
   }
 
-  private shareResult(stats: ShareCardStats): void {
-    const canvas = renderShareCard(stats);
+  private async shareResult(stats: ShareCardStats): Promise<void> {
+    const canvas = await renderShareCard(stats);
     void shareOrDownloadCard(canvas);
   }
 

@@ -4,6 +4,27 @@
 // (stats + roster, no screenshot) — the point is something worth bragging
 // about, not a second renderer to maintain.
 import { ClassId, CLASSES } from '@acm/shared';
+import { SHEET_WALKERS } from './walkSheets';
+
+// Loads (and caches) each class's single cast-pose portrait once — a bragging
+// card reads better mid-cast than standing idle. Failures (slow network,
+// blocked asset) resolve to null so the caller can fall back to the plain
+// color-circle avatar instead of breaking the whole card.
+const spriteCache = new Map<ClassId, Promise<HTMLImageElement | null>>();
+function loadClassSprite(classId: ClassId): Promise<HTMLImageElement | null> {
+  let p = spriteCache.get(classId);
+  if (p) return p;
+  const sheet = SHEET_WALKERS[classId];
+  p = new Promise((resolve) => {
+    if (!sheet) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = sheet.castUrl;
+  });
+  spriteCache.set(classId, p);
+  return p;
+}
 
 export interface ShareCardPlayer {
   name: string;
@@ -33,7 +54,7 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-export function renderShareCard(stats: ShareCardStats): HTMLCanvasElement {
+export async function renderShareCard(stats: ShareCardStats): Promise<HTMLCanvasElement> {
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W;
   canvas.height = CARD_H;
@@ -76,18 +97,37 @@ export function renderShareCard(stats: ShareCardStats): HTMLCanvasElement {
   }
 
   const rosterY = 420;
+  const AVATAR_R = 40;
   const slotW = (CARD_W - 120) / Math.max(1, stats.players.length);
   ctx.textAlign = 'center';
+  const sprites = await Promise.all(stats.players.map((p) => loadClassSprite(p.classId)));
   stats.players.forEach((p, i) => {
     const cx = 60 + slotW * i + slotW / 2;
     const color = CLASSES[p.classId].color;
     ctx.beginPath();
-    ctx.arc(cx, rosterY, 40, 0, Math.PI * 2);
+    ctx.arc(cx, rosterY, AVATAR_R, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.fillStyle = '#1a1030';
-    ctx.font = '800 30px system-ui, sans-serif';
-    ctx.fillText(p.name.slice(0, 1).toUpperCase(), cx, rosterY + 11);
+
+    const img = sprites[i];
+    if (img) {
+      // castUrl is already a single 128x128 pose frame — no cropping needed,
+      // just scale it to fill the circle, clipped so it reads as a round
+      // portrait rather than a square.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, rosterY, AVATAR_R, 0, Math.PI * 2);
+      ctx.clip();
+      const size = AVATAR_R * 2.5; // slightly oversized so the character isn't cropped too tight
+      ctx.drawImage(img, 0, 0, 128, 128, cx - size / 2, rosterY - size / 2, size, size);
+      ctx.restore();
+    } else {
+      // Fallback (sprite failed to load): initial letter, same as before.
+      ctx.fillStyle = '#1a1030';
+      ctx.font = '800 30px system-ui, sans-serif';
+      ctx.fillText(p.name.slice(0, 1).toUpperCase(), cx, rosterY + 11);
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 22px system-ui, sans-serif';
     ctx.fillText(truncate(p.name, 8), cx, rosterY + 66);
