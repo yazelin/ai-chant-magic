@@ -401,6 +401,30 @@
            at this height — no vertical room to keep both clear of each other.
            !important beats pwaInstall.ts's own inline style.display toggle. */
         #pwa-install { display: none !important; }
+        /* Room view — real player report: this whole column (picker + chat +
+           4 hint lines + start button) was never given a short-landscape
+           layout at all (only the home showcase above was). #lobby's global
+           overflow:hidden then turned "doesn't fit" into "picker clipped off
+           the top, start button unreachable, can't progress past character
+           select on mobile" — no scrollbar, no way to get to it.
+           Fix: stack grid-over-bar instead of side-by-side, shrink seats to
+           a single compact row, drop chat/hints (same "keep only the
+           actually-clickable buttons reachable" call the showcase above
+           already makes), pin the start/ready button so it's always visible,
+           and — as a safety net for whatever this pass still gets wrong on
+           some device — let this column scroll instead of silently clipping. */
+        .room-body { flex-direction: column; gap: 4px; overflow-y: auto; }
+        .room-grid { flex: 0 0 auto; grid-template-columns: repeat(4, 1fr); grid-template-rows: none; gap: 4px; }
+        .pslot { padding: 4px; gap: 2px; }
+        .pslot-top { position: static; padding: 0; }
+        .pslot .sprite-box { width: 32px; height: 32px; }
+        .pslot .walk-sprite { width: 28px; height: 28px; transform: scale(0.33); }
+        .pslot .cname { font-size: 12px; }
+        .pslot .crole, .pslot-skills { display: none; }
+        .room-bar { width: 100%; flex: 0 0 auto; gap: 4px; justify-content: flex-start; }
+        .picker { justify-content: flex-start; }
+        .chat, .hint { display: none; }
+        .btns { position: sticky; bottom: 0; background: var(--bg); padding: 4px 0; margin-top: 0; }
       }
       /* Reflow only in true PORTRAIT. The app is landscape-locked, so small
          landscape phones (e.g. 640x360) get the media query just above
