@@ -396,6 +396,11 @@
         .name-label { margin: 0; }
         .name-row input { padding: 6px 10px; }
         .btns button { padding: 5px 10px; }
+        /* The fixed-position 安裝 App button (bottom:12px/right:12px, see
+           pwaInstall.ts) sits right on top of the last lobby button (無盡模式)
+           at this height — no vertical room to keep both clear of each other.
+           !important beats pwaInstall.ts's own inline style.display toggle. */
+        #pwa-install { display: none !important; }
       }
       /* Reflow only in true PORTRAIT. The app is landscape-locked, so small
          landscape phones (e.g. 640x360) get the media query just above
@@ -463,6 +468,14 @@
       #game-chrome.playing > #mic-status { left: 12px; bottom: 16px; }
       #game-chrome.playing > #heard { left: 50%; bottom: 92px; transform: translateX(-50%); max-width: 86vw; }
       #game-chrome.playing > #fs-btn { top: 10px; right: 10px; }
+      /* #fs-btn opts back into pointer-events (like .mic-retry above) — the
+         glass-overlay rule right above sets pointer-events:none on the whole
+         zone list including #fs-btn, and #fs-btn's own plain `#fs-btn { ... }`
+         rule further down loses to that on specificity regardless of source
+         order, so without this override taps on it were silently swallowed
+         (real player report: 全螢幕 button did nothing on both mobile AND
+         desktop — it was never platform-specific). */
+      #game-chrome.playing > #fs-btn { pointer-events: auto; }
       /* Player status panel (built by Hud) — glass card + class accent + HP bar */
       .pstat { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px;
         background: rgba(16,16,34,0.66); border: 1px solid var(--edge); border-left: 3px solid var(--accent);
