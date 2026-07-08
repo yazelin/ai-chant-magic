@@ -70,7 +70,10 @@ export class SkillBar {
     this.resonanceSlot = document.createElement('div');
     this.resonanceSlot.className = 'slot resonance';
     this.resonanceSlot.textContent = '共鳴';
-    this.resonanceSlot.addEventListener('click', () => this.onResonance());
+    // pointerup, not click: while a thumb holds the aim stick, touch's synthetic
+    // click only fires for the "primary" pointer, so a second finger tapping this
+    // slot would silently do nothing. pointerup fires per-pointer regardless.
+    this.resonanceSlot.addEventListener('pointerup', () => this.onResonance());
 
     this.root.appendChild(this.resonanceSlot);
   }
@@ -86,7 +89,8 @@ export class SkillBar {
         `<div class="icon">${skillIconSvg(spell)}</div>` +
         `<div class="cd"></div><div class="num"></div>` +
         `<div class="key">${i + 1}</div><div class="badge"></div>`;
-      root.addEventListener('click', () => {
+      // pointerup, not click — see resonanceSlot above for why.
+      root.addEventListener('pointerup', () => {
         if (root.classList.contains('cooling') || root.classList.contains('locked')) return;
         this.onCast(spell);
       });

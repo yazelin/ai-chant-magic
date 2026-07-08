@@ -306,6 +306,11 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!p.wasTouch) return;
+      // Phaser also listens on window (not just canvas) for touch events, so a
+      // tap on a DOM overlay like SkillBar — not part of the canvas at all —
+      // still reaches here. Ignore it, or it hijacks aimPointerId/joyPointerId
+      // away from whichever finger is actually driving a joystick.
+      if (p.event.target !== this.sys.game.canvas) return;
       if (p.x < this.scale.width / 2) {
         this.joyPointerId = p.id; // left half: anchor the move joystick
         this.joyOrigin = { x: p.x, y: p.y };
