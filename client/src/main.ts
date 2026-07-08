@@ -22,7 +22,12 @@ import { initAudio, sfxWave, sfxDeath } from './audio/sfx';
 import { MusicEngine } from './audio/music';
 import { setupTrainingDummy } from './dev/trainingDummy';
 import { submitScore } from './session/weeklyChallenge';
-import { hasSeenVoiceHint, markVoiceHintSeen } from './session/onboarding';
+import {
+  hasSeenVoiceHint,
+  markVoiceHintSeen,
+  hasSeenControlsHint,
+  markControlsHintSeen,
+} from './session/onboarding';
 
 // Boot into the lobby. The lobby decides Local (single-player) vs Net
 // (connected, already `started`) and hands us a GameSession + the self class id.
@@ -151,9 +156,17 @@ function startGame(
   // First-match-ever onboarding: teach that this is a VOICE game before the
   // player has a chance to default to muscle-memory number keys and never
   // discover it. Once per browser, not once per match (see onboarding.ts).
-  if (!spectator && !hasSeenVoiceHint()) {
+  const showingVoiceHint = !spectator && !hasSeenVoiceHint();
+  if (showingVoiceHint) {
     hud.showVoiceHint(classId);
     markVoiceHintSeen();
+  }
+  // Sequenced after the voice hint (same toast slot, 6s each) so a
+  // first-timer isn't left assuming spells always fly wherever they last
+  // aimed by accident — see project memory on the "冰精靈固定方向" report.
+  if (!spectator && !hasSeenControlsHint()) {
+    setTimeout(() => hud.showControlsHint(), showingVoiceHint ? 6200 : 0);
+    markControlsHintSeen();
   }
 
   // HUD refresh loop (decoupled from Phaser so game-over text updates even when

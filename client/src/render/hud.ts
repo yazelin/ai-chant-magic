@@ -181,6 +181,15 @@ export class Hud {
     this.showToast(`喊出 ${spells} 施法(或按 1/2/3)`, 6000);
   }
 
+  // Voice hint only teaches *what* to shout — nothing ever told a player that
+  // aim is a separate control (mouse, or the touch joystick spawned on
+  // whichever half of the screen a finger lands on). Shown right after the
+  // voice hint fades (same toast slot, sequenced by main.ts) so it doesn't
+  // fight the first toast for the DOM.
+  showControlsHint(): void {
+    this.showToast('移動:WSAD(手機觸控畫面左半) · 瞄準方向:滑鼠(手機觸控畫面右半)', 6000);
+  }
+
   setMicStatus(s: VoiceStatus, message?: string): void {
     this.mic.className = s; // CSS colours the pill/dot by state
     // 'denied' used to only ever say "go allow it in the address bar, then

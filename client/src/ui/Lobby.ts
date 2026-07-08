@@ -943,6 +943,7 @@ export class Lobby {
             <button id="chat-send" type="button">送出</button>
           </div>
         </div>
+        <div class="hint">小技巧:移動用 WSAD,瞄準方向用滑鼠(手機分別是觸控畫面左半/右半)——詠唱只決定放什麼咒語,方向要另外瞄準</div>
         <div class="hint">小技巧:遊戲中和隊友一起喊「共鳴」(或按 4),同步呼喚可觸發全隊祝福</div>
         <div class="hint">小技巧:不同職業組隊有羈絆加成,職業越多元加成越高,四職業全上陣加成最大</div>
         <div class="hint">小技巧:同一隻怪連續被不同元素命中會觸發反應(沸騰/爆燃/凍鎖/淨化),隊友輪流打同一目標傷害更高</div>
