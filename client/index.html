@@ -231,6 +231,16 @@
         display: flex; align-items: center; }
       .chat-row button:hover { background: var(--panel); border-color: var(--accent); }
       #chat-send { background: var(--accent); color: #1a1030; border-color: var(--accent); font-weight: 700; }
+      /* Chat drawer toggle — only the mobile-landscape block below displays it;
+         desktop keeps the chat inline so this stays hidden there. */
+      .chat-toggle { display: none; position: relative; align-items: center; justify-content: center;
+        gap: 5px; background: var(--panel); border: 1px solid var(--edge); border-radius: 999px;
+        color: var(--ink); font: inherit; font-size: 12px; padding: 4px 12px; cursor: pointer;
+        align-self: flex-start; }
+      .chat-toggle svg { width: 14px; height: 14px; }
+      .chat-toggle .dot { display: none; position: absolute; top: -3px; right: -3px; width: 10px;
+        height: 10px; border-radius: 50%; background: #ff5a5a; box-shadow: 0 0 6px #ff5a5a; }
+      .chat-toggle.unread .dot { display: block; }
       .char-card .sprite-box { position: relative; width: 112px; height: 112px; overflow: hidden; }
       .char-card .walk-sprite { width: 96px; height: 96px; transform: scale(1.16); transform-origin: top left;
         image-rendering: pixelated; background-repeat: no-repeat; background-position: 0 0; }
@@ -374,7 +384,7 @@
          Placed after every base rule it touches (char-card, center-skills,
          .foot, etc.) so it reliably wins on source order — an early insertion
          point here previously lost to those later same-specificity rules. */
-      @media (orientation: landscape) and (max-height: 480px) {
+      @media (orientation: landscape) and (max-height: 480px) and (pointer: fine) {
         #lobby { gap: 3px; }
         #lobby h1 { font-size: 15px; margin-bottom: 0; }
         #lobby .sub { font-size: 10px; margin-bottom: 0; }
@@ -425,6 +435,83 @@
         .picker { justify-content: flex-start; }
         .chat, .hint { display: none; }
         .btns { position: sticky; bottom: 0; background: var(--bg); padding: 4px 0; margin-top: 0; }
+      }
+      /* ===== Mobile landscape — a real phone held sideways (pointer:coarse
+         keeps small DESKTOP windows in the fine-pointer block above). Not
+         "desktop squeezed": the home page splits characters-left /
+         skills+actions-right, and the room swaps the side chat panel for a
+         drawer instead of amputating it. Player-reported gaps this block
+         exists to close: skill descriptions were display:none'd (and the
+         desktop version was hover-only — unreachable on touch anyway), and
+         chat was cut entirely. ===== */
+      @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
+        /* Safety net: whatever still doesn't fit on some device scrolls
+           instead of silently clipping (the failure mode that made the room
+           unusable in the first place). */
+        #lobby { gap: 2px; padding: 4px 12px; overflow-y: auto; }
+        #lobby h1 { font-size: 13px; margin-bottom: 0; }
+        #lobby .sub { font-size: 9px; margin-bottom: 0; }
+        .foot { display: none; }
+        #pwa-install { display: none !important; }
+
+        /* Home: side-by-side split — 2x2 character grid left, everything
+           actionable (skills, name, start buttons) right. */
+        .showcase { flex-direction: row; gap: 8px; }
+        .char-row { flex: 0 0 44%; min-width: 0; display: grid;
+          grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; }
+        .char-card { height: auto; max-width: none; padding: 4px; gap: 0; }
+        .char-card .sprite-box { width: 44px; height: 44px; }
+        .char-card .walk-sprite { transform: scale(0.45); }
+        .char-card .cname { font-size: 13px; }
+        .char-card .cworld { font-size: 9px; margin-bottom: 0; }
+        .char-card .crecord { display: none; }
+        .center-panel { min-width: 0; gap: 3px; overflow-y: auto; }
+        .center-skills { gap: 2px; }
+        .center-skills .cs-head { font-size: 11px; }
+        .center-skills .skills { gap: 2px; }
+        .center-skills .skill { padding: 1px 8px; }
+        .center-skills .chant { font-size: 12px; }
+        .center-skills .skill-ico, .center-skills .skill-ico svg { width: 14px; height: 14px; }
+        /* Skill info stays VISIBLE (tap a row to switch which skill shows).
+           Only the long prose body is cut — name/effect/numbers remain. */
+        .center-skills .skill-detail { padding: 3px 8px; }
+        .center-skills .sd-title { font-size: 12px; }
+        .center-skills .sd-effect { font-size: 11px; }
+        .center-skills .sd-stats { font-size: 10px; }
+        .center-skills .sd-body { display: none; }
+        /* #lobby-prefixed: the base rules carry the #lobby id (higher
+           specificity than plain class selectors), so these must too. */
+        #lobby .name-label { margin: 0; font-size: 10px; }
+        #lobby .name-row input { padding: 4px 8px; font-size: 12px; }
+        .name-row #btn-reroll, .name-row .practice-open { padding: 0 9px; font-size: 12px; }
+        .btns { gap: 4px; }
+        /* flex-basis 30% → exactly 3 buttons per row (6 actions = 2 tidy rows);
+           min-width:0 alone let all 6 squeeze into one clipped row. */
+        .btns button { flex: 1 1 30%; min-width: 0; padding: 5px 4px; font-size: 12px; }
+
+        /* Room: seats one compact row on top; picker/tip/buttons below. */
+        .room-body { flex-direction: column; gap: 4px; overflow-y: auto; }
+        .room-grid { flex: 0 0 auto; grid-template-columns: repeat(4, 1fr); grid-template-rows: none; gap: 4px; }
+        .pslot { padding: 4px; gap: 2px; }
+        .pslot-top { position: static; padding: 0; }
+        .pslot .sprite-box { width: 32px; height: 32px; }
+        .pslot .walk-sprite { width: 28px; height: 28px; transform: scale(0.33); }
+        .pslot .cname { font-size: 12px; }
+        .pslot .crole, .pslot-skills { display: none; }
+        .room-bar { width: 100%; flex: 0 0 auto; gap: 4px; justify-content: flex-start; }
+        .picker { justify-content: flex-start; }
+        /* Chat becomes a drawer: inline panel hidden, pill toggle shown, and
+           opening it overlays a floating card above the pinned buttons. */
+        .chat-toggle { display: inline-flex; }
+        .chat { display: none; }
+        .room-bar.chat-open .chat { display: block; position: fixed; left: 50%; bottom: 54px;
+          transform: translateX(-50%); width: min(86vw, 420px); z-index: 250; margin: 0;
+          background: var(--panel); border: 1px solid var(--accent); border-radius: 12px;
+          padding: 8px; box-shadow: 0 10px 34px rgba(0,0,0,0.65); }
+        /* One tip only (the controls one is first and matters most here). */
+        .room-bar .hint { font-size: 11px; margin-top: 2px; }
+        .room-bar .hint ~ .hint { display: none; }
+        .room-bar .btns { position: sticky; bottom: 0; background: var(--bg); padding: 4px 0; margin-top: 0; }
       }
       /* Reflow only in true PORTRAIT. The app is landscape-locked, so small
          landscape phones (e.g. 640x360) get the media query just above

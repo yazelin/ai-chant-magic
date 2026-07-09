@@ -125,6 +125,12 @@ export class Lobby {
   private selfReady = false;
   private chatLog: { from: string; text: string }[] = []; // room chat history
   private chatVoice: FallbackVoiceInput | null = null; // one-shot dictation for chat
+  // Mobile-landscape chat drawer (desktop shows the chat inline and never
+  // renders the toggle). Kept as fields so re-renders (member joins, class
+  // picks — renderRoom rebuilds innerHTML each time) don't slam it shut or
+  // eat the unread dot.
+  private chatDrawerOpen = false;
+  private chatUnread = false;
   private returnFn: (() => void) | null = null; // main.ts game teardown (net return-to-lobby)
   // Generic input-modal (join-by-code / edit-chant) — replaces window.prompt()
   // for the two highest-value first-time actions, matching the rest of this
@@ -881,6 +887,9 @@ export class Lobby {
       this.client.close();
       this.client = null;
     }
+    // Don't carry a stale unread dot / open drawer into the next room.
+    this.chatDrawerOpen = false;
+    this.chatUnread = false;
   }
 
   // --- Connecting / Room screens -------------------------------------------
@@ -933,8 +942,9 @@ export class Lobby {
       </div>
       <div class="room-body">
       <div class="room-grid">${slots.join('')}</div>
-      <div class="room-bar">
+      <div class="room-bar${this.chatDrawerOpen ? ' chat-open' : ''}">
         <div class="picker"><span class="picker-label">選你的角色</span>${chips}</div>
+        <button id="chat-toggle" class="chat-toggle${this.chatUnread ? ' unread' : ''}" type="button" aria-label="房間聊天"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>聊天<span class="dot"></span></button>
         <div class="chat">
           <div class="chat-log" id="chat-log">${this.chatLogHtml()}</div>
           <div class="chat-row">
@@ -1013,6 +1023,17 @@ export class Lobby {
       if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
     });
     this.root.querySelector('#chat-voice')?.addEventListener('click', () => this.dictateChat());
+    const chatToggle = this.root.querySelector<HTMLButtonElement>('#chat-toggle');
+    chatToggle?.addEventListener('click', () => {
+      this.chatDrawerOpen = !this.chatDrawerOpen;
+      this.root.querySelector('.room-bar')?.classList.toggle('chat-open', this.chatDrawerOpen);
+      if (this.chatDrawerOpen) {
+        this.chatUnread = false;
+        chatToggle.classList.remove('unread');
+        const l = this.root.querySelector('#chat-log');
+        if (l) l.scrollTop = l.scrollHeight;
+      }
+    });
     const log = this.root.querySelector('#chat-log');
     if (log) log.scrollTop = log.scrollHeight;
 
@@ -1038,6 +1059,12 @@ export class Lobby {
     line.innerHTML = `<b>${escapeHtml(from)}</b> ${escapeHtml(text)}`;
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
+    // Unread dot on the drawer toggle (mobile). Desktop shows chat inline and
+    // never displays the toggle, so the flag is harmless there.
+    if (!this.chatDrawerOpen) {
+      this.chatUnread = true;
+      this.root.querySelector('#chat-toggle')?.classList.add('unread');
+    }
   }
 
   // One-shot voice dictation into the chat input (frees the practice mic first).
