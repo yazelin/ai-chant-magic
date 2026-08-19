@@ -2,6 +2,7 @@
   "name": "真。AI。咏唱魔法",
   "short_name": "咏唱魔法",
   "description": "用麥克風喊出技能名稱即時施法的俯視角生存遊戲。",
+  "id": ".",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
