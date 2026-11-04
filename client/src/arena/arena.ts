@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ClassId, SpellId, Vec2 } from '@acm/shared';
 import { GameScene } from '../render/GameScene';
 import { initAudio, getMaster } from '../audio/sfx';
+import { MusicEngine } from '../audio/music';
 import { PartySession } from './PartySession';
 import { RELAY_URL, padUrl, roomFromUrl } from './relay';
 
@@ -165,10 +166,24 @@ showSlide();
 setInterval(showSlide, 9000);
 
 // --- 操作 ------------------------------------------------------------------
+// BGM：咏唱魔法原本的四段自適應配樂（微焰→星火→燎原→焚天）。
+// 等待模式按關卡升溫：第 1 關最平靜、無盡最激烈，魔王波再往上一階；沒人時最平靜。
+const music = new MusicEngine();
+let musicOn = true;
+function musicIntensity(): number {
+  const w = session.getWorld();
+  if (!w.players.length || w.status === 'gameover') return 0;
+  const base = w.endless ? 3 : w.levelId;
+  const bossWave = !w.endless && w.wave > 0 && w.wave % 5 === 0;
+  return Math.min(3, base + (bossWave ? 1 : 0));
+}
+setInterval(() => music.setIntensity(musicIntensity()), 500);
+
 $('gate').addEventListener('click', () => {
   initAudio();
   const g = getMaster();
   if (g) g.gain.value = 0.5;
+  music.start();
   $('gate').remove();
 });
 let muted = false;
@@ -178,6 +193,10 @@ window.addEventListener('keydown', (e) => {
     const g = getMaster();
     if (g) g.gain.value = muted ? 0 : 0.5;
     toast(muted ? '已靜音' : '音效開啟');
+  } else if (e.key === 'b' || e.key === 'B') {
+    musicOn = !musicOn;
+    if (musicOn) music.start(); else music.stop();
+    toast(musicOn ? '背景音樂開啟' : '背景音樂關閉');
   } else if (e.key === 'f' || e.key === 'F') {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen();
