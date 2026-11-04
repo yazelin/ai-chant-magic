@@ -203,7 +203,9 @@ export class GameScene extends Phaser.Scene {
   private playerAnim = new Map<string, PlayerAnimState>();
   // Pooled fireball/firestorm glow visuals, keyed by projectile id.
   private fireVfx = new Map<number, FireVfx>();
-  private fxSeen = new Set<number>(); // 已經放過插畫特效的 effect id
+  private fxSeen = new Set<number>();
+  private lastBigShake = 0; // 主畫面爆裂魔法震動節流（場景時間，秒）
+  private projArt = new Map<number, { img: Phaser.GameObjects.Image; trail?: Phaser.GameObjects.Particles.ParticleEmitter }>(); // 主畫面：飛行中的招式插畫 // 已經放過插畫特效的 effect id
   // Cast-detection bookkeeping: ids whose appearance we've already reacted to.
   private seenProj = new Set<number>();
   private seenFx = new Set<number>();
@@ -261,6 +263,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.enemySprites.clear(); // 場景重開時舊圖片物件已被銷毀
+    this.projArt.clear();
     this.gfx = this.add.graphics();
     this.aimGfx = this.add.graphics();
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
@@ -513,6 +516,7 @@ export class GameScene extends Phaser.Scene {
     const liveProj = new Set<number>();
     for (const p of w.projectiles) {
       liveProj.add(p.id);
+      if (this.overview) this.drawArtProjectile(p);
       if (p.spell === 'fireball' || p.spell === 'firestorm') {
         this.drawFireProjectile(p);
       } else {
@@ -525,6 +529,12 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(c, 1);
         g.fillCircle(p.pos.x, p.pos.y, p.radius);
       }
+    }
+    for (const [id, a] of this.projArt) {
+      if (liveProj.has(id)) continue;
+      a.img.destroy();
+      if (a.trail) { a.trail.stop(); this.time.delayedCall(500, () => a.trail?.destroy()); }
+      this.projArt.delete(id);
     }
     // tear down glow visuals for projectiles that have left the world
     for (const [id, vfx] of this.fireVfx) {
@@ -1141,6 +1151,12 @@ export class GameScene extends Phaser.Scene {
         const enemy = !fx.ownerId; // 自爆史萊姆
         this.fxPop('fx-explosion', x, y, r * (big ? 3 : 2.6), { dur: big ? 900 : 600, from: 0.35, to: 1.15, spin: 0.6, tint: enemy ? 0xff7a9a : undefined });
         this.fxPop('fx-flare', x, y, r * (big ? 2.4 : 1.6), { dur: 320, from: 0.6, to: 1.3 });
+        if (big && !enemy && this.t - this.lastBigShake > 0.8) {
+          // 主畫面平常不震（全場一起放招會一直晃），只有爆裂魔法震，而且 0.8 秒內最多一次
+          this.lastBigShake = this.t;
+          this.cameras.main.shake(420, 0.012);
+          this.cameras.main.flash(160, 255, 170, 80, false);
+        }
         if (big) {
           this.fxPop('fx-explosion', x, y, r * 2.2, { dur: 1100, from: 0.2, to: 1.3, spin: -0.9, delay: 120 });
           this.fxPop('fx-circle', x, y, r * 3.2, { dur: 1200, from: 0.8, to: 1.1, spin: 0.5, tint: 0xff6a2a, peak: 0.8 });
@@ -1191,6 +1207,31 @@ export class GameScene extends Phaser.Scene {
         this.fxPop('fx-flare', x, y, r * 2.2, { dur: 500, from: 0.4, to: 1.4, tint });
         break;
     }
+  }
+
+  // 飛行中的招式：火系疊一團旋轉火焰、冰箭是旋轉冰晶拖冰屑、聖光彈是金色光芒
+  private drawArtProjectile(p: { id: number; spell: SpellId; pos: { x: number; y: number }; radius: number }): void {
+    let a = this.projArt.get(p.id);
+    if (!a) {
+      const fire = p.spell === 'fireball' || p.spell === 'firestorm';
+      const key = fire ? 'fx-explosion' : p.spell === 'frost' ? 'fx-ice' : 'fx-flare';
+      if (!this.textures.exists(key)) return;
+      const img = this.add.image(p.pos.x, p.pos.y, key).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_VFX + 1);
+      const size = p.spell === 'firestorm' ? Math.max(110, p.radius * 5) : Math.max(64, p.radius * 5);
+      img.setScale(size / img.width);
+      if (p.spell === 'holybolt') img.setTint(0xffe08a);
+      let trail: Phaser.GameObjects.Particles.ParticleEmitter | undefined;
+      if (!fire) {
+        trail = this.add.particles(p.pos.x, p.pos.y, 'spark', {
+          lifespan: 380, speed: { min: 10, max: 50 }, scale: { start: 1.1, end: 0 }, alpha: { start: 0.9, end: 0 },
+          tint: p.spell === 'frost' ? [0xbff4ff, 0x39c5e0, 0xffffff] : [0xffe08a, 0xfff6d0], frequency: 18, blendMode: 'ADD',
+        }).setDepth(DEPTH_VFX);
+      }
+      a = { img, trail };
+      this.projArt.set(p.id, a);
+    }
+    a.img.setPosition(p.pos.x, p.pos.y).setRotation(a.img.rotation + (p.spell === 'frost' ? 0.25 : 0.12));
+    a.trail?.setPosition(p.pos.x, p.pos.y);
   }
 
   // 一張特效圖：放大＋旋轉＋淡出，跑完自己銷毀

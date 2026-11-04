@@ -55,6 +55,13 @@
     #stat .stage { color: var(--gold-hi); font-size: 2.4vh; font-weight: 700; }
     #stat .best { color: var(--gold); font-size: 1.5vh; }
     #stat .wipe { color: #ffb4a0; }
+    /* 關鍵數字各用一色：關卡波數白、擊倒橘紅、元素反應青、今晚最遠金 */
+    #stat .stage em { font-style: normal; color: #fff; font-size: 3vh; margin: 0 .1em; text-shadow: 0 0 10px rgba(255,220,150,.5); }
+    #stat b.kill { color: #ff9a62; font-size: 2.6vh; }
+    #stat b.react { color: #7fe3ff; font-size: 2.6vh; }
+    #stat .best em { font-style: normal; color: var(--gold-hi); font-weight: 700; font-size: 1.8vh; }
+    #stat li b { color: #ffd27a; }
+    #stat li:first-child span { color: var(--gold-hi); font-weight: 700; }
     #stat .k { margin-top: .8vh; padding-top: .8vh; border-top: 1px solid var(--line); color: var(--gold); letter-spacing: .3em; font-size: 1.4vh; }
     #stat ol { margin: .3vh 0 0; padding-left: 1.4em; }
     #stat li { display: flex; justify-content: space-between; gap: 1vh; color: var(--txt); }
