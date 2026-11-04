@@ -118,8 +118,8 @@ function enterPad(): void {
   document.body.classList.add('playing');
   ($('me') as HTMLImageElement).src = IMG[cls];
   $('who').textContent = ($('name') as HTMLInputElement).value.trim() || '勇者';
-  $('spells').innerHTML = CLASSES[cls].spells.map((s) => `<button class="sp" data-s="${s}">${SPELLS[s].displayName}</button>`).join('')
-    + '<button id="res">共鳴（兩人以上一起按：全隊加盾回血）</button>';
+  $('spells').innerHTML = CLASSES[cls].spells.map((s) => `<button class="sp" data-s="${s}">${SPELLS[s].displayName}<small>喊「${shoutHint(s)}」</small></button>`).join('')
+    + '<button id="res">共鳴（兩人以上一起按或一起喊「共鳴」：全隊加盾回血）</button>';
   voice?.stop();
   voice = null;
   micOn = false;
@@ -201,7 +201,18 @@ $('mic').addEventListener('click', () => {
   if (micOn) voice.start(); else voice.stop();
   renderMic();
 });
-function renderMic(): void { $('mic').classList.toggle('on', micOn); $('mic').textContent = micOn ? '聽你喊…' : '麥克風'; }
+// 按鈕下面那行「喊什麼」：招式名，再加一個比較短的別名（兩個字以上、中文、不是誤聽字）
+function shoutHint(s: SpellId): string {
+  const name = SPELLS[s].displayName;
+  const alt = SPELLS[s].aliases.find((a) => a !== name && a.length >= 2 && a.length < name.length && /^[\u4e00-\u9fff]+$/.test(a) && name.includes(a.slice(0, 1))
+    && !(name.startsWith(a) && name.length - a.length === 1)); // 「絕對零」這種只少一個字的不列
+  return alt ? `${name}」或「${alt}` : name;
+}
+function renderMic(): void {
+  $('mic').classList.toggle('on', micOn);
+  $('mic').textContent = micOn ? '聽你喊…' : '麥克風';
+  if (joined) $('heard').textContent = micOn ? '對手機喊按鈕下面的字，說在句子裡也可以' : '';
+}
 let heardTimer = 0;
 function heard(text: string, spell: string | null): void {
   $('heard').textContent = spell ? `「${text}」→ ${spell}` : `「${text}」沒對到招式`;
