@@ -140,11 +140,11 @@ clock.onmessage = () => {
 function broadcast(): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const w = session.getWorld();
-  const p: Record<string, [number, number, number, Record<string, number>, number]> = {};
+  const p: Record<string, [number, number, number, Record<string, number>, number, number]> = {};
   for (const pl of w.players) {
     const cd: Record<string, number> = {};
     for (const [k, v] of Object.entries(pl.cooldowns)) if (v > w.time) cd[k] = Math.round((v - w.time) * 10) / 10;
-    p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd, pl.kills ?? 0];
+    p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd, pl.kills ?? 0, pl.pyroCharge ?? 0];
   }
   ws.send(JSON.stringify({ t: 'st', p, wave: w.wave, n: w.players.length, over: w.status === 'gameover' }));
 }
