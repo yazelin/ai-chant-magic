@@ -1,0 +1,11 @@
+name = "ai-chant-magic-arena"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "ArenaRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ArenaRoom"]

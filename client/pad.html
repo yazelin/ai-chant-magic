@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#100d0b" />
+  <title>勇者手把｜咏唱魔法</title>
+  <style>
+    :root { --ink: #100d0b; --panel: #1b1612; --gold: #d6b26e; --gold-hi: #f6dea6; --txt: #eee8dc; --dim: #a69a88; --line: rgba(214,178,110,.4); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; background: var(--ink); color: var(--txt); font-family: system-ui, 'Noto Sans TC', sans-serif;
+      overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+    body { touch-action: none; }
+    .serif { font-family: 'Noto Serif TC', 'Songti TC', serif; }
+    button { font: inherit; color: inherit; }
+
+    /* 報到 */
+    #setup { min-height: 100%; padding: calc(env(safe-area-inset-top) + 20px) 18px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 520px; margin: 0 auto; touch-action: auto; }
+    #setup h1 { margin: 0; font-size: 24px; color: var(--gold-hi); letter-spacing: .08em; }
+    #setup .hint { color: var(--dim); font-size: 14px; margin: -8px 0 0; line-height: 1.6; }
+    #setup label { font-size: 13px; color: var(--gold); letter-spacing: .2em; }
+    #name { width: 100%; font-size: 18px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--txt); }
+    #classes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cls { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .cls img { width: 72px; height: 72px; object-fit: contain; image-rendering: auto; }
+    .cls b { font-size: 16px; }
+    .cls small { color: var(--dim); font-size: 12px; text-align: center; }
+    .cls.on { border-color: var(--gold-hi); box-shadow: 0 0 0 2px var(--gold) inset; background: #2a2118; }
+    .go { margin-top: 4px; padding: 15px; font-size: 18px; font-weight: 700; border-radius: 12px; border: 0; background: linear-gradient(#f6dea6, #c9a15a); color: #2a1d08; letter-spacing: .2em; }
+    #status0 { color: var(--dim); font-size: 13px; text-align: center; }
+
+    /* 手把 */
+    #pad { position: fixed; inset: 0; display: none; grid-template-rows: auto 1fr; }
+    #bar { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 8px) 14px 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    #bar img { width: 34px; height: 34px; object-fit: contain; }
+    #who { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
+    #hp { flex: 1; height: 10px; background: #3a2e24; border-radius: 6px; overflow: hidden; }
+    #hp i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #e26a4b, #f2c46b); transition: width .2s; }
+    #mic { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+    #mic.on { background: #c9a15a; color: #2a1d08; border-color: #c9a15a; }
+    #help, #change { border: 0; background: transparent; color: var(--dim); font-size: 13px; padding: 6px; }
+    .how { margin: 0; padding-left: 1.3em; color: var(--txt); font-size: 15px; line-height: 1.75; }
+    #tip { position: fixed; inset: 0; background: rgba(8,6,5,.82); display: none; place-items: center; padding: 20px; z-index: 5; touch-action: auto; }
+    #tip .box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 16px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+    #tip b { color: var(--gold-hi); font-size: 20px; }
+    #tip .small { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.6; }
+    #main { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px); min-height: 0; }
+    #stick { position: relative; border-radius: 18px; background: radial-gradient(circle, #241d17 0, #17120e 70%); border: 1px solid var(--line); }
+    #stick .base, #stick .knob { position: absolute; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); }
+    #stick .base { width: 140px; height: 140px; border: 2px solid rgba(214,178,110,.35); left: 50%; top: 50%; }
+    #stick .knob { width: 64px; height: 64px; background: radial-gradient(circle at 35% 30%, #f6dea6, #b08540); left: 50%; top: 50%; box-shadow: 0 4px 14px #000; }
+    #stick .cap { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: var(--dim); }
+    #spells { display: grid; grid-template-rows: repeat(3, 1fr) auto; gap: 10px; }
+    .sp { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #241c15; font-size: 20px; font-weight: 700; letter-spacing: .05em; }
+    .sp:active { background: #3a2c1e; }
+    .sp .cd { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; font-size: 22px; color: var(--gold-hi); }
+    #res { border-radius: 12px; border: 1px dashed var(--line); background: transparent; padding: 10px; color: var(--gold); font-size: 15px; }
+    #msg { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); padding: 14px 18px; border-radius: 12px; background: rgba(16,13,11,.92); border: 1px solid var(--line);
+      text-align: center; font-size: 16px; line-height: 1.6; display: none; pointer-events: none; max-width: 86vw; }
+    #heard { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 2px); text-align: center; font-size: 12px; color: var(--dim); pointer-events: none; }
+    @media (orientation: portrait) {
+      #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+      #spells { grid-template-rows: none; grid-template-columns: repeat(3, 1fr); }
+      .sp { min-height: 84px; font-size: 18px; }
+      #res { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <section id="setup">
+    <h1 class="serif">加入等待場的戰鬥</h1>
+    <p class="hint">掃碼的人一起在大螢幕上打魔物，等直播開始。隨時可以加入、隨時可以離開。</p>
+    <ol class="how">
+      <li>看大螢幕：頭上有你名字的就是你</li>
+      <li>搖桿移動，三顆按鈕放招式，數字是冷卻秒數</li>
+      <li>按「麥克風」，對手機喊招式名也能施法</li>
+      <li>倒下時隊友走過來可以救你；全員倒下會自動重來</li>
+    </ol>
+    <label for="name">名字</label>
+    <input id="name" maxlength="8" placeholder="最多 8 個字" autocomplete="nickname" />
+    <label>職業</label>
+    <div id="classes"></div>
+    <button class="go" id="go">上場</button>
+    <div id="status0">連線中…</div>
+  </section>
+
+  <section id="pad">
+    <div id="bar">
+      <img id="me" alt="" />
+      <span id="who"></span>
+      <div id="hp"><i></i></div>
+      <button id="mic">麥克風</button>
+      <button id="help">說明</button>
+      <button id="change">換角</button>
+    </div>
+    <div id="main">
+      <div id="stick"><div class="base"></div><div class="knob"></div><div class="cap">按住拖動來移動</div></div>
+      <div id="spells"></div>
+    </div>
+  </section>
+  <div id="tip"><div class="box"><b class="serif">怎麼玩</b>
+    <ol class="how">
+      <li>看大螢幕：頭上有你名字的就是你</li>
+      <li>搖桿移動，三顆按鈕放招式，數字是冷卻秒數</li>
+      <li>按「麥克風」，對手機喊招式名也能施法</li>
+      <li>倒下時隊友走過來可以救你；全員倒下會自動重來</li>
+    </ol>
+    <p class="small">炎術士：先按「黑暗」「深淵」集氣，再放「爆裂魔法」，集越多越大。</p>
+    <button class="go" id="tipok">知道了</button></div></div>
+  <div id="msg"></div>
+  <div id="heard"></div>
+
+  <script type="module" src="/src/arena/pad.ts"></script>
+</body>
+</html>

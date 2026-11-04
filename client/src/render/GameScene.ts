@@ -227,7 +227,9 @@ export class GameScene extends Phaser.Scene {
   // GameScene is session-agnostic: it renders whatever World the injected
   // GameSession exposes (LocalSession runs the sim locally; NetSession returns
   // an interpolated snapshot world). It never touches `step` itself.
-  constructor(session: GameSession) {
+  // overview: no local player — the camera zooms to fit the whole arena and
+  // stays centered (the 等待模式 big screen, where every player is a phone pad).
+  constructor(session: GameSession, private readonly overview = false) {
     super('game');
     this.session = session;
   }
@@ -414,6 +416,7 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.05); // clamp huge frames
     this.t += dt;
     const self = this.self();
+    if (this.overview) this.fitCamera();
     if (self) {
       this.followCamera(self);
       // Facing: touch aim stick (direction) wins; else mouse position (desktop).
@@ -623,6 +626,37 @@ export class GameScene extends Phaser.Scene {
   // the arena sits in the middle with even margins, not pinned top-left); a
   // narrower axis follows the local player, clamped so we never scroll past the
   // arena edge.
+  // Overview auto-framing: zoom in on the box around every player (enemies
+  // spawn at the arena rim, so including them would pin the zoom at fit)
+  // (padded), never past the whole-arena fit and never closer than 1.6x, and
+  // ease toward it so the shot doesn't jitter as people move.
+  private camFocus = { x: CONFIG.arenaWidth / 2, y: CONFIG.arenaHeight / 2, z: 0 };
+  private fitCamera(): void {
+    const cam = this.cameras.main;
+    const aw = CONFIG.arenaWidth;
+    const ah = CONFIG.arenaHeight;
+    const fit = Math.min(cam.width / aw, cam.height / ah);
+    const w = this.session.getWorld();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of w.players.map((p) => p.pos)) {
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+    }
+    let tx = aw / 2, ty = ah / 2, tz = fit;
+    if (x0 !== Infinity) {
+      const pad = 260;
+      tz = Phaser.Math.Clamp(Math.min(cam.width / (x1 - x0 + pad * 2), cam.height / (y1 - y0 + pad * 2)), fit, 1.6);
+      // keep the view inside the arena where possible
+      const hw = cam.width / tz / 2, hh = cam.height / tz / 2;
+      tx = hw * 2 >= aw ? aw / 2 : Phaser.Math.Clamp((x0 + x1) / 2, hw, aw - hw);
+      ty = hh * 2 >= ah ? ah / 2 : Phaser.Math.Clamp((y0 + y1) / 2, hh, ah - hh);
+    }
+    const f = this.camFocus;
+    if (f.z === 0) { f.x = tx; f.y = ty; f.z = tz; }
+    f.x += (tx - f.x) * 0.04; f.y += (ty - f.y) * 0.04; f.z += (tz - f.z) * 0.03;
+    cam.setZoom(f.z);
+    cam.centerOn(f.x, f.y);
+  }
+
   private followCamera(self: Player): void {
     const cam = this.cameras.main;
     const aw = CONFIG.arenaWidth;
