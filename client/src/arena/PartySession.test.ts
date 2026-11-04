@@ -159,6 +159,26 @@ describe('PartySession（等待模式）', () => {
     expect(s.getWorld().resonanceCooldownUntil).toBeGreaterThan(s.getWorld().time);
   });
 
+  it('重置：人留著，擊倒數、今晚最遠、關卡、反應次數歸零', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'pyro');
+    s.setNpc('cryo');
+    for (let i = 0; i < 200; i++) s.tick(0.05);
+    const w = s.getWorld();
+    w.levelId = 2; w.score = 99; w.reactionCount = 5; w.players[0].kills = 30;
+    s.tick(0.05);
+    expect(s.bestLabel()).toContain('第 3 關');
+    s.resetAll();
+    const r = s.getWorld();
+    expect(r.players.length).toBe(2);
+    expect(r.levelId).toBe(0);
+    expect(r.score).toBe(0);
+    expect(r.reactionCount).toBe(0);
+    expect(r.players.every((p) => (p.kills ?? 0) === 0)).toBe(true);
+    expect(s.bestLabel()).toBe('');
+    expect(s.npcClass()).toBe('cryo');
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');
