@@ -12,6 +12,7 @@ import {
   CONFIG,
 } from '@acm/shared';
 import { GameSession } from '../session/GameSession';
+import { npcThink, NPC_ID, NPC_NAME } from './npc';
 
 // 等待模式（直播倒數）的 session：主畫面自己跑模擬，玩家是手機手把。
 // 跟 LocalSession 一樣在本機 step，差別是玩家隨時加入、離開，而且沒有「自己」：
@@ -119,6 +120,16 @@ export class PartySession implements GameSession {
     if (pad) pad.resonance = true;
   }
 
+  // 格莉奇（AI 隊友）：null 是關掉，給職業就上場或換職業。擊倒數換職業時保留。
+  setNpc(classId: ClassId | null): void {
+    if (classId === null) { this.leave(NPC_ID); return; }
+    this.join(NPC_ID, NPC_NAME, classId);
+  }
+
+  npcClass(): ClassId | null {
+    return this.world.players.find((p) => p.id === NPC_ID)?.classId ?? null;
+  }
+
   playerCount(): number {
     return this.world.players.length;
   }
@@ -167,6 +178,14 @@ export class PartySession implements GameSession {
       if (this.wipedFor >= RESTART_AFTER_WIPE_SEC) this.restartKeepingPlayers();
       this.worldCb(w);
       return;
+    }
+    const npc = w.players.find((p) => p.id === NPC_ID);
+    const npcPad = this.pads.get(NPC_ID);
+    if (npc && npcPad) {
+      const it = npcThink(w, npc);
+      npcPad.move = it.move;
+      npcPad.face = it.face;
+      npcPad.casts = it.casts;
     }
     const commands: Command[] = [];
     // 記下這一格要放的大招與放之前的冷卻、集氣，step 之後冷卻被設下去才算真的放出來
