@@ -22,7 +22,7 @@
       backdrop-filter: blur(6px); }
 
     /* 倒數：上方置中 */
-    #count { top: 2.2vh; left: 50%; transform: translateX(-50%); padding: 1.2vh 2.6vw 1.4vh; text-align: center; min-width: 30vw; }
+    #count { top: 2.2vh; left: 50%; transform: translateX(-50%); padding: 1.2vh 2.6vw 1.4vh; text-align: center; min-width: 30vw; z-index: 7; } /* 疊在大招條幅（6）上面，立繪不會擋到倒數；結算畫面（8）照樣蓋過它 */
     #count .label { font-size: 1.5vh; letter-spacing: .5em; color: var(--gold); }
     #count .time { font-family: 'Noto Serif TC', serif; font-weight: 700; font-size: 7.4vh; line-height: 1.1;
       background: linear-gradient(var(--gold-hi), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent;
