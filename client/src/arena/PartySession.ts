@@ -166,7 +166,10 @@ export class PartySession implements GameSession {
   getSelfId(): string { return ''; }
   onWorld(cb: (w: World) => void): void { this.worldCb = cb; }
 
+  paused = false; // 結算畫面時整個世界停住（手機輸入照收、不動）
+
   tick(dt: number): void {
+    if (this.paused) return;
     const w = this.world;
     // 離線秒數自己累計（不用 world.time：全滅重開會把世界時間歸零）
     for (const [id, sec] of this.awaySince) {
