@@ -133,6 +133,32 @@ describe('PartySession（等待模式）', () => {
     expect(s.playerCount()).toBe(0);
   });
 
+  it('死掉 8 秒後自己復活，不用等下一波（魔王波也一樣）', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'cryo');
+    s.join('b', 'y', 'storm');
+    s.tick(0.05);
+    const w = s.getWorld();
+    const b = w.players.find((p) => p.id === 'b')!;
+    b.alive = false; b.downed = false; b.hp = 0; b.respawnAtWave = w.wave + 1;
+    for (let i = 0; i < 100; i++) s.tick(0.05); // 5 秒
+    expect(s.getWorld().players.find((p) => p.id === 'b')!.alive).toBe(false);
+    for (let i = 0; i < 80; i++) s.tick(0.05); // 再 4 秒
+    const b2 = s.getWorld().players.find((p) => p.id === 'b')!;
+    expect(b2.alive).toBe(true);
+    expect(b2.hp).toBe(b2.maxHp);
+  });
+
+  it('只有一個人加格莉奇也能放共鳴（她會跟著喊）', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'pyro');
+    s.setNpc('warden');
+    s.tick(0.05);
+    s.resonate('a');
+    s.tick(0.05);
+    expect(s.getWorld().resonanceCooldownUntil).toBeGreaterThan(s.getWorld().time);
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');

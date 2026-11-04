@@ -33,6 +33,9 @@ const RESTART_AFTER_WIPE_SEC = 4;
 const SPAWN_WINDOW_SEC = 30;
 // 手機切到別的 App、鎖螢幕時連線會斷；角色留在場上（不被追、不算人數）等它回來
 const AWAY_GRACE_SEC = 90;
+// 原本死掉要等「下一波開始」才復活；魔王波打不完就不會有下一波，人會一直躺著（作者實測格莉奇卡在 0 血）。
+// 等待模式改成死掉 RESPAWN_SEC 秒後原地附近復活，滿血。倒地 8 秒內隊友救人的規則不變。
+const RESPAWN_SEC = 8;
 const NAME_MAX = 8;
 
 // 每個職業的大招：放出來時主畫面打一條條幅，寫是誰放的
@@ -49,6 +52,7 @@ export class PartySession implements GameSession {
   wipes = 0;
   private pacedWave = -1;
   private awaySince = new Map<string, number>(); // id → 已離線秒數
+  private deadFor = new Map<string, number>(); // id → 已死亡秒數
   onUlt: (e: UltEvent) => void = () => {};
 
   constructor(private rng: () => number = Math.random) {}
@@ -118,6 +122,9 @@ export class PartySession implements GameSession {
   resonate(id: string): void {
     const pad = this.pads.get(id);
     if (pad) pad.resonance = true;
+    // 共鳴要兩個人在 1.5 秒內一起喊；格莉奇聽到有人喊就跟著喊，只有你跟她兩個也放得出來
+    const npc = this.pads.get(NPC_ID);
+    if (npc && id !== NPC_ID) npc.resonance = true;
   }
 
   // 格莉奇（AI 隊友）：null 是關掉，給職業就上場或換職業。擊倒數換職業時保留。
@@ -186,6 +193,7 @@ export class PartySession implements GameSession {
       npcPad.move = it.move;
       npcPad.face = it.face;
       npcPad.casts = it.casts;
+      // resonance 由 resonate() 設定，這裡不覆蓋
     }
     const commands: Command[] = [];
     // 記下這一格要放的大招與放之前的冷卻、集氣，step 之後冷卻被設下去才算真的放出來
@@ -200,6 +208,7 @@ export class PartySession implements GameSession {
       if (pad.resonance) { commands.push({ kind: 'resonance', playerId: id }); pad.resonance = false; }
     }
     step(w, commands, dt, this.rng);
+    this.respawnDead(dt);
     for (const t of ultTries) {
       const pl = w.players.find((p) => p.id === t.id);
       if (pl && pl.cooldowns[t.spell] > t.cdBefore) this.onUlt({ playerId: pl.id, name: pl.name, classId: pl.classId, spell: t.spell, charge: t.charge });
@@ -210,6 +219,24 @@ export class PartySession implements GameSession {
   }
 
   bestLabel(): string { return this.best.label; }
+
+  private respawnDead(dt: number): void {
+    const w = this.world;
+    if (w.status !== 'playing') return;
+    for (const p of w.players) {
+      if (p.alive) { this.deadFor.delete(p.id); continue; }
+      const t = (this.deadFor.get(p.id) ?? 0) + dt;
+      if (t < RESPAWN_SEC) { this.deadFor.set(p.id, t); continue; }
+      this.deadFor.delete(p.id);
+      p.alive = true;
+      p.downed = false;
+      p.hp = p.maxHp;
+      p.reviveProgress = 0;
+      p.bleedoutAt = 0;
+      p.respawnAtWave = 0;
+      p.pos = this.freeSpot();
+    }
+  }
 
   // 原本的出怪量是人數的 1.4 次方（為 4 人房調的）：20 人第 1 波約 400 隻、
   // 每 1.2 秒才出一隻，一波要打好幾分鐘。等待模式改成跟人數線性成長，
