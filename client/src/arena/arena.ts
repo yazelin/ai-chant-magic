@@ -75,11 +75,11 @@ connect();
 setInterval(() => {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const w = session.getWorld();
-  const p: Record<string, [number, number, number, Record<string, number>]> = {};
+  const p: Record<string, [number, number, number, Record<string, number>, number]> = {};
   for (const pl of w.players) {
     const cd: Record<string, number> = {};
     for (const [k, v] of Object.entries(pl.cooldowns)) if (v > w.time) cd[k] = Math.round((v - w.time) * 10) / 10;
-    p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd];
+    p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd, pl.kills ?? 0];
   }
   ws.send(JSON.stringify({ t: 'st', p, wave: w.wave, n: w.players.length, over: w.status === 'gameover' }));
 }, 200);
@@ -96,9 +96,13 @@ setInterval(() => {
   const n = w.players.length;
   $('n').textContent = `目前 ${n} 位勇者`;
   $('empty').style.display = n ? 'none' : '';
-  $('stat').innerHTML = n
-    ? `${w.endless ? '無盡模式　' : ''}第 <b>${Math.max(1, w.wave)}</b> 波<br>擊倒魔物 <b>${w.score}</b>${w.status === 'gameover' ? '<br>全員倒下，馬上重來' : ''}`
-    : '尚無勇者';
+  if (!n) { $('stat').innerHTML = session.bestLabel() ? `今晚最遠　${session.bestLabel()}` : '尚無勇者'; return; }
+  const top = [...w.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0)).slice(0, 5).filter((p) => (p.kills ?? 0) > 0);
+  $('stat').innerHTML = `<div class="stage serif">${PartySession.stageLabel(w)}</div>`
+    + `<div>全隊擊倒 <b>${w.score}</b></div>`
+    + `<div class="best">今晚最遠　${session.bestLabel()}</div>`
+    + (w.status === 'gameover' ? '<div class="wipe">全員倒下，從這一關重來</div>' : '')
+    + (top.length ? `<div class="k">擊倒王</div><ol>${top.map((p) => `<li><span>${esc(p.name)}</span><b>${p.kills}</b></li>`).join('')}</ol>` : '');
 }, 250);
 
 const SLIDES = [
@@ -109,7 +113,7 @@ const SLIDES = [
   `<img class="avatar" src="./arena/speaker.jpg" alt=""><div><div class="k">講者</div><h2>茶葉飲料</h2>
    <p>靈感來源・審題・製作前的準備・遇到的問題・劇情改動</p></div>`,
   `<div><div class="k">等待時一起玩</div><h2>掃碼加入</h2><ol>
-   <li>掃右上角的 QR Code，取名、選職業</li><li>左邊搖桿移動，右邊三顆招式鈕</li><li>打開麥克風，喊招式名也能施法</li></ol></div>`,
+   <li>掃右上角的 QR Code，取名、選職業</li><li>搖桿移動，三顆按鈕放招式</li><li>打開麥克風，喊招式名也能施法</li></ol></div>`,
 ];
 $('info').innerHTML = SLIDES.map((h) => `<div class="slide">${h}</div>`).join('');
 const slides = Array.from(document.querySelectorAll<HTMLElement>('#info .slide'));
@@ -151,6 +155,7 @@ function vec(x: unknown, y: unknown): Vec2 {
   const nx = Number(x), ny = Number(y);
   return { x: Number.isFinite(nx) ? Math.max(-1, Math.min(1, nx)) : 0, y: Number.isFinite(ny) ? Math.max(-1, Math.min(1, ny)) : 0 };
 }
+function esc(s: string): string { return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`); }
 function pad2(n: number): string { return String(n).padStart(2, '0'); }
 function randomRoom(): string {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

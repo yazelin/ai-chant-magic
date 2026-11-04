@@ -44,6 +44,43 @@ describe('PartySession（等待模式）', () => {
     expect(s.playerCount()).toBe(2);
   });
 
+  it('全滅從同一關重來，擊倒數保留；無盡全滅回最後一關', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'pyro');
+    const w = s.getWorld();
+    w.levelId = 2; w.players[0].kills = 7; w.status = 'gameover';
+    for (let i = 0; i < 100; i++) s.tick(0.05);
+    expect(s.getWorld().levelId).toBe(2);
+    expect(s.getWorld().players[0].kills).toBe(7);
+    const w2 = s.getWorld();
+    w2.endless = true; w2.status = 'gameover';
+    for (let i = 0; i < 100; i++) s.tick(0.05);
+    expect(s.getWorld().levelId).toBe(3);
+    expect(s.getWorld().endless).toBe(false);
+  });
+
+  it('最後一擊算擊倒', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'warden');
+    const w = s.getWorld();
+    const me = w.players[0];
+    w.enemies.push({ id: 999, pos: { x: me.pos.x + 20, y: me.pos.y }, hp: 1, speed: 0, slowUntil: 0, radius: 16, targetId: null, element: 'normal' });
+    s.tick(0.05);
+    s.cast('a', 'holybolt');
+    s.tick(0.05);
+    expect(s.getWorld().players[0].kills).toBe(1);
+  });
+
+  it('20 人第 1 波不會出幾百隻，且大約 30 秒內出完', () => {
+    const s = new PartySession(() => 0.5);
+    for (let i = 0; i < 20; i++) s.join('p' + i, 'x', 'cryo');
+    s.tick(0.05);
+    const w = s.getWorld();
+    expect(w.wave).toBe(1);
+    expect(w.spawnQueue).toBeLessThan(100);
+    expect(w.spawnQueue * w.spawnCadence).toBeLessThanOrEqual(31);
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');

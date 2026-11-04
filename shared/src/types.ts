@@ -42,6 +42,9 @@ export interface Player {
   pyroCharge?: number;
   cooldowns: Record<SpellId, number>;
   connected: boolean;
+  // Last-hit kill count (sim-only, not serialized): credited in
+  // removeDeadEnemies from Enemy.lastHitBy. Read by the 等待模式 leaderboard.
+  kills?: number;
 }
 
 export interface Enemy {
@@ -80,6 +83,9 @@ export interface Enemy {
   // mismatched hit can trigger another reaction on THIS enemy (bounds proc
   // frequency under focus-fire). Sim-only — no continuous visual rides on it.
   reactionReadyAt?: number;
+  // Id of the player whose spell dealt the most recent damage (sim-only) —
+  // the kill goes to whoever lands the last hit. See `hitBy` in world.ts.
+  lastHitBy?: string;
 }
 
 export interface Projectile {

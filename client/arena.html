@@ -50,8 +50,17 @@
     @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
     /* 戰況：右下 */
-    #stat { right: 1.4vw; bottom: 2.2vh; padding: 1.2vh 1.6vh; font-size: 1.7vh; color: var(--dim); text-align: right; line-height: 1.6; }
-    #stat b { color: var(--gold-hi); font-family: 'Noto Serif TC', serif; font-size: 2.4vh; }
+    #stat { right: 1.4vw; bottom: 2.2vh; padding: 1.4vh 1.8vh; font-size: 1.7vh; color: var(--dim); line-height: 1.6; width: 21vh; min-width: 220px; }
+    #stat b { color: var(--gold-hi); font-family: 'Noto Serif TC', serif; font-size: 2.2vh; }
+    #stat .stage { color: var(--gold-hi); font-size: 2.4vh; font-weight: 700; }
+    #stat .best { color: var(--gold); font-size: 1.5vh; }
+    #stat .wipe { color: #ffb4a0; }
+    #stat .k { margin-top: .8vh; padding-top: .8vh; border-top: 1px solid var(--line); color: var(--gold); letter-spacing: .3em; font-size: 1.4vh; }
+    #stat ol { margin: .3vh 0 0; padding-left: 1.4em; }
+    #stat li { display: flex; justify-content: space-between; gap: 1vh; color: var(--txt); }
+    #stat li::marker { color: var(--gold); }
+    #stat li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #stat li b { font-size: 1.8vh; }
 
     /* 沒人時場地中央的提示 */
     #empty { position: fixed; left: 50%; top: 52%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;
