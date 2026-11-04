@@ -30,6 +30,8 @@ interface Pad {
 
 const RESTART_AFTER_WIPE_SEC = 4;
 const SPAWN_WINDOW_SEC = 30;
+// 手機切到別的 App、鎖螢幕時連線會斷；角色留在場上（不被追、不算人數）等它回來
+const AWAY_GRACE_SEC = 90;
 const NAME_MAX = 8;
 
 export class PartySession implements GameSession {
@@ -41,6 +43,7 @@ export class PartySession implements GameSession {
   private best = { rank: 0, label: '' };
   wipes = 0;
   private pacedWave = -1;
+  private awaySince = new Map<string, number>(); // id → 已離線秒數
 
   constructor(private rng: () => number = Math.random) {}
 
@@ -50,6 +53,14 @@ export class PartySession implements GameSession {
     const name = cleanName(rawName);
     const cls = CLASSES[classId] ? classId : 'pyro';
     const existing = this.world.players.find((p) => p.id === id);
+    this.awaySince.delete(id);
+    if (!this.pads.has(id)) this.pads.set(id, { move: { x: 0, y: 0 }, face: 0, casts: [], resonance: false });
+    if (existing && existing.classId === cls) {
+      // 斷線回來或重新報到：接回原本的角色
+      existing.connected = true;
+      existing.name = name;
+      return;
+    }
     if (existing) {
       // 同一支手機換職業：重建這個角色（位置保留）
       const { pos, kills } = existing;
@@ -59,12 +70,26 @@ export class PartySession implements GameSession {
       return;
     }
     this.addPlayer(id, name, cls);
-    this.pads.set(id, { move: { x: 0, y: 0 }, face: 0, casts: [], resonance: false });
+  }
+
+  // 連線斷了：先把角色標成離線，AWAY_GRACE_SEC 內回來就接回去
+  away(id: string): void {
+    const p = this.world.players.find((pl) => pl.id === id);
+    if (!p) return;
+    p.connected = false;
+    const pad = this.pads.get(id);
+    if (pad) pad.move = { x: 0, y: 0 };
+    this.awaySince.set(id, 0);
   }
 
   leave(id: string): void {
     this.pads.delete(id);
+    this.awaySince.delete(id);
     this.world.players = this.world.players.filter((p) => p.id !== id);
+  }
+
+  connectedCount(): number {
+    return this.world.players.filter((p) => p.connected).length;
   }
 
   input(id: string, move: Vec2, face: number | undefined): void {
@@ -120,6 +145,11 @@ export class PartySession implements GameSession {
 
   tick(dt: number): void {
     const w = this.world;
+    // 離線秒數自己累計（不用 world.time：全滅重開會把世界時間歸零）
+    for (const [id, sec] of this.awaySince) {
+      if (sec + dt > AWAY_GRACE_SEC) this.leave(id);
+      else this.awaySince.set(id, sec + dt);
+    }
     if (w.players.length === 0) {
       // 沒人時不跑模擬（0 人會被判定全滅），場地保持乾淨
       w.enemies = []; w.projectiles = []; w.effects = [];
@@ -182,9 +212,9 @@ export class PartySession implements GameSession {
   private restartKeepingPlayers(): void {
     const old = this.world;
     const seeds = old.players.map((p) => ({ id: p.id, name: p.name, classId: p.classId }));
-    const kills = new Map(old.players.map((p) => [p.id, p.kills ?? 0]));
+    const prev = new Map(old.players.map((p) => [p.id, p]));
     this.world = createWorld(seeds);
-    for (const p of this.world.players) p.kills = kills.get(p.id) ?? 0;
+    for (const p of this.world.players) { p.kills = prev.get(p.id)?.kills ?? 0; p.connected = prev.get(p.id)?.connected ?? true; }
     // 從同一關的開頭重來；無盡模式全滅就回到最後一關
     this.world.levelId = old.endless ? MAX_LEVEL_ID : old.levelId;
     this.world.score = old.score;

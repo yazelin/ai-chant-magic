@@ -30,6 +30,11 @@ let myId = '';
 let joined = false;
 let ws: WebSocket | null = null;
 let hostUp = false;
+// 這支手機的身分：切 App、鎖螢幕斷線後帶著它重連，大螢幕就接回同一個角色
+const padKey = store.get('acm-arena-key') ?? Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => (b % 36).toString(36)).join('');
+store.set('acm-arena-key', padKey);
+let reconnectTimer = 0;
+let offlineTimer = 0;
 
 ($('name') as HTMLInputElement).value = store.get('acm-arena-name') ?? '';
 
@@ -47,12 +52,17 @@ $('classes').addEventListener('click', (e) => {
 // --- 連線 ------------------------------------------------------------------
 function connect(): void {
   if (!room) { $('status0').textContent = '網址少了房間代碼，請重新掃大螢幕上的 QR Code'; return; }
-  ws = new WebSocket(`${RELAY_URL}/room/${room}/pad`);
+  clearTimeout(reconnectTimer);
+  if (ws && ws.readyState <= WebSocket.OPEN) return;
+  ws = new WebSocket(`${RELAY_URL}/room/${room}/pad?k=${padKey}`);
+  const me = ws;
   ws.onmessage = (ev) => {
     let m: any;
     try { m = JSON.parse(ev.data); } catch { return; }
     if (m.t === 'you') {
       myId = m.id; hostUp = !!m.host;
+      clearTimeout(offlineTimer);
+      if (joined) showMsg('');
       $('status0').textContent = hostUp ? `已連上房間 ${room}` : `已連上房間 ${room}，等大螢幕開啟`;
       if (joined) sendJoin(); // 斷線重連：用新 id 重新報到
     } else if (m.t === 'host') {
@@ -64,11 +74,20 @@ function connect(): void {
     }
   };
   ws.onclose = () => {
-    $('status0').textContent = '連線中斷，重新連線中…';
-    if (joined) showMsg('連線中斷，重新連線中…');
-    setTimeout(connect, 1500);
+    if (ws !== me) return;
+    ws = null;
+    // 重連通常一秒內就好，超過 4 秒才提示，切回來的時候不會先看到一句「中斷」
+    clearTimeout(offlineTimer);
+    offlineTimer = window.setTimeout(() => {
+      $('status0').textContent = '重新連線中…';
+      if (joined && !document.hidden) showMsg('重新連線中…');
+    }, 4000);
+    reconnectTimer = window.setTimeout(connect, 1000);
   };
 }
+// 從別的 App 切回來時馬上重連，不等計時器
+document.addEventListener('visibilitychange', () => { if (!document.hidden) connect(); });
+window.addEventListener('pageshow', () => connect());
 const send = (o: object) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
 function sendJoin(): void { send({ t: 'join', name: ($('name') as HTMLInputElement).value, cls }); }
 connect();
