@@ -30,7 +30,7 @@
     #count .sub { font-size: 1.8vh; color: var(--dim); letter-spacing: .12em; }
 
     /* QR：右上 */
-    #join { top: 2.2vh; right: 1.4vw; padding: 1.6vh; width: 21vh; text-align: center; }
+    #join { top: 2.2vh; right: 1.4vw; padding: 1.6vh; width: 27vh; text-align: center; } /* 直播畫面會被壓縮，QR 放大一點才掃得到 */
     #qr { background: #fff; border-radius: 8px; padding: 1vh; line-height: 0; }
     #qr img, #qr svg { width: 100%; height: auto; }
     #join .t { font-family: 'Noto Serif TC', serif; font-weight: 700; color: var(--gold-hi); font-size: 2.1vh; margin: 1.2vh 0 .4vh; letter-spacing: .1em; }
@@ -85,29 +85,33 @@
     #busy button { font: inherit; font-size: 1.9vh; padding: 1.2vh 2.4vh; border-radius: 10px; border: 1px solid var(--gold); background: transparent; color: var(--gold-hi); cursor: pointer; }
     /* 大招條幅：橫過畫面中段，職業顏色 */
     /* 大招條幅：從左上角斜斜滑進來（畫面最空的地方），不擋畫面正中間 */
-    #ult { position: fixed; left: -3vw; top: 19vh; width: 44vw; pointer-events: none; z-index: 6;
-      text-align: left; padding: 1.2vh 0 1.6vh 7vw; opacity: 0; transform-origin: left center;
+    /* 條幅容器：新的從最下面插進來，舊的一格一格往上推，超過 3 條最上面的往上滑出去（--row：0 是最新） */
+    #ult { position: fixed; left: -3vw; top: 0; width: 44vw; height: 0; pointer-events: none; z-index: 6; }
+    #ult .ub { position: absolute; left: 0; width: 100%; top: calc(32vh - var(--row, 0) * 13vh);
+      transition: top .35s ease-out, opacity .35s, transform .35s;
+      text-align: left; padding: 1.2vh 0 1.6vh 7vw; opacity: 1; transform-origin: left center;
       background: linear-gradient(270deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 30%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b));
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
     /* 有插畫時：大招插畫放在 ::before 當底（左邊淡出），角色立繪站在前面、可以超出條幅上緣 */
-    #ult.art { padding: 4.5vh 0 5vh 7vw; background: none; isolation: isolate; }
-    #ult.art::before { content: ''; position: absolute; inset: 0; z-index: -1;
+    #ult .ub.art { padding: 2.8vh 0 3.2vh 7vw; background: none; isolation: isolate; }
+    #ult .ub.art::before { content: ''; position: absolute; inset: 0; z-index: -1;
       background: linear-gradient(270deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff);
       -webkit-mask-image: linear-gradient(270deg, transparent, #000 28%); mask-image: linear-gradient(270deg, transparent, #000 28%); }
-    #ult.art { border: 0; }
-    #ult .por { position: absolute; right: 3%; bottom: -1vh; height: 36vh; z-index: 0; -webkit-mask-image: linear-gradient(to top, transparent, #000 18%); mask-image: linear-gradient(to top, transparent, #000 18%); filter: drop-shadow(0 0 1.2vh var(--c, #d6b26e)) drop-shadow(0 .6vh 1vh #000); }
+    #ult .ub.art { border: 0; }
+    #ult .por { position: absolute; right: 3%; bottom: -1vh; height: 27vh; z-index: 0; -webkit-mask-image: linear-gradient(to top, transparent, #000 18%); mask-image: linear-gradient(to top, transparent, #000 18%); filter: drop-shadow(0 0 1.2vh var(--c, #d6b26e)) drop-shadow(0 .6vh 1vh #000); }
     #ult .who, #ult .what { position: relative; z-index: 1; }
     #ult .who { font-size: 2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
-    #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 6vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
+    #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 4.8vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
       text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }
     #ult .x { font-size: 4.4vh; margin-left: .4em; color: #fff3c4; -webkit-text-stroke: 1.5px #2a0d00; text-shadow: 0 0 8px #000, 0 2px 10px #000; }
-    #ult.go { animation: ult 1.2s cubic-bezier(.2,.8,.2,1) forwards; }
+    #ult .ub { transform: rotate(6deg); }
+    #ult .ub.go { animation: ult .4s cubic-bezier(.2,.8,.2,1) both; }
+    #ult .ub.out { opacity: 0; }
     @keyframes ult {
       0% { opacity: 0; transform: rotate(6deg) translateX(-60%); }
-      16% { opacity: 1; transform: rotate(6deg) translateX(0); }
-      80% { opacity: 1; transform: rotate(6deg) translateX(0); }
-      100% { opacity: 0; transform: rotate(6deg) translateX(-40%); }
+      100% { opacity: 1; transform: rotate(6deg) translateX(0); }
+    }
     }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
