@@ -87,6 +87,7 @@ $('change').addEventListener('click', () => {
   voice?.stop(); micOn = false; renderMic();
   $('pad').style.display = 'none';
   $('setup').style.display = '';
+  document.body.classList.remove('playing');
 });
 
 // --- 手把 ------------------------------------------------------------------
@@ -95,6 +96,7 @@ let micOn = false;
 function enterPad(): void {
   $('setup').style.display = 'none';
   $('pad').style.display = 'grid';
+  document.body.classList.add('playing');
   ($('me') as HTMLImageElement).src = IMG[cls];
   $('who').textContent = ($('name') as HTMLInputElement).value.trim() || '勇者';
   $('spells').innerHTML = CLASSES[cls].spells.map((s) => `<button class="sp" data-s="${s}">${SPELLS[s].displayName}</button>`).join('')

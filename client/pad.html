@@ -9,21 +9,23 @@
   <style>
     :root { --ink: #100d0b; --panel: #1b1612; --gold: #d6b26e; --gold-hi: #f6dea6; --txt: #eee8dc; --dim: #a69a88; --line: rgba(214,178,110,.4); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; background: var(--ink); color: var(--txt); font-family: system-ui, 'Noto Sans TC', sans-serif;
-      overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
-    body { touch-action: none; }
+    html, body { margin: 0; min-height: 100%; background: var(--ink); color: var(--txt); font-family: system-ui, 'Noto Sans TC', sans-serif; }
+    /* 只有手把畫面鎖觸控捲動與選取；報到頁要能捲動、能打字（iOS 的 user-select:none 會讓輸入框打不了字） */
+    #pad, #tip { -webkit-user-select: none; user-select: none; }
+    #pad { touch-action: none; overscroll-behavior: none; }
+    body.playing { overflow: hidden; overscroll-behavior: none; }
     .serif { font-family: 'Noto Serif TC', 'Songti TC', serif; }
     button { font: inherit; color: inherit; }
 
     /* 報到 */
-    #setup { min-height: 100%; padding: calc(env(safe-area-inset-top) + 20px) 18px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 520px; margin: 0 auto; touch-action: auto; }
+    #setup { padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 28px); display: flex; flex-direction: column; gap: 12px; max-width: 520px; margin: 0 auto; }
     #setup h1 { margin: 0; font-size: 24px; color: var(--gold-hi); letter-spacing: .08em; }
     #setup .hint { color: var(--dim); font-size: 14px; margin: -8px 0 0; line-height: 1.6; }
     #setup label { font-size: 13px; color: var(--gold); letter-spacing: .2em; }
     #name { width: 100%; font-size: 18px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--txt); }
     #classes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .cls { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .cls img { width: 72px; height: 72px; object-fit: contain; image-rendering: auto; }
+    .cls { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .cls img { width: 56px; height: 56px; object-fit: contain; image-rendering: auto; }
     .cls b { font-size: 16px; }
     .cls small { color: var(--dim); font-size: 12px; text-align: center; }
     .cls.on { border-color: var(--gold-hi); box-shadow: 0 0 0 2px var(--gold) inset; background: #2a2118; }
@@ -72,18 +74,20 @@
   <section id="setup">
     <h1 class="serif">加入等待場的戰鬥</h1>
     <p class="hint">掃碼的人一起在大螢幕上打魔物，等直播開始。隨時可以加入、隨時可以離開。</p>
-    <ol class="how">
-      <li>看大螢幕：頭上有你名字的就是你</li>
-      <li>搖桿移動，三顆按鈕放招式，數字是冷卻秒數</li>
-      <li>按「麥克風」，對手機喊招式名也能施法</li>
-      <li>倒下時隊友走過來可以救你；全員倒下會自動重來</li>
-    </ol>
+    
     <label for="name">名字</label>
     <input id="name" maxlength="8" placeholder="最多 8 個字" autocomplete="nickname" />
     <label>職業</label>
     <div id="classes"></div>
     <button class="go" id="go">上場</button>
     <div id="status0">連線中…</div>
+    <label>怎麼玩</label>
+    <ol class="how">
+      <li>看大螢幕：頭上有你名字的就是你</li>
+      <li>搖桿移動，三顆按鈕放招式，數字是冷卻秒數</li>
+      <li>按「麥克風」，對手機喊招式名也能施法</li>
+      <li>倒下時隊友走過來可以救你；全員倒下會自動重來</li>
+    </ol>
   </section>
 
   <section id="pad">
