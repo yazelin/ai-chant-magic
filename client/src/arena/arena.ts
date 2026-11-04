@@ -4,7 +4,7 @@ import { GameScene } from '../render/GameScene';
 import { initAudio, getMaster } from '../audio/sfx';
 import { MusicEngine } from '../audio/music';
 import { TrackMusic } from './bgm';
-import { PartySession, UltEvent } from './PartySession';
+import { PartySession } from './PartySession';
 import { NPC_ID } from './npc';
 import { RELAY_URL, padUrl, roomFromUrl } from './relay';
 
@@ -44,31 +44,38 @@ const NPC_CLASSES: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 let npcPick: ClassId = (NPC_CLASSES as string[]).includes(params.get('npc') ?? '') ? (params.get('npc') as ClassId) : 'warden';
 if (params.get('npc')) session.setNpc(npcPick);
 
-// --- 大招條幅：誰放了什麼大招。人多時排隊，一次一條，最多排 3 條 ------------
-const ultQueue: UltEvent[] = [];
-let ultShowing = false;
+// --- 大招條幅：誰放了什麼大招。同時放的疊起來顯示，最多 3 條；第 4 條進來時最舊的提早收掉 ---
 for (const sp of ['firestorm', 'frostnova', 'thunder', 'aegis']) new Image().src = `${import.meta.env.BASE_URL}arena/art/ult-${sp}.jpg`;
 for (const c of ['pyro', 'cryo', 'storm', 'warden']) new Image().src = `${import.meta.env.BASE_URL}arena/art/por-${c}.webp`; // 條幅插畫與角色立繪先載好，條幅出現時不會空一下
+const ULT_MS = 1800; // 每條停留時間
+const ultRows: HTMLElement[] = []; // [0] 是最新，畫在最下面
+function layoutUlt(): void {
+  ultRows.forEach((el, i) => { el.style.setProperty('--row', String(i)); el.style.zIndex = String(10 - i); });
+}
+function dropUlt(el: HTMLElement): void {
+  const i = ultRows.indexOf(el);
+  if (i < 0) return;
+  ultRows.splice(i, 1);
+  el.style.setProperty('--row', String(i + 1)); // 左進上出：不管是被擠掉還是時間到，都往上滑一格淡出
+  el.classList.add('out');
+  window.setTimeout(() => el.remove(), 400);
+  layoutUlt();
+}
 session.onUlt = (e) => {
-  if (ultQueue.length < 3) ultQueue.push(e);
-  if (!ultShowing) nextUlt();
-};
-function nextUlt(): void {
-  const e = ultQueue.shift();
-  if (!e) { ultShowing = false; return; }
-  ultShowing = true;
-  const el = $('ult');
+  const el = document.createElement('div');
+  el.className = 'ub art go';
+  el.addEventListener('animationend', () => el.classList.remove('go')); // 進場動畫結束就拿掉，不然它最後一格會蓋住退場的 transform／opacity
   el.style.setProperty('--c', CLASSES[e.classId].color);
   el.style.setProperty('--art', `url(${import.meta.env.BASE_URL}arena/art/ult-${e.spell}.jpg)`);
-  el.classList.add('art');
   const charge = e.spell === 'firestorm' && e.charge > 1 ? `<span class="x">×${e.charge}</span>` : '';
   el.innerHTML = `<img class="por" src="${import.meta.env.BASE_URL}arena/art/por-${e.classId}.webp" alt="" onerror="this.remove()">`
     + `<div class="who">${esc(e.name)}・${CLASSES[e.classId].displayName}</div><div class="what">${SPELLS[e.spell].displayName}！${charge}</div>`;
-  el.classList.remove('go');
-  void el.offsetWidth; // 重新觸發動畫
-  el.classList.add('go');
-  window.setTimeout(nextUlt, 1250);
-}
+  ultRows.unshift(el);
+  $('ult').appendChild(el);
+  while (ultRows.length > 3) dropUlt(ultRows[ultRows.length - 1]);
+  layoutUlt();
+  window.setTimeout(() => dropUlt(el), ULT_MS);
+};
 const scene = new GameScene(session, true);
 new Phaser.Game({
   type: Phaser.AUTO,
