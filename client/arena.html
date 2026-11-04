@@ -112,7 +112,25 @@
       0% { opacity: 0; transform: rotate(6deg) translateX(-60%); }
       100% { opacity: 1; transform: rotate(6deg) translateX(0); }
     }
-    }
+    /* 結算畫面：倒數歸零時蓋在正中間，E 收掉 */
+    #fin { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh;
+      background: radial-gradient(ellipse at center, rgba(16,13,11,.78), rgba(5,6,10,.94)); text-align: center; }
+    #fin.on { display: flex; animation: finIn .8s ease-out; }
+    @keyframes finIn { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+    #fin .k { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 6.4vh; letter-spacing: .4em; color: var(--gold-hi); text-shadow: 0 0 24px rgba(255,210,120,.45); }
+    #fin .podium { display: flex; align-items: flex-end; gap: 4vw; }
+    #fin .hero { display: flex; flex-direction: column; align-items: center; }
+    #fin .hero img { height: 34vh; -webkit-mask-image: linear-gradient(to top, transparent, #000 20%); mask-image: linear-gradient(to top, transparent, #000 20%); filter: drop-shadow(0 0 1.4vh rgba(255,210,120,.5)); }
+    #fin .hero.r1 { order: 2; } #fin .hero.r1 img { height: 44vh; }
+    #fin .hero.r2 { order: 1; } #fin .hero.r3 { order: 3; }
+    #fin .rk { color: var(--gold); letter-spacing: .3em; font-size: 2vh; margin-top: -2vh; }
+    #fin .r1 .rk { color: var(--gold-hi); font-size: 2.6vh; }
+    #fin .nm { font-family: 'Noto Serif TC', serif; font-weight: 700; color: #fff; font-size: 3.4vh; }
+    #fin .r1 .nm { font-size: 4.4vh; }
+    #fin .kc { color: var(--dim); font-size: 2vh; } #fin .kc b { color: #ffd27a; font-size: 3vh; }
+    #fin .sum { color: var(--dim); font-size: 2.4vh; } #fin .sum b { color: var(--gold-hi); font-size: 3.2vh; margin-right: .3em; }
+    #fin .sum b.kill { color: #ff9a62; } #fin .sum b.react { color: #7fe3ff; }
+    #fin .go { font-family: 'Noto Serif TC', serif; font-weight: 700; font-size: 4vh; color: #fff; letter-spacing: .15em; margin-top: 1vh; }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
     #err { position: fixed; left: 1.4vw; top: 2.2vh; font-size: 1.5vh; color: #ffb4a0; text-shadow: 0 1px 6px #000; }
@@ -138,6 +156,7 @@
   <div id="stat" class="card"></div>
   <div id="empty"><div class="a">等待勇者集結</div><div class="b">掃右上角的 QR Code 加入</div></div>
   <div id="ult"></div>
+  <div id="fin"></div>
   <div id="toast"></div>
   <div id="err"></div>
 
@@ -152,7 +171,7 @@
   <div id="gate">
     <div>
       <div class="a">點一下開始</div>
-      <div class="b">開始後瀏覽器才能播放音效<br>M 全部靜音　B 背景音樂開關　F 全螢幕<br>G 格莉奇上場／下場　1～4 換她的職業（炎、冰、雷、守護）<br>R 連按兩次：重置今晚所有紀錄（人留著）</div>
+      <div class="b">開始後瀏覽器才能播放音效<br>M 全部靜音　B 背景音樂開關　F 全螢幕<br>G 格莉奇上場／下場　1～4 換她的職業（炎、冰、雷、守護）<br>R 連按兩次：重置今晚所有紀錄（人留著）<br>E 結算畫面開／關（倒數到 0 會自動跳出，遊戲暫停）</div>
     </div>
   </div>
 

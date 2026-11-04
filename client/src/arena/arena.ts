@@ -165,12 +165,32 @@ function broadcast(): void {
     for (const [k, v] of Object.entries(pl.cooldowns)) if (v > w.time) cd[k] = Math.round((v - w.time) * 10) / 10;
     p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd, pl.kills ?? 0, pl.pyroCharge ?? 0];
   }
-  ws.send(JSON.stringify({ t: 'st', p, wave: w.wave, n: w.players.length, over: w.status === 'gameover' }));
+  ws.send(JSON.stringify({ t: 'st', p, wave: w.wave, n: w.players.length, over: w.status === 'gameover', fin: session.paused }));
 }
+
+// --- 結算畫面：倒數到 0 自動跳出一次（遊戲暫停），E 鍵開關 ---------------------
+// 開頁時已經過了目標時間就不自動跳（避免重新整理又跳一次）
+let finAuto = target.getTime() > Date.now();
+function showFinale(on: boolean): void {
+  session.paused = on;
+  const el = $('fin');
+  el.classList.toggle('on', on);
+  if (!on) return;
+  const w = session.getWorld();
+  const top = [...w.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0)).filter((p) => (p.kills ?? 0) > 0).slice(0, 3);
+  el.innerHTML = `<div class="k">今晚的勇者</div>`
+    + (top.length ? `<div class="podium">${top.map((p, i) => `<div class="hero r${i + 1}">
+        <img src="${import.meta.env.BASE_URL}arena/art/por-${p.classId}.webp" alt="">
+        <div class="rk">第 ${i + 1} 名</div><div class="nm">${esc(p.name)}</div><div class="kc">擊倒 <b>${p.kills}</b></div></div>`).join('')}</div>` : '')
+    + `<div class="sum">全隊擊倒 <b class="kill">${w.score}</b>　元素反應 <b class="react">${w.reactionCount}</b>　今晚最遠 <b>${esc(session.bestLabel() || PartySession.stageLabel(w))}</b></div>`
+    + `<div class="go">直播開始！《最後的聖戰》分享即將開始</div>`;
+}
+window.addEventListener('keydown', (ev) => { if (ev.key === 'e' || ev.key === 'E') showFinale(!session.paused); });
 
 // --- 畫面上的字 ------------------------------------------------------------
 setInterval(() => {
   const left = Math.max(0, target.getTime() - Date.now());
+  if (left === 0 && finAuto) { finAuto = false; showFinale(true); }
   const s = Math.floor(left / 1000);
   $('clock').textContent = left > 0
     ? (s >= 3600 ? `${Math.floor(s / 3600)}:${pad2(Math.floor(s / 60) % 60)}:${pad2(s % 60)}` : `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`)
