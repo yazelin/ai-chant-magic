@@ -13,8 +13,8 @@ export const NPC_NAME = '格莉奇';
 export interface NpcIntent { move: Vec2; face: number; casts: SpellId[] }
 
 // 跟最近那隻怪保持的距離：守護者的聖光只打身邊 120，要貼近；電擊使射程最遠，站最後面
-const PREFERRED: Record<ClassId, number> = { pyro: 240, cryo: 220, storm: 300, warden: 80 };
-const TOO_CLOSE: Record<ClassId, number> = { pyro: 140, cryo: 130, storm: 170, warden: 40 };
+const PREFERRED: Record<ClassId, number> = { pyro: 280, cryo: 220, storm: 300, warden: 80 };
+const TOO_CLOSE: Record<ClassId, number> = { pyro: 180, cryo: 130, storm: 170, warden: 40 };
 const EDGE = 120;
 
 export function npcThink(w: World, me: Player): NpcIntent {
@@ -62,10 +62,18 @@ function pickCasts(w: World, me: Player, nearest: Enemy | null, dN: number, near
 
   switch (me.classId) {
     case 'pyro': {
-      // 集到 3 層、或怪已經貼近，就放爆裂魔法；其餘時間輪流詠唱集氣
+      // 爆裂魔法冷卻 = 2 秒 + 每層 1 秒，而炎術士只有這一招打得到怪。層數堆滿要等很久，
+      // 中間只能一直退（作者實測：會被卡死），每秒傷害其實差不多，所以低層數、放得勤。
+      // 怪多才多疊：4 隻以上 2 層、8 隻以上 3 層。冷卻快好了才開始集氣，不在冷卻中先堆滿。
       const charge = me.pyroCharge ?? 0;
-      try_('firestorm', !!nearest && charge >= 1 && (charge >= 3 || dN < 220) && dN < 420);
-      try_(charge % 2 === 0 ? 'chant1' : 'chant2', charge < 5);
+      const crowd = near(300);
+      const target = crowd >= 8 ? 3 : crowd >= 4 ? 2 : 1;
+      const readyIn = me.cooldowns.firestorm - w.time;
+      // 投射物飛約 330 就爆，太遠的怪打不到就先不放
+      // 怪已經貼到 200 以內：有 1 層就先炸，保命優先
+      try_('firestorm', !!nearest && charge >= 1 && dN < 200);
+      try_('firestorm', !!nearest && charge >= target && dN < 340);
+      try_(charge % 2 === 0 ? 'chant1' : 'chant2', charge < target && readyIn < 0.4);
       break;
     }
     case 'cryo':
