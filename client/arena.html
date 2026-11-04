@@ -84,30 +84,30 @@
     #busy .b { color: var(--dim); margin: 1.4vh 0 2.4vh; font-size: 1.8vh; line-height: 1.8; }
     #busy button { font: inherit; font-size: 1.9vh; padding: 1.2vh 2.4vh; border-radius: 10px; border: 1px solid var(--gold); background: transparent; color: var(--gold-hi); cursor: pointer; }
     /* 大招條幅：橫過畫面中段，職業顏色 */
-    /* 大招條幅：從右下角斜斜滑進來（在統計卡上方），不擋畫面正中間 */
-    #ult { position: fixed; right: -3vw; bottom: 25vh; width: 54vw; pointer-events: none; z-index: 6;
-      text-align: right; padding: 1.2vh 7vw 1.6vh 0; opacity: 0; transform-origin: right center;
-      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 30%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b));
+    /* 大招條幅：從左上角斜斜滑進來（畫面最空的地方），不擋畫面正中間 */
+    #ult { position: fixed; left: -3vw; top: 19vh; width: 44vw; pointer-events: none; z-index: 6;
+      text-align: left; padding: 1.2vh 0 1.6vh 7vw; opacity: 0; transform-origin: left center;
+      background: linear-gradient(270deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 30%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b));
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
     /* 有插畫時：大招插畫放在 ::before 當底（左邊淡出），角色立繪站在前面、可以超出條幅上緣 */
-    #ult.art { padding: 4.5vh 7vw 5vh 0; background: none; isolation: isolate; }
+    #ult.art { padding: 4.5vh 0 5vh 7vw; background: none; isolation: isolate; }
     #ult.art::before { content: ''; position: absolute; inset: 0; z-index: -1;
-      background: linear-gradient(90deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
+      background: linear-gradient(270deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff);
-      -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%); mask-image: linear-gradient(90deg, transparent, #000 28%); }
+      -webkit-mask-image: linear-gradient(270deg, transparent, #000 28%); mask-image: linear-gradient(270deg, transparent, #000 28%); }
     #ult.art { border: 0; }
-    #ult .por { position: absolute; left: 22%; bottom: -1vh; height: 44vh; z-index: 0; -webkit-mask-image: linear-gradient(to top, transparent, #000 18%); mask-image: linear-gradient(to top, transparent, #000 18%); filter: drop-shadow(0 0 1.2vh var(--c, #d6b26e)) drop-shadow(0 .6vh 1vh #000); }
+    #ult .por { position: absolute; right: 3%; bottom: -1vh; height: 36vh; z-index: 0; -webkit-mask-image: linear-gradient(to top, transparent, #000 18%); mask-image: linear-gradient(to top, transparent, #000 18%); filter: drop-shadow(0 0 1.2vh var(--c, #d6b26e)) drop-shadow(0 .6vh 1vh #000); }
     #ult .who, #ult .what { position: relative; z-index: 1; }
     #ult .who { font-size: 2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
     #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 6vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
       text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }
-    #ult .x { font-size: 4vh; margin-left: .4em; color: var(--gold-hi); }
+    #ult .x { font-size: 4.4vh; margin-left: .4em; color: #fff3c4; -webkit-text-stroke: 1.5px #2a0d00; text-shadow: 0 0 8px #000, 0 2px 10px #000; }
     #ult.go { animation: ult 1.2s cubic-bezier(.2,.8,.2,1) forwards; }
     @keyframes ult {
-      0% { opacity: 0; transform: rotate(-8deg) translateX(60%); }
-      16% { opacity: 1; transform: rotate(-8deg) translateX(0); }
-      80% { opacity: 1; transform: rotate(-8deg) translateX(0); }
-      100% { opacity: 0; transform: rotate(-8deg) translateX(40%); }
+      0% { opacity: 0; transform: rotate(6deg) translateX(-60%); }
+      16% { opacity: 1; transform: rotate(6deg) translateX(0); }
+      80% { opacity: 1; transform: rotate(6deg) translateX(0); }
+      100% { opacity: 0; transform: rotate(6deg) translateX(-40%); }
     }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
