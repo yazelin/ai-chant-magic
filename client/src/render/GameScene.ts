@@ -1168,7 +1168,12 @@ export class GameScene extends Phaser.Scene {
       case 'blast': {
         const big = r >= 110; // 爆裂魔法（firestorm）的爆炸半徑比火球大很多
         const enemy = !fx.ownerId; // 自爆史萊姆
-        this.fxPop('fx-explosion', x, y, r * (big ? 3 : 2.6), { dur: big ? 900 : 600, from: 0.35, to: 1.15, spin: 0.6, tint: enemy ? 0xff7a9a : undefined });
+        if (enemy) {
+          // 火史萊姆死掉的自爆：小、暗紅、短，跟玩家的爆炸魔法分得出來（不然冰系打死火史萊姆看起來像冰變成火）
+          this.fxPop('fx-explosion', x, y, r * 1.4, { dur: 380, from: 0.4, to: 1, spin: 0.4, tint: 0xc0402a, peak: 0.7, minor: true });
+          break;
+        }
+        this.fxPop('fx-explosion', x, y, r * (big ? 3 : 2.6), { dur: big ? 900 : 600, from: 0.35, to: 1.15, spin: 0.6 });
         this.fxPop('fx-flare', x, y, r * (big ? 2.4 : 1.6), { dur: 320, from: 0.6, to: 1.3 });
         if (big && !enemy && this.t - this.lastBigShake > 0.8) {
           // 主畫面平常不震（全場一起放招會一直晃），只有爆裂魔法震，而且 0.8 秒內最多一次
