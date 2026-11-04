@@ -5,6 +5,7 @@ import { initAudio, getMaster } from '../audio/sfx';
 import { MusicEngine } from '../audio/music';
 import { TrackMusic } from './bgm';
 import { PartySession, UltEvent } from './PartySession';
+import { NPC_ID } from './npc';
 import { RELAY_URL, padUrl, roomFromUrl } from './relay';
 
 // 等待模式主畫面：直播分享這一頁。網址參數：
@@ -36,6 +37,10 @@ $('qr').title = joinUrl;
 
 // --- 遊戲 ------------------------------------------------------------------
 const session = new PartySession();
+// 格莉奇（AI 隊友）：?npc=pyro|cryo|storm|warden 開頁面就上場；G 開關、1～4 換職業
+const NPC_CLASSES: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
+let npcPick: ClassId = (NPC_CLASSES as string[]).includes(params.get('npc') ?? '') ? (params.get('npc') as ClassId) : 'warden';
+if (params.get('npc')) session.setNpc(npcPick);
 
 // --- 大招條幅：誰放了什麼大招。人多時排隊，一次一條，最多排 3 條 ------------
 const ultQueue: UltEvent[] = [];
@@ -159,8 +164,9 @@ setInterval(() => {
 
   const w = session.getWorld();
   const n = w.players.length;
-  $('n').textContent = `目前 ${session.connectedCount()} 位勇者`;
-  $('empty').style.display = n ? 'none' : '';
+  const npcOn = session.npcClass() !== null;
+  $('n').textContent = `目前 ${session.connectedCount() - (npcOn ? 1 : 0)} 位勇者${npcOn ? '＋格莉奇' : ''}`;
+  $('empty').style.display = w.players.some((p) => p.id !== NPC_ID) ? 'none' : '';
   if (!n) { $('stat').innerHTML = session.bestLabel() ? `今晚最遠　${session.bestLabel()}` : '尚無勇者'; return; }
   const top = [...w.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0)).slice(0, 5).filter((p) => (p.kills ?? 0) > 0);
   $('stat').innerHTML = `<div class="stage serif">${PartySession.stageLabel(w)}</div>`
@@ -223,6 +229,14 @@ window.addEventListener('keydown', (e) => {
     if (g) g.gain.value = muted ? 0 : 0.5;
     tracks.setMuted(muted);
     toast(muted ? '已靜音' : '音效開啟');
+  } else if (e.key === 'g' || e.key === 'G') {
+    const on = session.npcClass() === null;
+    session.setNpc(on ? npcPick : null);
+    toast(on ? `格莉奇上場（${CLASSES[npcPick].displayName}）` : '格莉奇下場');
+  } else if (['1', '2', '3', '4'].includes(e.key)) {
+    npcPick = NPC_CLASSES[Number(e.key) - 1];
+    if (session.npcClass() !== null) session.setNpc(npcPick);
+    toast(`格莉奇${session.npcClass() !== null ? '換成' : '下次上場用'}${CLASSES[npcPick].displayName}`);
   } else if (e.key === 'b' || e.key === 'B') {
     musicOn = !musicOn;
     if (musicOn) music.start(); else music.stop();

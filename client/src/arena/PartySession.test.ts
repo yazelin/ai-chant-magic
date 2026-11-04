@@ -110,6 +110,29 @@ describe('PartySession（等待模式）', () => {
     expect(got).toEqual(['亞澤:frostnova']);
   });
 
+  it('格莉奇自己會打怪：四個職業都能在 60 秒內擊倒魔物且活著', () => {
+    for (const cls of ['pyro', 'cryo', 'storm', 'warden'] as const) {
+      let seed = 7;
+      const s = new PartySession(() => ((seed = (seed * 16807) % 2147483647) / 2147483647));
+      s.setNpc(cls);
+      for (let i = 0; i < 1200; i++) s.tick(0.05);
+      const g = s.getWorld().players.find((p) => p.name === '格莉奇')!;
+      expect(g.classId).toBe(cls);
+      expect(g.kills ?? 0, cls).toBeGreaterThan(3);
+    }
+  });
+
+  it('格莉奇可以關掉、換職業時擊倒數保留', () => {
+    const s = new PartySession(() => 0.5);
+    s.setNpc('cryo');
+    s.getWorld().players[0].kills = 9;
+    s.setNpc('storm');
+    expect(s.npcClass()).toBe('storm');
+    expect(s.getWorld().players[0].kills).toBe(9);
+    s.setNpc(null);
+    expect(s.playerCount()).toBe(0);
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');
