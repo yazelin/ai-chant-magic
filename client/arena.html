@@ -84,23 +84,24 @@
     #busy .b { color: var(--dim); margin: 1.4vh 0 2.4vh; font-size: 1.8vh; line-height: 1.8; }
     #busy button { font: inherit; font-size: 1.9vh; padding: 1.2vh 2.4vh; border-radius: 10px; border: 1px solid var(--gold); background: transparent; color: var(--gold-hi); cursor: pointer; }
     /* 大招條幅：橫過畫面中段，職業顏色 */
-    #ult { position: fixed; left: 0; right: 0; top: 40%; transform: translateY(-50%); pointer-events: none; z-index: 6;
-      text-align: center; padding: 1.4vh 0 1.8vh; opacity: 0;
-      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 18%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b) 50%, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 82%, transparent);
+    /* 大招條幅：從右下角斜斜滑進來（在統計卡上方），不擋畫面正中間 */
+    #ult { position: fixed; right: -3vw; bottom: 25vh; width: 54vw; pointer-events: none; z-index: 6;
+      text-align: right; padding: 1.2vh 7vw 1.6vh 0; opacity: 0; transform-origin: right center;
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 30%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b));
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
-    /* 有插畫時：條幅換成大招插畫，左右淡出 */
-    #ult.art { padding: 7vh 0 7.5vh; background: linear-gradient(90deg, rgba(0,0,0,.15), rgba(0,0,0,.45) 50%, rgba(0,0,0,.15)), var(--art) center / cover no-repeat;
-      -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); }
-    #ult .who { font-size: 2.2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
-    #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 7vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
+    /* 有插畫時：條幅換成大招插畫，左邊淡出 */
+    #ult.art { padding: 4.5vh 7vw 5vh 0; background: linear-gradient(90deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%); mask-image: linear-gradient(90deg, transparent, #000 28%); }
+    #ult .who { font-size: 2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
+    #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 6vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
       text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }
-    #ult .x { font-size: 4.4vh; margin-left: .4em; color: var(--gold-hi); }
+    #ult .x { font-size: 4vh; margin-left: .4em; color: var(--gold-hi); }
     #ult.go { animation: ult 1.2s cubic-bezier(.2,.8,.2,1) forwards; }
     @keyframes ult {
-      0% { opacity: 0; transform: translate(-30%, -50%) skewX(-12deg); }
-      14% { opacity: 1; transform: translate(0, -50%) skewX(0); }
-      78% { opacity: 1; transform: translate(0, -50%); }
-      100% { opacity: 0; transform: translate(24%, -50%); }
+      0% { opacity: 0; transform: rotate(-8deg) translateX(60%); }
+      16% { opacity: 1; transform: rotate(-8deg) translateX(0); }
+      80% { opacity: 1; transform: rotate(-8deg) translateX(0); }
+      100% { opacity: 0; transform: rotate(-8deg) translateX(40%); }
     }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
