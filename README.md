@@ -117,7 +117,7 @@ npm run dev          # 同時起 server(ws://localhost:8787)與 client(Vite)
   原始碼在 `cloudflare/arena-relay/`，要另外 `npx wrangler deploy`，merge main 不會自動部署。
 - 主畫面要留在前景分頁：瀏覽器會暫停背景分頁的畫面更新，遊戲也跟著停。
 - 開始時點一下畫面（瀏覽器要一次點擊才能出聲），M 靜音、F 全螢幕。
-- 美術：場地背景、六種史萊姆（五屬性＋史萊姆王）、四張大招條幅插畫在 `client/public/arena/art/`，只有主畫面（overview）用，一般遊戲維持程式畫的。圖由 codex-image-service 產生，史萊姆用平底色去背。
+- 美術：場地背景、六種史萊姆（五屬性＋史萊姆王）、四張大招條幅插畫、六張技能特效圖（黑底，加法混色疊上去）在 `client/public/arena/art/`，只有主畫面（overview）用，一般遊戲維持程式畫的。圖由 codex-image-service 產生，史萊姆用平底色去背。
 
 ## 音效與音樂
 

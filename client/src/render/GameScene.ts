@@ -41,6 +41,8 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
 const BOSS_COLOR = 0xd23c6b;
 // 等待模式（overview）用生成的插畫：場地背景＋各屬性史萊姆圖。一般遊戲維持程式畫的。
 const ART = (f: string) => `${import.meta.env.BASE_URL}arena/art/${f}`;
+// 技能特效圖（黑底，用加法混色疊上去，黑色等於透明）
+const FX_ART = ['explosion', 'ice', 'holy', 'circle', 'bolt', 'flare'] as const;
 const SLIME_ART: Record<EnemyElement | 'boss', string> = {
   normal: 'slime-normal', fire: 'slime-fire', ice: 'slime-ice', storm: 'slime-storm', holy: 'slime-holy', boss: 'slime-boss',
 }; // 史萊姆王 regal crimson (gold crown drawn on top)
@@ -201,6 +203,7 @@ export class GameScene extends Phaser.Scene {
   private playerAnim = new Map<string, PlayerAnimState>();
   // Pooled fireball/firestorm glow visuals, keyed by projectile id.
   private fireVfx = new Map<number, FireVfx>();
+  private fxSeen = new Set<number>(); // 已經放過插畫特效的 effect id
   // Cast-detection bookkeeping: ids whose appearance we've already reacted to.
   private seenProj = new Set<number>();
   private seenFx = new Set<number>();
@@ -245,6 +248,7 @@ export class GameScene extends Phaser.Scene {
     if (this.overview) {
       this.load.image('arena-bg', ART('bg.jpg'));
       for (const k of Object.values(SLIME_ART)) this.load.image(k, ART(`${k}.png`));
+      for (const k of FX_ART) this.load.image(`fx-${k}`, ART(`fx-${k}.jpg`));
     }
     // Sheet-walker classes (128x128 cells) — all four mages. Walk sheet + a
     // single cast-pose frame each.
@@ -482,6 +486,7 @@ export class GameScene extends Phaser.Scene {
     this.detectImpacts(w);
 
     this.drawEffects(w);
+    if (this.overview) this.spawnArtFx(w);
 
     // enemies — procedurally-drawn bouncing slimes (coloured by element), below players
     const liveEnemies = new Set<number>();
@@ -1113,6 +1118,108 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(0, 0, 0);
   }
 
+  // --- 主畫面的插畫特效：每個新出現的 effect 放一次，獨立於模擬的 ttl（模擬裡只有 0.1～0.6 秒，太短）
+  private spawnArtFx(w: World): void {
+    if (!this.textures.exists('fx-flare')) return;
+    const live = new Set<number>();
+    for (const fx of w.effects) {
+      live.add(fx.id);
+      if (this.fxSeen.has(fx.id)) continue;
+      this.fxSeen.add(fx.id);
+      this.artFxFor(fx);
+    }
+    for (const id of this.fxSeen) if (!live.has(id)) this.fxSeen.delete(id);
+  }
+
+  private artFxFor(fx: TransientEffect): void {
+    const r = fx.radius ?? 60;
+    const { x, y } = fx.a;
+    const tint = hexColor(fx.colorHint);
+    switch (fx.kind) {
+      case 'blast': {
+        const big = r >= 110; // 爆裂魔法（firestorm）的爆炸半徑比火球大很多
+        const enemy = !fx.ownerId; // 自爆史萊姆
+        this.fxPop('fx-explosion', x, y, r * (big ? 3 : 2.6), { dur: big ? 900 : 600, from: 0.35, to: 1.15, spin: 0.6, tint: enemy ? 0xff7a9a : undefined });
+        this.fxPop('fx-flare', x, y, r * (big ? 2.4 : 1.6), { dur: 320, from: 0.6, to: 1.3 });
+        if (big) {
+          this.fxPop('fx-explosion', x, y, r * 2.2, { dur: 1100, from: 0.2, to: 1.3, spin: -0.9, delay: 120 });
+          this.fxPop('fx-circle', x, y, r * 3.2, { dur: 1200, from: 0.8, to: 1.1, spin: 0.5, tint: 0xff6a2a, peak: 0.8 });
+        }
+        break;
+      }
+      case 'nova':
+        if (fx.spell === 'frostnova') {
+          this.fxPop('fx-ice', x, y, r * 2.5, { dur: 900, from: 0.3, to: 1.1, spin: 0.3 });
+          this.fxPop('fx-circle', x, y, r * 2.3, { dur: 1100, from: 0.9, to: 1.05, spin: -0.6, tint: 0x7fe6ff, peak: 0.85 });
+          this.fxPop('fx-flare', x, y, r * 1.2, { dur: 350, from: 0.5, to: 1.4, tint: 0xbff4ff });
+        } else if (fx.spell === 'holybolt') {
+          this.fxPop('fx-holy', x, y, r * 2.2, { dur: 650, from: 0.5, to: 1.15, spin: 0.4, peak: 0.9 });
+          this.fxPop('fx-flare', x, y, r * 1.8, { dur: 380, from: 0.5, to: 1.3, tint: 0xffe6a0 });
+        } else {
+          this.fxPop('fx-circle', x, y, r * 2.3, { dur: 700, from: 0.4, to: 1.2, spin: 1.2, tint });
+          this.fxPop('fx-flare', x, y, r * 1.4, { dur: 300, from: 0.5, to: 1.3, tint });
+        }
+        break;
+      case 'beam':
+      case 'chain': {
+        const b = fx.b ?? fx.a;
+        const thunder = fx.kind === 'beam';
+        this.fxBolt(fx.a.x, fx.a.y, b.x, b.y, thunder ? 150 : 80, thunder ? 520 : 320);
+        this.fxPop('fx-flare', b.x, b.y, thunder ? 220 : 120, { dur: thunder ? 420 : 260, from: 0.5, to: 1.3, tint: 0xd9c8ff });
+        break;
+      }
+      case 'aura': {
+        if (!fx.spell) break; // 怪物的預警圈照舊
+        if (fx.spell === 'aegis' || fx.spell === 'shield') {
+          const big = fx.spell === 'aegis';
+          this.fxPop('fx-holy', x, y, r * (big ? 2.6 : 2.2), { dur: big ? 1500 : 900, from: 0.6, to: 1.05, spin: 0.25, peak: 0.95 });
+          if (big) this.fxPop('fx-flare', x, y, r * 2.4, { dur: 500, from: 0.4, to: 1.3, tint: 0xffe6a0 });
+        } else if (fx.spell === 'heal' || fx.spell === 'mend') {
+          this.fxPop('fx-circle', x, y, r * 2.2, { dur: 1100, from: 0.7, to: 1.05, spin: 0.5, tint: 0x8dffb8, peak: 0.8 });
+          this.fxPop('fx-flare', x, y, r * 1.2, { dur: 450, from: 0.5, to: 1.2, tint: 0xc8ffd8 });
+        } else {
+          // 集氣（chant1/chant2）：腳下一圈紅色法陣快轉
+          this.fxPop('fx-circle', x, y, Math.max(90, r * 2), { dur: 600, from: 0.5, to: 1.1, spin: 2.2, tint: 0xff5a2a, peak: 0.85 });
+        }
+        break;
+      }
+      case 'resonance':
+        this.fxPop('fx-circle', x, y, r * 2.6, { dur: 1300, from: 0.3, to: 1.2, spin: 0.8, tint: 0xffd27a });
+        this.fxPop('fx-flare', x, y, r * 1.6, { dur: 600, from: 0.4, to: 1.4, tint: 0xfff0c0 });
+        break;
+      case 'reaction':
+        this.fxPop('fx-flare', x, y, r * 2.2, { dur: 500, from: 0.4, to: 1.4, tint });
+        break;
+    }
+  }
+
+  // 一張特效圖：放大＋旋轉＋淡出，跑完自己銷毀
+  private fxPop(key: string, x: number, y: number, size: number,
+    o: { dur: number; from: number; to: number; spin?: number; tint?: number; peak?: number; delay?: number }): void {
+    if (!this.textures.exists(key)) return;
+    const img = this.add.image(x, y, key).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_VFX);
+    const base = size / Math.max(img.width, img.height);
+    img.setScale(base * o.from).setAlpha(0).setRotation(Math.random() * Math.PI * 2);
+    if (o.tint !== undefined) img.setTint(o.tint);
+    const peak = o.peak ?? 1;
+    this.tweens.add({ targets: img, alpha: peak, duration: o.dur * 0.15, delay: o.delay ?? 0 });
+    this.tweens.add({
+      targets: img, scale: base * o.to, rotation: img.rotation + (o.spin ?? 0),
+      duration: o.dur, delay: o.delay ?? 0, ease: 'Cubic.easeOut',
+    });
+    this.tweens.add({ targets: img, alpha: 0, duration: o.dur * 0.55, delay: (o.delay ?? 0) + o.dur * 0.45, onComplete: () => img.destroy() });
+  }
+
+  // 閃電：把直立的閃電圖拉成 a→b 這一段，閃幾下再消失
+  private fxBolt(ax: number, ay: number, bx: number, by: number, width: number, dur: number): void {
+    if (!this.textures.exists('fx-bolt')) return;
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const img = this.add.image((ax + bx) / 2, (ay + by) / 2, 'fx-bolt').setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_PLAYER + 2);
+    img.setRotation(Math.atan2(by - ay, bx - ax) + Math.PI / 2).setDisplaySize(width, len * 1.15).setFlipX(Math.random() < 0.5);
+    this.tweens.add({ targets: img, alpha: { from: 1, to: 0.35 }, duration: dur / 6, yoyo: true, repeat: 1 }); // 閃兩下（到 2/3 處結束，接淡出）
+    this.tweens.add({ targets: img, alpha: 0, delay: dur * 0.7, duration: dur * 0.3, onComplete: () => img.destroy() });
+  }
+
   // 共鳴詠唱's shared party-wide burst — an expanding double ring (not a
   // static aura) so it reads as a one-shot celebratory pulse rather than a
   // lingering zone, visible to every client regardless of who called it.
@@ -1566,8 +1673,11 @@ export class GameScene extends Phaser.Scene {
     const css = '#' + color.toString(16).padStart(6, '0');
     if (!label) {
       label = this.add
-        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px' })
-        .setOrigin(0.5, 1);
+        .text(0, 0, '', this.overview
+          // 主畫面：字大、加粗、黑色描邊，壓在亮背景與特效上也看得清
+          ? { fontFamily: "'Noto Sans TC', system-ui, sans-serif", fontSize: '17px', fontStyle: 'bold', stroke: '#0b0d12', strokeThickness: 4 }
+          : { fontFamily: 'system-ui, sans-serif', fontSize: '12px' })
+        .setOrigin(0.5, 1).setResolution(2).setDepth(DEPTH_PLAYER + 6);
       this.labels.set(pl.id, label);
     }
     label.setText(pl.name);
