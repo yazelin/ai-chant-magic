@@ -264,6 +264,20 @@ export class PartySession implements GameSession {
   }
 
   restart(): void { this.restartKeepingPlayers(); }
+
+  // 直播前清掉測試時的紀錄：人留著，擊倒數、今晚最遠、關卡、反應次數全部歸零，回第 1 關第 1 波
+  resetAll(): void {
+    const seeds = this.world.players.map((p) => ({ id: p.id, name: p.name, classId: p.classId }));
+    const connected = new Map(this.world.players.map((p) => [p.id, p.connected]));
+    this.world = createWorld(seeds);
+    for (const p of this.world.players) p.connected = connected.get(p.id) ?? true;
+    this.best = { rank: 0, label: '' };
+    this.wipes = 0;
+    this.wipedFor = 0;
+    this.pacedWave = -1;
+    this.deadFor.clear();
+    this.worldCb(this.world);
+  }
   enterEndless(): void { enterEndlessMode(this.world); }
   endEndless(): void {}
   skipToLobby(): void {}

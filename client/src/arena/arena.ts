@@ -224,6 +224,7 @@ $('gate').addEventListener('click', () => {
   $('gate').remove();
 });
 let muted = false;
+let resetArmedAt = 0;
 window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') {
     muted = !muted;
@@ -239,6 +240,16 @@ window.addEventListener('keydown', (e) => {
     npcPick = NPC_CLASSES[Number(e.key) - 1];
     if (session.npcClass() !== null) session.setNpc(npcPick);
     toast(`格莉奇${session.npcClass() !== null ? '換成' : '下次上場用'}${CLASSES[npcPick].displayName}`);
+  } else if (e.key === 'r' || e.key === 'R') {
+    // 按兩次才重置，避免直播中誤按把大家的分數清掉
+    if (performance.now() - resetArmedAt < 2000) {
+      session.resetAll();
+      resetArmedAt = 0;
+      toast('已重置：回到第 1 關，紀錄全部歸零');
+    } else {
+      resetArmedAt = performance.now();
+      toast('2 秒內再按一次 R 重置所有紀錄');
+    }
   } else if (e.key === 'b' || e.key === 'B') {
     musicOn = !musicOn;
     if (musicOn) music.start(); else music.stop();
