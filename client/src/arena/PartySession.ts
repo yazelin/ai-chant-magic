@@ -34,6 +34,10 @@ const SPAWN_WINDOW_SEC = 30;
 const AWAY_GRACE_SEC = 90;
 const NAME_MAX = 8;
 
+// 每個職業的大招：放出來時主畫面打一條條幅，寫是誰放的
+export const ULTIMATES: Partial<Record<SpellId, true>> = { firestorm: true, frostnova: true, thunder: true, aegis: true };
+export interface UltEvent { playerId: string; name: string; classId: ClassId; spell: SpellId; charge: number }
+
 export class PartySession implements GameSession {
   private world: World = createWorld([]);
   private pads = new Map<string, Pad>();
@@ -44,6 +48,7 @@ export class PartySession implements GameSession {
   wipes = 0;
   private pacedWave = -1;
   private awaySince = new Map<string, number>(); // id → 已離線秒數
+  onUlt: (e: UltEvent) => void = () => {};
 
   constructor(private rng: () => number = Math.random) {}
 
@@ -164,7 +169,11 @@ export class PartySession implements GameSession {
       return;
     }
     const commands: Command[] = [];
+    // 記下這一格要放的大招與放之前的冷卻、集氣，step 之後冷卻被設下去才算真的放出來
+    const ultTries: { id: string; spell: SpellId; cdBefore: number; charge: number }[] = [];
     for (const [id, pad] of this.pads) {
+      const pl = w.players.find((p) => p.id === id);
+      if (pl) for (const spell of pad.casts) if (ULTIMATES[spell]) ultTries.push({ id, spell, cdBefore: pl.cooldowns[spell], charge: pl.pyroCharge ?? 0 });
       commands.push({ kind: 'face', playerId: id, angle: pad.face });
       commands.push({ kind: 'move', playerId: id, dir: pad.move });
       for (const spell of pad.casts) commands.push({ kind: 'cast', playerId: id, spell });
@@ -172,6 +181,10 @@ export class PartySession implements GameSession {
       if (pad.resonance) { commands.push({ kind: 'resonance', playerId: id }); pad.resonance = false; }
     }
     step(w, commands, dt, this.rng);
+    for (const t of ultTries) {
+      const pl = w.players.find((p) => p.id === t.id);
+      if (pl && pl.cooldowns[t.spell] > t.cdBefore) this.onUlt({ playerId: pl.id, name: pl.name, classId: pl.classId, spell: t.spell, charge: t.charge });
+    }
     this.paceWave();
     this.trackBest();
     this.worldCb(w);

@@ -76,6 +76,22 @@
     #busy .a { font-family: 'Noto Serif TC', serif; font-size: 3.6vh; color: var(--gold-hi); }
     #busy .b { color: var(--dim); margin: 1.4vh 0 2.4vh; font-size: 1.8vh; line-height: 1.8; }
     #busy button { font: inherit; font-size: 1.9vh; padding: 1.2vh 2.4vh; border-radius: 10px; border: 1px solid var(--gold); background: transparent; color: var(--gold-hi); cursor: pointer; }
+    /* 大招條幅：橫過畫面中段，職業顏色 */
+    #ult { position: fixed; left: 0; right: 0; top: 40%; transform: translateY(-50%); pointer-events: none; z-index: 6;
+      text-align: center; padding: 1.4vh 0 1.8vh; opacity: 0;
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 18%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b) 50%, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 82%, transparent);
+      border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
+    #ult .who { font-size: 2.2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
+    #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 7vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
+      text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }
+    #ult .x { font-size: 4.4vh; margin-left: .4em; color: var(--gold-hi); }
+    #ult.go { animation: ult 1.2s cubic-bezier(.2,.8,.2,1) forwards; }
+    @keyframes ult {
+      0% { opacity: 0; transform: translate(-30%, -50%) skewX(-12deg); }
+      14% { opacity: 1; transform: translate(0, -50%) skewX(0); }
+      78% { opacity: 1; transform: translate(0, -50%); }
+      100% { opacity: 0; transform: translate(24%, -50%); }
+    }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
     #err { position: fixed; left: 1.4vw; top: 2.2vh; font-size: 1.5vh; color: #ffb4a0; text-shadow: 0 1px 6px #000; }
@@ -100,6 +116,7 @@
   <div id="info" class="card"></div>
   <div id="stat" class="card"></div>
   <div id="empty"><div class="a">等待勇者集結</div><div class="b">掃右上角的 QR Code 加入</div></div>
+  <div id="ult"></div>
   <div id="toast"></div>
   <div id="err"></div>
 

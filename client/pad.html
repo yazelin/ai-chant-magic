@@ -57,6 +57,8 @@
     #spells { display: grid; grid-template-rows: repeat(3, 1fr) auto; gap: 10px; }
     .sp { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #241c15; font-size: 20px; font-weight: 700; letter-spacing: .05em; }
     .sp:active { background: #3a2c1e; }
+    .sp.need { opacity: .55; }
+    .sp .charge { display: block; margin-top: 2px; font-style: normal; font-size: 13px; color: var(--gold-hi); }
     .sp small { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--dim); letter-spacing: 0; }
     .sp .cd { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; font-size: 22px; color: var(--gold-hi); }
     #res { border-radius: 12px; border: 1px dashed var(--line); background: transparent; padding: 10px; color: var(--gold); font-size: 15px; }

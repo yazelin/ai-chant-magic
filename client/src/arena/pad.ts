@@ -31,8 +31,16 @@ let joined = false;
 let ws: WebSocket | null = null;
 let hostUp = false;
 // 這支手機的身分：切 App、鎖螢幕斷線後帶著它重連，大螢幕就接回同一個角色
-const padKey = store.get('acm-arena-key') ?? Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => (b % 36).toString(36)).join('');
-store.set('acm-arena-key', padKey);
+// 存在 sessionStorage：同一個分頁重新整理、切 App 都沿用；開第二個分頁就是另一支手把，不會互踢
+const padKey = (() => {
+  const make = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => (b % 36).toString(36)).join('');
+  try {
+    const k = sessionStorage.getItem('acm-arena-key') ?? make();
+    sessionStorage.setItem('acm-arena-key', k);
+    return k;
+  } catch { return make(); }
+})();
+let replaced = false;
 let reconnectTimer = 0;
 let offlineTimer = 0;
 
@@ -53,6 +61,7 @@ $('classes').addEventListener('click', (e) => {
 function connect(): void {
   if (!room) { $('status0').textContent = '網址少了房間代碼，請重新掃大螢幕上的 QR Code'; return; }
   clearTimeout(reconnectTimer);
+  if (replaced) return;
   if (ws && ws.readyState <= WebSocket.OPEN) return;
   ws = new WebSocket(`${RELAY_URL}/room/${room}/pad?k=${padKey}`);
   const me = ws;
@@ -73,9 +82,15 @@ function connect(): void {
       onState(m);
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
     if (ws !== me) return;
     ws = null;
+    if (ev.reason === 'replaced') {
+      // 同一支手把在別處又連上了（例如同一分頁的新連線）：這條不要再搶回來
+      replaced = true;
+      showMsg('這支手把在別的地方開著，請用那一個');
+      return;
+    }
     // 重連通常一秒內就好，超過 4 秒才提示，切回來的時候不會先看到一句「中斷」
     clearTimeout(offlineTimer);
     offlineTimer = window.setTimeout(() => {
@@ -221,11 +236,11 @@ function heard(text: string, spell: string | null): void {
 }
 
 // --- 大螢幕回傳的狀態 --------------------------------------------------------
-function onState(m: { p: Record<string, [number, number, number, Record<string, number>, number]>; over?: boolean }): void {
+function onState(m: { p: Record<string, [number, number, number, Record<string, number>, number, number]>; over?: boolean }): void {
   if (!joined) return;
   const me = m.p[myId];
   if (!me) { showMsg(hostUp ? '報到中…' : '等大螢幕開啟'); return; }
-  const [hp, max, state, cd, kills] = me;
+  const [hp, max, state, cd, kills, charge] = me;
   const rank = 1 + Object.values(m.p).filter((o) => (o[4] ?? 0) > (kills ?? 0)).length;
   $('kills').textContent = kills ? `擊倒 ${kills}・第 ${rank} 名` : '';
   ($('hp').firstElementChild as HTMLElement).style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
@@ -237,6 +252,13 @@ function onState(m: { p: Record<string, [number, number, number, Record<string, 
       if (!c) { c = document.createElement('span'); c.className = 'cd'; b.appendChild(c); }
       c.textContent = left >= 1 ? String(Math.ceil(left)) : left.toFixed(1);
     } else c?.remove();
+    // 爆裂魔法要先集氣：沒集氣時按鈕變暗並說明，有集氣時顯示層數
+    if (b.dataset.s === 'firestorm') {
+      b.classList.toggle('need', !charge);
+      let t = b.querySelector<HTMLElement>('.charge');
+      if (!t) { t = document.createElement('em'); t.className = 'charge'; b.appendChild(t); }
+      t.textContent = charge ? `×${charge}` : '先按黑暗或深淵集氣';
+    }
   });
 }
 
