@@ -81,6 +81,9 @@
       text-align: center; padding: 1.4vh 0 1.8vh; opacity: 0;
       background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 18%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b) 50%, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 82%, transparent);
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
+    /* 有插畫時：條幅換成大招插畫，左右淡出 */
+    #ult.art { padding: 7vh 0 7.5vh; background: linear-gradient(90deg, rgba(0,0,0,.15), rgba(0,0,0,.45) 50%, rgba(0,0,0,.15)), var(--art) center / cover no-repeat;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); }
     #ult .who { font-size: 2.2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
     #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 7vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
       text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }

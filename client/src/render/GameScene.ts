@@ -38,7 +38,12 @@ const SLIME_COLOR: Record<EnemyElement, number> = {
   storm: 0xb06cff, // purple
   holy: 0xffd24d, // gold
 };
-const BOSS_COLOR = 0xd23c6b; // 史萊姆王 regal crimson (gold crown drawn on top)
+const BOSS_COLOR = 0xd23c6b;
+// 等待模式（overview）用生成的插畫：場地背景＋各屬性史萊姆圖。一般遊戲維持程式畫的。
+const ART = (f: string) => `${import.meta.env.BASE_URL}arena/art/${f}`;
+const SLIME_ART: Record<EnemyElement | 'boss', string> = {
+  normal: 'slime-normal', fire: 'slime-fire', ice: 'slime-ice', storm: 'slime-storm', holy: 'slime-holy', boss: 'slime-boss',
+}; // 史萊姆王 regal crimson (gold crown drawn on top)
 // Endless-mode elite identity → display name, keyed by the same element the
 // enemy already carries (spawnElite() cycles through these 4 — see shared/
 // world.ts's BOSS_ELEMENT). No crown (that reads "boss encounter"); elites get
@@ -186,6 +191,7 @@ export class GameScene extends Phaser.Scene {
   >();
   private prevSelfHp = -1;
   private enemyHitFlash = new Map<number, number>();
+  private enemySprites = new Map<number, Phaser.GameObjects.Image>();
   // Local player hurt cue: scene time until which to tint the self sprite red.
   private hurtFlashUntil = 0;
   // Decorative scene elements (built once): ground goo blobs + drifting bubbles.
@@ -236,6 +242,10 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     for (const s of SPRITES) this.load.image(s.key, s.url);
+    if (this.overview) {
+      this.load.image('arena-bg', ART('bg.jpg'));
+      for (const k of Object.values(SLIME_ART)) this.load.image(k, ART(`${k}.png`));
+    }
     // Sheet-walker classes (128x128 cells) — all four mages. Walk sheet + a
     // single cast-pose frame each.
     for (const cls of Object.keys(SHEET_WALKERS) as ClassId[]) {
@@ -246,6 +256,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.enemySprites.clear(); // 場景重開時舊圖片物件已被銷毀
     this.gfx = this.add.graphics();
     this.aimGfx = this.add.graphics();
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
@@ -258,6 +269,12 @@ export class GameScene extends Phaser.Scene {
     this.skyGfx.setScrollFactor(0).setDepth(-1000);
     this.scale.on('resize', () => this.drawSky());
     this.applyThemeForLevel(this.session.getWorld().levelId);
+    if (this.overview && this.textures.exists('arena-bg')) {
+      // 場外：同一張圖放大壓暗墊底，鏡頭拉近時邊緣外面不會是一片空
+      this.add.image(CONFIG.arenaWidth / 2, CONFIG.arenaHeight / 2, 'arena-bg')
+        .setDisplaySize(CONFIG.arenaWidth * 2.4, CONFIG.arenaHeight * 2.4).setTint(0x3a4a58).setDepth(-999.5);
+      this.add.image(0, 0, 'arena-bg').setOrigin(0).setDisplaySize(CONFIG.arenaWidth, CONFIG.arenaHeight).setTint(0xb4bcc6).setDepth(-999); // 壓暗一點，角色與特效才跳得出來
+    }
 
     // Define each walk animation once. Guard against double-create when the
     // scene restarts (anims live on the global AnimationManager).
@@ -475,6 +492,9 @@ export class GameScene extends Phaser.Scene {
     // prune render-side per-enemy hp memory for enemies that have left the world
     for (const id of this.enemyMaxHp.keys()) {
       if (!liveEnemies.has(id)) this.enemyMaxHp.delete(id);
+    }
+    for (const [id, img] of this.enemySprites) {
+      if (!liveEnemies.has(id)) { img.destroy(); this.enemySprites.delete(id); }
     }
     for (const [id, label] of this.eliteLabels) {
       if (!liveEnemies.has(id)) {
@@ -1042,7 +1062,9 @@ export class GameScene extends Phaser.Scene {
     const aw = CONFIG.arenaWidth;
     const ah = CONFIG.arenaHeight;
     const theme = THEMES[this.themeKey];
-    if (theme.mode === 'grid') {
+    if (this.overview && this.textures.exists('arena-bg')) {
+      // 背景圖已經畫好地面，不再疊程式畫的格線／泡泡
+    } else if (theme.mode === 'grid') {
       const step = 80;
       g.lineStyle(1, theme.grid ?? 0x2a2a4a, 0.55);
       for (let x = step; x < aw; x += step) g.lineBetween(x, 0, x, ah);
@@ -1222,6 +1244,22 @@ export class GameScene extends Phaser.Scene {
     const cx = e.pos.x;
     const cy = e.pos.y - hop;
 
+    const artKey = SLIME_ART[e.boss ? 'boss' : e.element];
+    if (this.overview && artKey && this.textures.exists(artKey)) {
+      // 插畫史萊姆：圖片物件放在 gfx 底下（depth -1），血條、光環照舊由 gfx 畫在上面
+      let img = this.enemySprites.get(e.id);
+      if (!img) { img = this.add.image(cx, cy, artKey).setDepth(-1); this.enemySprites.set(e.id, img); }
+      if (img.texture.key !== artKey) img.setTexture(artKey);
+      const h = bh * 1.9; // 畫面上比碰撞範圍大，細節才看得出來（判定不變）
+      const k = h / img.height;
+      img.setPosition(cx, cy - bh * 0.4).setScale(k * (1 + sq), k * (1 - sq));
+      if (e.elite) img.setScale(k * 1.15 * (1 + sq), k * 1.15 * (1 - sq));
+      if (flashing) img.setTintFill(0xffffff);
+      else if (slowed) img.setTint(0x9fd8ff);
+      else img.clearTint();
+      this.drawEnemyOverlays(w, e, cx, cy - bh * 0.3, bw * 1.3, bh * 1.75);
+      return;
+    }
     g.fillStyle(color, 0.92);
     g.fillEllipse(cx, cy, bw, bh);
     g.lineStyle(2, 0x101018, 0.3);
@@ -1285,6 +1323,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    this.drawEnemyOverlays(w, e, cx, cy, bw, bh);
+  }
+
+  private drawEnemyOverlays(w: World, e: Enemy, cx: number, cy: number, bw: number, bh: number): void {
+    const g = this.gfx;
     // Elite (endless-mode demoted boss): gold outline instead of a crown — a
     // boss fighting "as if it were a regular mob", not a staged boss fight.
     if (e.elite) {
