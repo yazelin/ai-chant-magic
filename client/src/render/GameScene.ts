@@ -631,6 +631,12 @@ export class GameScene extends Phaser.Scene {
   // (padded), never past the whole-arena fit and never closer than 1.6x, and
   // ease toward it so the shot doesn't jitter as people move.
   private camFocus = { x: CONFIG.arenaWidth / 2, y: CONFIG.arenaHeight / 2, z: 0 };
+  // Screen flash/shake for big hits. Off in overview: with a whole room
+  // casting at once the big screen would flash and shake nonstop.
+  private camFx(): Phaser.Cameras.Scene2D.Camera | null {
+    return this.overview ? null : this.cameras.main;
+  }
+
   private fitCamera(): void {
     const cam = this.cameras.main;
     const aw = CONFIG.arenaWidth;
@@ -644,17 +650,18 @@ export class GameScene extends Phaser.Scene {
     let tx = aw / 2, ty = ah / 2, tz = fit;
     if (x0 !== Infinity) {
       const pad = 260;
-      tz = Phaser.Math.Clamp(Math.min(cam.width / (x1 - x0 + pad * 2), cam.height / (y1 - y0 + pad * 2)), fit, 1.6);
-      // keep the view inside the arena where possible
-      const hw = cam.width / tz / 2, hh = cam.height / tz / 2;
-      tx = hw * 2 >= aw ? aw / 2 : Phaser.Math.Clamp((x0 + x1) / 2, hw, aw - hw);
-      ty = hh * 2 >= ah ? ah / 2 : Phaser.Math.Clamp((y0 + y1) / 2, hh, ah - hh);
+      // the top ~18% of the screen sits under the big screen's countdown card
+      tz = Phaser.Math.Clamp(Math.min(cam.width / (x1 - x0 + pad * 2), (cam.height * 0.82) / (y1 - y0 + pad * 2)), fit, 1.6);
+      // center on the group itself (not clamped to the arena: people hugging
+      // an edge would otherwise be cut off), zoomed so the padded box fits
+      tx = (x0 + x1) / 2;
+      ty = (y0 + y1) / 2;
     }
     const f = this.camFocus;
     if (f.z === 0) { f.x = tx; f.y = ty; f.z = tz; }
     f.x += (tx - f.x) * 0.04; f.y += (ty - f.y) * 0.04; f.z += (tz - f.z) * 0.03;
     cam.setZoom(f.z);
-    cam.centerOn(f.x, f.y);
+    cam.centerOn(f.x, f.y - (cam.height * 0.09) / f.z);
   }
 
   private followCamera(self: Player): void {
@@ -763,8 +770,8 @@ export class GameScene extends Phaser.Scene {
           // ultimate), and its own floating score callout.
           this.spawnDeathBurst(prev.x, prev.y, SLIME_COLOR[prev.element] ?? SLIME_COLOR.normal, 34);
           this.time.delayedCall(110, () => this.spawnDeathBurst(prev.x, prev.y, 0xffd24d, 22));
-          this.cameras.main.shake(160, 0.006);
-          this.cameras.main.flash(140, 255, 210, 90, false);
+          this.camFx()?.shake(160, 0.006);
+          this.camFx()?.flash(140, 255, 210, 90, false);
           this.spawnEliteKillText(prev.x, prev.y - ENEMY_SPRITE_H / 2 - 10);
           eliteKilled = true;
         } else {
@@ -948,11 +955,11 @@ export class GameScene extends Phaser.Scene {
 
     // Camera: stronger + slightly longer flash/shake for the bigger blast.
     if (big) {
-      this.cameras.main.flash(180, 255, 120, 30, false);
-      this.cameras.main.shake(220, 0.008);
+      this.camFx()?.flash(180, 255, 120, 30, false);
+      this.camFx()?.shake(220, 0.008);
     } else {
-      this.cameras.main.flash(120, 255, 140, 40, false);
-      this.cameras.main.shake(120, 0.004);
+      this.camFx()?.flash(120, 255, 140, 40, false);
+      this.camFx()?.shake(120, 0.004);
     }
   }
 

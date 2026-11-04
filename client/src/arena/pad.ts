@@ -189,13 +189,15 @@ function heard(text: string, spell: string | null): void {
 }
 
 // --- 大螢幕回傳的狀態 --------------------------------------------------------
-function onState(m: { p: Record<string, [number, number, number, Record<string, number>]>; over?: boolean }): void {
+function onState(m: { p: Record<string, [number, number, number, Record<string, number>, number]>; over?: boolean }): void {
   if (!joined) return;
   const me = m.p[myId];
   if (!me) { showMsg(hostUp ? '報到中…' : '等大螢幕開啟'); return; }
-  const [hp, max, state, cd] = me;
+  const [hp, max, state, cd, kills] = me;
+  const rank = 1 + Object.values(m.p).filter((o) => (o[4] ?? 0) > (kills ?? 0)).length;
+  $('kills').textContent = kills ? `擊倒 ${kills}・第 ${rank} 名` : '';
   ($('hp').firstElementChild as HTMLElement).style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
-  showMsg(m.over ? '全員倒下，馬上重來' : state === 2 ? '倒下了！隊友靠近可以救你' : state === 0 ? '下一波會復活' : '');
+  showMsg(m.over ? '全員倒下，從這一關重來' : state === 2 ? '倒下了！隊友靠近可以救你' : state === 0 ? '下一波會復活' : '');
   document.querySelectorAll<HTMLElement>('.sp').forEach((b) => {
     const left = cd[b.dataset.s!];
     let c = b.querySelector<HTMLElement>('.cd');

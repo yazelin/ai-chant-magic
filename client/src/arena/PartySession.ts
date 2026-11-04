@@ -8,6 +8,8 @@ import {
   createWorld,
   step,
   enterEndlessMode,
+  MAX_LEVEL_ID,
+  CONFIG,
 } from '@acm/shared';
 import { GameSession } from '../session/GameSession';
 
@@ -15,7 +17,8 @@ import { GameSession } from '../session/GameSession';
 // 跟 LocalSession 一樣在本機 step，差別是玩家隨時加入、離開，而且沒有「自己」：
 // getSelfId() 回傳空字串，GameScene 的 overview 模式會把整個場地縮放進畫面。
 //
-// 這個模式沒有輸贏：全滅就幾秒後原地重開（玩家留著），破關就直接進無盡。
+// 這個模式沒有輸贏：全滅就幾秒後從同一關的開頭重來（玩家與擊倒數留著），破關就直接進無盡。
+// 無盡模式全滅則回到最後一關。
 // ponytail: 玩家上限只靠 relay 的 MAX_PADS 擋；模擬本身沒有人數上限。
 
 interface Pad {
@@ -26,6 +29,7 @@ interface Pad {
 }
 
 const RESTART_AFTER_WIPE_SEC = 4;
+const SPAWN_WINDOW_SEC = 30;
 const NAME_MAX = 8;
 
 export class PartySession implements GameSession {
@@ -33,6 +37,10 @@ export class PartySession implements GameSession {
   private pads = new Map<string, Pad>();
   private worldCb: (w: World) => void = () => {};
   private wipedFor = 0;
+  // 今晚最遠：關卡*100+波數，無盡另計（無盡一律比關卡遠）
+  private best = { rank: 0, label: '' };
+  wipes = 0;
+  private pacedWave = -1;
 
   constructor(private rng: () => number = Math.random) {}
 
@@ -44,9 +52,10 @@ export class PartySession implements GameSession {
     const existing = this.world.players.find((p) => p.id === id);
     if (existing) {
       // 同一支手機換職業：重建這個角色（位置保留）
-      const pos = existing.pos;
+      const { pos, kills } = existing;
       this.world.players = this.world.players.filter((p) => p.id !== id);
       this.addPlayer(id, name, cls, pos);
+      this.world.players[this.world.players.length - 1].kills = kills;
       return;
     }
     this.addPlayer(id, name, cls);
@@ -133,7 +142,36 @@ export class PartySession implements GameSession {
       if (pad.resonance) { commands.push({ kind: 'resonance', playerId: id }); pad.resonance = false; }
     }
     step(w, commands, dt, this.rng);
+    this.paceWave();
+    this.trackBest();
     this.worldCb(w);
+  }
+
+  bestLabel(): string { return this.best.label; }
+
+  // 原本的出怪量是人數的 1.4 次方（為 4 人房調的）：20 人第 1 波約 400 隻、
+  // 每 1.2 秒才出一隻，一波要打好幾分鐘。等待模式改成跟人數線性成長，
+  // 出怪速度跟著加快，讓每一波大約 SPAWN_WINDOW_SEC 秒出完。
+  private paceWave(): void {
+    const w = this.world;
+    if (w.wave === this.pacedWave || w.spawnQueue === 0) return;
+    this.pacedWave = w.wave;
+    const n = Math.max(1, w.players.filter((p) => p.alive || p.downed).length);
+    const ratio = Math.min(1, (1.5 + n * 0.6) / Math.pow(n, CONFIG.wave.scaleExp));
+    w.spawnQueue = Math.max(1, Math.round(w.spawnQueue * ratio));
+    w.spawnCadence = Math.max(0.12, Math.min(w.spawnCadence, SPAWN_WINDOW_SEC / w.spawnQueue));
+    w.spawnTimer = Math.min(w.spawnTimer, w.spawnCadence);
+  }
+
+  static stageLabel(w: World): string {
+    const wave = Math.max(1, w.wave);
+    return w.endless ? `無盡第 ${wave} 波` : `第 ${w.levelId + 1} 關第 ${wave} 波`;
+  }
+
+  private trackBest(): void {
+    const w = this.world;
+    const rank = (w.endless ? 10000 : w.levelId * 100) + w.wave;
+    if (rank > this.best.rank) this.best = { rank, label: PartySession.stageLabel(w) };
   }
 
   restart(): void { this.restartKeepingPlayers(); }
@@ -142,9 +180,17 @@ export class PartySession implements GameSession {
   skipToLobby(): void {}
 
   private restartKeepingPlayers(): void {
-    const seeds = this.world.players.map((p) => ({ id: p.id, name: p.name, classId: p.classId }));
+    const old = this.world;
+    const seeds = old.players.map((p) => ({ id: p.id, name: p.name, classId: p.classId }));
+    const kills = new Map(old.players.map((p) => [p.id, p.kills ?? 0]));
     this.world = createWorld(seeds);
+    for (const p of this.world.players) p.kills = kills.get(p.id) ?? 0;
+    // 從同一關的開頭重來；無盡模式全滅就回到最後一關
+    this.world.levelId = old.endless ? MAX_LEVEL_ID : old.levelId;
+    this.world.score = old.score;
     this.wipedFor = 0;
+    this.wipes += 1;
+    this.pacedWave = -1;
     this.worldCb(this.world);
   }
 }

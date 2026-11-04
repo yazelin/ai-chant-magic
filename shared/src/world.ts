@@ -248,7 +248,13 @@ function skillHeal(world: World, base: number): number {
 // against it. Called at every damage-application call site in place of the
 // raw `skillDamage(world, base)` call.
 // ---------------------------------------------------------------------------
+// Who is dealing damage right now: set around each player cast and each
+// projectile hit/detonation, so applyElementalHit can stamp Enemy.lastHitBy
+// without threading a caster id through every damage call site.
+let hitBy: string | undefined;
+
 function applyElementalHit(world: World, e: Enemy, tag: ReactionElement, base: number): number {
+  if (hitBy) e.lastHitBy = hitBy;
   const dmg = skillDamage(world, base);
   const auraActive = e.auraElement !== undefined && world.time < (e.auraUntil ?? 0);
   if (!auraActive) {
@@ -351,7 +357,7 @@ export function step(
     if (!p || !inFight(p)) continue;
     if (cmd.kind === 'move') moveDirs.set(p.id, cmd.dir);
     else if (cmd.kind === 'face') p.facing = cmd.angle;
-    else if (cmd.kind === 'cast') castSpell(world, p, cmd.spell);
+    else if (cmd.kind === 'cast') { hitBy = p.id; castSpell(world, p, cmd.spell); hitBy = undefined; }
     else if (cmd.kind === 'resonance') world.resonanceCalls.push({ playerId: p.id, at: world.time });
   }
 
@@ -796,6 +802,10 @@ function removeDeadEnemies(world: World): void {
       world.transitionTimer = CONFIG.transition.delay;
     }
     if (e.elite) eliteBonus += CONFIG.elite.scoreBonus - 1; // +1 per kill already counted below
+    if (e.lastHitBy) {
+      const killer = world.players.find((p) => p.id === e.lastHitBy);
+      if (killer) killer.kills = (killer.kills ?? 0) + (e.elite ? CONFIG.elite.scoreBonus : 1);
+    }
   }
   world.score += world.enemies.length - survivors.length + eliteBonus;
   world.enemies = survivors;
@@ -832,7 +842,9 @@ function updateProjectiles(world: World, dt: number): void {
     for (const e of world.enemies) {
       if (e.hp <= 0) continue;
       if (dist(proj.pos, e.pos) <= proj.radius + e.radius) {
+        hitBy = proj.ownerId;
         if (onProjectileHit(world, proj, e)) detonated.add(proj.id);
+        hitBy = undefined;
         proj.ttl = 0; // consumed
         break;
       }
@@ -842,9 +854,11 @@ function updateProjectiles(world: World, dt: number): void {
   for (const proj of world.projectiles) {
     if (proj.spell === 'firestorm' && proj.fuse !== undefined &&
         proj.ttl <= 0 && !detonated.has(proj.id)) {
+      hitBy = proj.ownerId;
       explodeAoE(world, proj.pos, proj.ownerId,
         proj.explosionRadius ?? CONFIG.firestorm.explosionRadius,
         proj.explosionDamage ?? CONFIG.firestorm.baseDamage, CLASSES.pyro.color);
+      hitBy = undefined;
     }
   }
   world.projectiles = world.projectiles.filter((p) => p.ttl > 0 && inBounds(p.pos));
