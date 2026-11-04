@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { ClassId, SpellId, Vec2 } from '@acm/shared';
+import { ClassId, SpellId, Vec2, SPELLS, CLASSES } from '@acm/shared';
 import { GameScene } from '../render/GameScene';
 import { initAudio, getMaster } from '../audio/sfx';
 import { MusicEngine } from '../audio/music';
-import { PartySession } from './PartySession';
+import { TrackMusic } from './bgm';
+import { PartySession, UltEvent } from './PartySession';
 import { RELAY_URL, padUrl, roomFromUrl } from './relay';
 
 // 等待模式主畫面：直播分享這一頁。網址參數：
@@ -35,6 +36,27 @@ $('qr').title = joinUrl;
 
 // --- 遊戲 ------------------------------------------------------------------
 const session = new PartySession();
+
+// --- 大招條幅：誰放了什麼大招。人多時排隊，一次一條，最多排 3 條 ------------
+const ultQueue: UltEvent[] = [];
+let ultShowing = false;
+session.onUlt = (e) => {
+  if (ultQueue.length < 3) ultQueue.push(e);
+  if (!ultShowing) nextUlt();
+};
+function nextUlt(): void {
+  const e = ultQueue.shift();
+  if (!e) { ultShowing = false; return; }
+  ultShowing = true;
+  const el = $('ult');
+  el.style.setProperty('--c', CLASSES[e.classId].color);
+  const charge = e.spell === 'firestorm' && e.charge > 1 ? `<span class="x">×${e.charge}</span>` : '';
+  el.innerHTML = `<div class="who">${esc(e.name)}・${CLASSES[e.classId].displayName}</div><div class="what">${SPELLS[e.spell].displayName}！${charge}</div>`;
+  el.classList.remove('go');
+  void el.offsetWidth; // 重新觸發動畫
+  el.classList.add('go');
+  window.setTimeout(nextUlt, 1250);
+}
 const scene = new GameScene(session, true);
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -168,8 +190,15 @@ setInterval(showSlide, 9000);
 // --- 操作 ------------------------------------------------------------------
 // BGM：咏唱魔法原本的四段自適應配樂（微焰→星火→燎原→焚天）。
 // 等待模式按關卡升溫：第 1 關最平靜、無盡最激烈，魔王波再往上一階；沒人時最平靜。
-const music = new MusicEngine();
+const synth = new MusicEngine();
+const tracks = new TrackMusic([0, 1, 2, 3].map((i) => `./arena/bgm/arena-${i}.mp3`));
+let useTracks = true;
 let musicOn = true;
+const music = {
+  start: () => { if (useTracks) void tracks.start().then((ok) => { if (!ok) { useTracks = false; synth.start(); } }); else synth.start(); },
+  stop: () => { tracks.stop(); synth.stop(); },
+  setIntensity: (l: number) => { tracks.setIntensity(l); synth.setIntensity(l); },
+};
 function musicIntensity(): number {
   const w = session.getWorld();
   if (!w.players.length || w.status === 'gameover') return 0;
@@ -192,6 +221,7 @@ window.addEventListener('keydown', (e) => {
     muted = !muted;
     const g = getMaster();
     if (g) g.gain.value = muted ? 0 : 0.5;
+    tracks.setMuted(muted);
     toast(muted ? '已靜音' : '音效開啟');
   } else if (e.key === 'b' || e.key === 'B') {
     musicOn = !musicOn;

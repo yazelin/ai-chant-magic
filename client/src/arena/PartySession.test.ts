@@ -98,6 +98,18 @@ describe('PartySession（等待模式）', () => {
     expect(s.playerCount()).toBe(1);
   });
 
+  it('大招真的放出來才發條幅事件，冷卻中按不算', () => {
+    const s = new PartySession(() => 0.5);
+    const got: string[] = [];
+    s.onUlt = (e) => got.push(`${e.name}:${e.spell}`);
+    s.join('a', '亞澤', 'cryo');
+    s.tick(0.05);
+    s.cast('a', 'frostnova'); s.tick(0.05);
+    s.cast('a', 'frostnova'); s.tick(0.05);
+    s.cast('a', 'frost'); s.tick(0.05);
+    expect(got).toEqual(['亞澤:frostnova']);
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');
