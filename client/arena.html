@@ -89,9 +89,15 @@
       text-align: right; padding: 1.2vh 7vw 1.6vh 0; opacity: 0; transform-origin: right center;
       background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c, #d6b26e) 55%, #100d0b) 30%, color-mix(in srgb, var(--c, #d6b26e) 70%, #100d0b));
       border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); }
-    /* 有插畫時：條幅換成大招插畫，左邊淡出 */
-    #ult.art { padding: 4.5vh 7vw 5vh 0; background: linear-gradient(90deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
+    /* 有插畫時：大招插畫放在 ::before 當底（左邊淡出），角色立繪站在前面、可以超出條幅上緣 */
+    #ult.art { padding: 4.5vh 7vw 5vh 0; background: none; isolation: isolate; }
+    #ult.art::before { content: ''; position: absolute; inset: 0; z-index: -1;
+      background: linear-gradient(90deg, rgba(0,0,0,.1), rgba(0,0,0,.5)), var(--art) center / cover no-repeat;
+      border-top: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff); border-bottom: 1px solid color-mix(in srgb, var(--c, #d6b26e) 80%, #fff);
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%); mask-image: linear-gradient(90deg, transparent, #000 28%); }
+    #ult.art { border: 0; }
+    #ult .por { position: absolute; left: 22%; bottom: -1vh; height: 44vh; z-index: 0; -webkit-mask-image: linear-gradient(to top, transparent, #000 18%); mask-image: linear-gradient(to top, transparent, #000 18%); filter: drop-shadow(0 0 1.2vh var(--c, #d6b26e)) drop-shadow(0 .6vh 1vh #000); }
+    #ult .who, #ult .what { position: relative; z-index: 1; }
     #ult .who { font-size: 2vh; color: #fff; letter-spacing: .3em; text-shadow: 0 1px 6px #000; }
     #ult .what { font-family: 'Noto Serif TC', serif; font-weight: 900; font-size: 6vh; line-height: 1.1; color: #fff; letter-spacing: .12em;
       text-shadow: 0 0 18px var(--c, #d6b26e), 0 3px 10px #000; }

@@ -47,7 +47,8 @@ if (params.get('npc')) session.setNpc(npcPick);
 // --- 大招條幅：誰放了什麼大招。人多時排隊，一次一條，最多排 3 條 ------------
 const ultQueue: UltEvent[] = [];
 let ultShowing = false;
-for (const sp of ['firestorm', 'frostnova', 'thunder', 'aegis']) new Image().src = `${import.meta.env.BASE_URL}arena/art/ult-${sp}.jpg`; // 先載好，條幅出現時不會空一下
+for (const sp of ['firestorm', 'frostnova', 'thunder', 'aegis']) new Image().src = `${import.meta.env.BASE_URL}arena/art/ult-${sp}.jpg`;
+for (const c of ['pyro', 'cryo', 'storm', 'warden']) new Image().src = `${import.meta.env.BASE_URL}arena/art/por-${c}.webp`; // 條幅插畫與角色立繪先載好，條幅出現時不會空一下
 session.onUlt = (e) => {
   if (ultQueue.length < 3) ultQueue.push(e);
   if (!ultShowing) nextUlt();
@@ -61,7 +62,8 @@ function nextUlt(): void {
   el.style.setProperty('--art', `url(${import.meta.env.BASE_URL}arena/art/ult-${e.spell}.jpg)`);
   el.classList.add('art');
   const charge = e.spell === 'firestorm' && e.charge > 1 ? `<span class="x">×${e.charge}</span>` : '';
-  el.innerHTML = `<div class="who">${esc(e.name)}・${CLASSES[e.classId].displayName}</div><div class="what">${SPELLS[e.spell].displayName}！${charge}</div>`;
+  el.innerHTML = `<img class="por" src="${import.meta.env.BASE_URL}arena/art/por-${e.classId}.webp" alt="" onerror="this.remove()">`
+    + `<div class="who">${esc(e.name)}・${CLASSES[e.classId].displayName}</div><div class="what">${SPELLS[e.spell].displayName}！${charge}</div>`;
   el.classList.remove('go');
   void el.offsetWidth; // 重新觸發動畫
   el.classList.add('go');
