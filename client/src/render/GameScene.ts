@@ -249,8 +249,11 @@ export class GameScene extends Phaser.Scene {
     for (const s of SPRITES) this.load.image(s.key, s.url);
     if (this.overview) {
       this.load.image('arena-bg', ART('bg.jpg'));
+      // 每關一張場地：1 聖所（arena-bg）、2 冰封魔域、3 雷鳴魔城、4 魔王王座（無盡也停在這張）
+      for (let i = 1; i <= 3; i++) this.load.image(`arena-bg-${i}`, ART(`bg-${i}.jpg`));
       for (const k of Object.values(SLIME_ART)) this.load.image(k, ART(`${k}.png`));
       for (const k of FX_ART) this.load.image(`fx-${k}`, ART(`fx-${k}.jpg`));
+      this.load.image('fx-icelance', ART('fx-icelance.jpg'));
     }
     // Sheet-walker classes (128x128 cells) — all four mages. Walk sheet + a
     // single cast-pose frame each.
@@ -264,6 +267,8 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.enemySprites.clear(); // 場景重開時舊圖片物件已被銷毀
     this.projArt.clear();
+    this.fxLive = 0;
+    this.bgImgs = [];
     this.gfx = this.add.graphics();
     this.aimGfx = this.add.graphics();
     this.aimGfx.setDepth(DEPTH_PLAYER + 1);
@@ -278,9 +283,12 @@ export class GameScene extends Phaser.Scene {
     this.applyThemeForLevel(this.session.getWorld().levelId);
     if (this.overview && this.textures.exists('arena-bg')) {
       // 場外：同一張圖放大壓暗墊底，鏡頭拉近時邊緣外面不會是一片空
-      this.add.image(CONFIG.arenaWidth / 2, CONFIG.arenaHeight / 2, 'arena-bg')
-        .setDisplaySize(CONFIG.arenaWidth * 2.4, CONFIG.arenaHeight * 2.4).setTint(0x3a4a58).setDepth(-999.5);
-      this.add.image(0, 0, 'arena-bg').setOrigin(0).setDisplaySize(CONFIG.arenaWidth, CONFIG.arenaHeight).setTint(0xb4bcc6).setDepth(-999); // 壓暗一點，角色與特效才跳得出來
+      this.bgImgs = [
+        this.add.image(CONFIG.arenaWidth / 2, CONFIG.arenaHeight / 2, 'arena-bg')
+          .setDisplaySize(CONFIG.arenaWidth * 2.4, CONFIG.arenaHeight * 2.4).setTint(0x3a4a58).setDepth(-999.5),
+        this.add.image(0, 0, 'arena-bg').setOrigin(0).setDisplaySize(CONFIG.arenaWidth, CONFIG.arenaHeight).setTint(0xb4bcc6).setDepth(-999), // 壓暗一點，角色與特效才跳得出來
+      ];
+      this.setLevelBg(this.session.getWorld().levelId, false);
     }
 
     // Define each walk animation once. Guard against double-create when the
@@ -1028,8 +1036,19 @@ export class GameScene extends Phaser.Scene {
   // resetting, not their colour). Called once from create() and again from
   // draw() whenever world.levelId changes — a level transition, entirely
   // without tearing down/rebuilding the Phaser scene itself.
+  private bgImgs: Phaser.GameObjects.Image[] = [];
+  private setLevelBg(levelId: number, fade: boolean): void {
+    const k = levelId > 0 && this.textures.exists(`arena-bg-${Math.min(3, levelId)}`) ? `arena-bg-${Math.min(3, levelId)}` : 'arena-bg';
+    for (const img of this.bgImgs) {
+      if (img.texture.key === k) continue;
+      img.setTexture(k);
+      if (fade) { img.setAlpha(0); this.tweens.add({ targets: img, alpha: 1, duration: 1200 }); }
+    }
+  }
+
   private applyThemeForLevel(levelId: number): void {
     this.lastThemedLevelId = levelId;
+    if (this.bgImgs.length) this.setLevelBg(levelId, true);
     this.themeKey = themeKeyForLevel(levelId);
     const theme = THEMES[this.themeKey];
     this.scenery = [];
@@ -1195,7 +1214,7 @@ export class GameScene extends Phaser.Scene {
           this.fxPop('fx-flare', x, y, r * 1.2, { dur: 450, from: 0.5, to: 1.2, tint: 0xc8ffd8 });
         } else {
           // 集氣（chant1/chant2）：腳下一圈紅色法陣快轉
-          this.fxPop('fx-circle', x, y, Math.max(90, r * 2), { dur: 600, from: 0.5, to: 1.1, spin: 2.2, tint: 0xff5a2a, peak: 0.85 });
+          this.fxPop('fx-circle', x, y, Math.max(90, r * 2), { dur: 600, from: 0.5, to: 1.1, spin: 2.2, tint: 0xff5a2a, peak: 0.85, minor: true });
         }
         break;
       }
@@ -1204,21 +1223,22 @@ export class GameScene extends Phaser.Scene {
         this.fxPop('fx-flare', x, y, r * 1.6, { dur: 600, from: 0.4, to: 1.4, tint: 0xfff0c0 });
         break;
       case 'reaction':
-        this.fxPop('fx-flare', x, y, r * 2.2, { dur: 500, from: 0.4, to: 1.4, tint });
+        this.fxPop('fx-flare', x, y, r * 2.2, { dur: 500, from: 0.4, to: 1.4, tint, minor: true });
         break;
     }
   }
 
   // 飛行中的招式：火系疊一團旋轉火焰、冰箭是旋轉冰晶拖冰屑、聖光彈是金色光芒
-  private drawArtProjectile(p: { id: number; spell: SpellId; pos: { x: number; y: number }; radius: number }): void {
+  private drawArtProjectile(p: { id: number; spell: SpellId; pos: { x: number; y: number }; radius: number; vel?: { x: number; y: number } }): void {
+    const lance = p.spell === 'frost' && this.textures.exists('fx-icelance'); // 冰箭：冰槍沿飛行方向
     let a = this.projArt.get(p.id);
     if (!a) {
       const fire = p.spell === 'fireball' || p.spell === 'firestorm';
-      const key = fire ? 'fx-explosion' : p.spell === 'frost' ? 'fx-ice' : 'fx-flare';
+      const key = fire ? 'fx-explosion' : lance ? 'fx-icelance' : p.spell === 'frost' ? 'fx-ice' : 'fx-flare';
       if (!this.textures.exists(key)) return;
       const img = this.add.image(p.pos.x, p.pos.y, key).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_VFX + 1);
       const size = p.spell === 'firestorm' ? Math.max(110, p.radius * 5) : Math.max(64, p.radius * 5);
-      img.setScale(size / img.width);
+      img.setScale((lance ? Math.max(130, p.radius * 14) : size) / img.width);
       if (p.spell === 'holybolt') img.setTint(0xffe08a);
       let trail: Phaser.GameObjects.Particles.ParticleEmitter | undefined;
       if (!fire) {
@@ -1230,14 +1250,20 @@ export class GameScene extends Phaser.Scene {
       a = { img, trail };
       this.projArt.set(p.id, a);
     }
-    a.img.setPosition(p.pos.x, p.pos.y).setRotation(a.img.rotation + (p.spell === 'frost' ? 0.25 : 0.12));
+    a.img.setPosition(p.pos.x, p.pos.y);
+    if (lance) { if (p.vel) a.img.setRotation(Math.atan2(p.vel.y, p.vel.x)); }
+    else a.img.setRotation(a.img.rotation + (p.spell === 'frost' ? 0.25 : 0.12));
     a.trail?.setPosition(p.pos.x, p.pos.y);
   }
 
   // 一張特效圖：放大＋旋轉＋淡出，跑完自己銷毀
+  private fxLive = 0; // 畫面上正在跑的特效圖數量
   private fxPop(key: string, x: number, y: number, size: number,
-    o: { dur: number; from: number; to: number; spin?: number; tint?: number; peak?: number; delay?: number }): void {
+    o: { dur: number; from: number; to: number; spin?: number; tint?: number; peak?: number; delay?: number; minor?: boolean }): void {
     if (!this.textures.exists(key)) return;
+    // ponytail: 全域上限 70 張；超過時次要的（集氣、閃光）先不放，大招照放
+    if (this.fxLive >= (o.minor ? 40 : 70)) return;
+    this.fxLive++;
     const img = this.add.image(x, y, key).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_VFX);
     const base = size / Math.max(img.width, img.height);
     img.setScale(base * o.from).setAlpha(0).setRotation(Math.random() * Math.PI * 2);
@@ -1248,7 +1274,7 @@ export class GameScene extends Phaser.Scene {
       targets: img, scale: base * o.to, rotation: img.rotation + (o.spin ?? 0),
       duration: o.dur, delay: o.delay ?? 0, ease: 'Cubic.easeOut',
     });
-    this.tweens.add({ targets: img, alpha: 0, duration: o.dur * 0.55, delay: (o.delay ?? 0) + o.dur * 0.45, onComplete: () => img.destroy() });
+    this.tweens.add({ targets: img, alpha: 0, duration: o.dur * 0.55, delay: (o.delay ?? 0) + o.dur * 0.45, onComplete: () => { img.destroy(); this.fxLive--; } });
   }
 
   // 閃電：把直立的閃電圖拉成 a→b 這一段，閃幾下再消失
@@ -1522,8 +1548,8 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 1);
       this.eliteLabels.set(e.id, label);
     }
-    label.setText(ELITE_NAME_BY_ELEMENT[e.element] ?? '菁英');
-    label.setColor('#ffd24d');
+    const name = ELITE_NAME_BY_ELEMENT[e.element] ?? '菁英';
+    if (label.text !== name) label.setText(name).setColor('#ffd24d'); // setColor 每呼叫一次就重畫字，只在變的時候設
     label.setPosition(x, y);
   }
 
@@ -1721,8 +1747,9 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 1).setResolution(2).setDepth(DEPTH_PLAYER + 6);
       this.labels.set(pl.id, label);
     }
-    label.setText(pl.name);
-    label.setColor(css);
+    // setText／setColor 每呼叫一次就重畫整張字的貼圖，只在真的變了才設（每幀設會 lag）
+    if (label.text !== pl.name) label.setText(pl.name);
+    if (label.getData('css') !== css) { label.setColor(css); label.setData('css', css); }
     label.setPosition(x, y);
   }
 }
