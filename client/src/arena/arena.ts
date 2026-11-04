@@ -37,6 +37,8 @@ $('qr').title = joinUrl;
 
 // --- 遊戲 ------------------------------------------------------------------
 const session = new PartySession();
+// 驗收截圖用：?debug=1 才把 session 掛到 window
+if (params.get('debug') === '1') (window as unknown as { __arena: PartySession }).__arena = session;
 // 格莉奇（AI 隊友）：?npc=pyro|cryo|storm|warden 開頁面就上場；G 開關、1～4 換職業
 const NPC_CLASSES: ClassId[] = ['pyro', 'cryo', 'storm', 'warden'];
 let npcPick: ClassId = (NPC_CLASSES as string[]).includes(params.get('npc') ?? '') ? (params.get('npc') as ClassId) : 'warden';
@@ -170,7 +172,7 @@ setInterval(() => {
   if (!n) { $('stat').innerHTML = session.bestLabel() ? `今晚最遠　${session.bestLabel()}` : '尚無勇者'; return; }
   const top = [...w.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0)).slice(0, 5).filter((p) => (p.kills ?? 0) > 0);
   $('stat').innerHTML = `<div class="stage serif">${PartySession.stageLabel(w)}</div>`
-    + `<div>全隊擊倒 <b>${w.score}</b></div>`
+    + `<div>全隊擊倒 <b>${w.score}</b>　元素反應 <b>${w.reactionCount}</b></div>`
     + `<div class="best">今晚最遠　${session.bestLabel()}</div>`
     + (w.status === 'gameover' ? '<div class="wipe">全員倒下，從這一關重來</div>' : '')
     + (top.length ? `<div class="k">擊倒王</div><ol>${top.map((p) => `<li><span>${esc(p.name)}</span><b>${p.kills}</b></li>`).join('')}</ol>` : '');

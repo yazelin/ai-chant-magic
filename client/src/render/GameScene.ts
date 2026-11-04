@@ -875,8 +875,19 @@ export class GameScene extends Phaser.Scene {
       this.reactionPlayedThisFrame = true;
     }
     const color = hexColor(fx.colorHint);
+    // overview（等待模式大螢幕、直播畫面被壓縮）：特效放大、留久一點，加一圈擴散的環
+    const k = this.overview ? 2 : 1;
+    if (this.overview) {
+      const ring = this.add.graphics().setDepth(DEPTH_VFX);
+      const st = { r: 10, a: 0.95 };
+      this.tweens.add({
+        targets: st, r: 90, a: 0, duration: 520, ease: 'Cubic.easeOut',
+        onUpdate: () => { ring.clear(); ring.lineStyle(5, color, st.a); ring.strokeCircle(fx.a.x, fx.a.y, st.r); },
+        onComplete: () => ring.destroy(),
+      });
+    }
     const burst = this.add.particles(fx.a.x, fx.a.y, 'spark', {
-      lifespan: 220,
+      lifespan: 220 * k,
       speed: { min: 60, max: 180 },
       angle: { min: 0, max: 360 },
       scale: { start: 1.1, end: 0 },
@@ -886,19 +897,19 @@ export class GameScene extends Phaser.Scene {
       emitting: false,
     });
     burst.setDepth(DEPTH_VFX);
-    burst.explode(10);
-    this.time.delayedCall(280, () => burst.destroy());
+    burst.explode(10 * k);
+    this.time.delayedCall(280 * k, () => burst.destroy());
 
     if (fx.reactionName) {
       const txt = this.add
-        .text(fx.a.x, fx.a.y - 14, fx.reactionName, {
-          fontFamily: 'system-ui, sans-serif', fontSize: '18px', fontStyle: 'bold',
-          color: fx.colorHint, stroke: '#000000', strokeThickness: 3,
+        .text(fx.a.x, fx.a.y - 14 * k, fx.reactionName, {
+          fontFamily: 'system-ui, sans-serif', fontSize: `${this.overview ? 38 : 18}px`, fontStyle: 'bold',
+          color: fx.colorHint, stroke: '#000000', strokeThickness: 3 * k,
         })
         .setOrigin(0.5)
         .setDepth(DEPTH_PLAYER + 6); // above spawnDamageNumber's DEPTH_PLAYER + 5
       this.tweens.add({
-        targets: txt, y: txt.y - 34, alpha: 0, duration: 650,
+        targets: txt, y: txt.y - 34 * k, alpha: 0, duration: this.overview ? 1100 : 650,
         ease: 'Cubic.easeOut', onComplete: () => txt.destroy(),
       });
     }
