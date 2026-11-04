@@ -46,12 +46,15 @@ new Phaser.Game({
 // --- 連線 ------------------------------------------------------------------
 let ws: WebSocket | null = null;
 function connect(): void {
-  ws = new WebSocket(`${RELAY_URL}/room/${room}/host`);
-  ws.onopen = () => { $('err').textContent = ''; };
+  ws = new WebSocket(`${RELAY_URL}/room/${room}/host?hk=${hostKey}${takeover ? '&takeover=1' : ''}`);
+  takeover = false;
+  ws.onopen = () => { clearTimeout(errTimer); $('err').textContent = ''; };
   ws.onmessage = (ev) => {
     let m: any;
     try { m = JSON.parse(ev.data); } catch { return; }
     switch (m.t) {
+      case 'busy': stopped = true; showBusy('這個房間已經有主畫面在跑'); return;
+      case 'taken': stopped = true; showBusy('別的分頁接手了這個房間'); return;
       case 'join': {
         const isNew = !session.getWorld().players.some((p) => p.id === m.id);
         session.join(m.id, String(m.name ?? ''), m.cls as ClassId);
@@ -61,18 +64,57 @@ function connect(): void {
       case 'in': session.input(m.id, vec(m.mx, m.my), typeof m.f === 'number' ? m.f : undefined); break;
       case 'cast': session.cast(m.id, m.s as SpellId); break;
       case 'res': session.resonate(m.id); break;
-      case 'leave': session.leave(m.id); break;
+      case 'leave': session.away(m.id); break;
     }
   };
   ws.onclose = () => {
-    $('err').textContent = '連線中斷，重新連線中…';
-    setTimeout(connect, 1500);
+    if (stopped) return;
+    // 短暫斷線（重連通常一秒內）不顯示，超過 4 秒才提示
+    clearTimeout(errTimer);
+    errTimer = window.setTimeout(() => { $('err').textContent = '連線中斷，重新連線中…'; }, 4000);
+    setTimeout(connect, 1000);
   };
 }
+let errTimer = 0;
+let stopped = false;
+let takeover = false;
+// 同一個分頁重新整理時沿用（sessionStorage 跟著分頁），轉發站就知道是同一個主畫面
+const hostKey = (() => {
+  try {
+    const k = sessionStorage.getItem('acm-arena-hk') ?? Math.random().toString(36).slice(2, 12);
+    sessionStorage.setItem('acm-arena-hk', k);
+    return k;
+  } catch { return Math.random().toString(36).slice(2, 12); }
+})();
+function showBusy(text: string): void {
+  const el = $('busy');
+  el.querySelector('.a')!.textContent = text;
+  el.style.display = 'grid';
+}
+$('takeover').addEventListener('click', () => {
+  $('busy').style.display = 'none';
+  stopped = false;
+  takeover = true;
+  connect();
+});
 connect();
 
+// 主畫面在背景分頁時，瀏覽器會停掉 requestAnimationFrame（Phaser 跟著停）、
+// 主執行緒的計時器也會被壓到一秒一次。Worker 裡的計時器不受影響，
+// 所以用它當時鐘：分頁看不見時由這裡推進模擬，看得見時交回 Phaser。
+// 狀態廣播也掛在這個時鐘上，背景時手機一樣收得到血量與冷卻。
+const clock = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 50)'], { type: 'text/javascript' })));
+let lastTick = performance.now();
+let lastBroadcast = 0;
+clock.onmessage = () => {
+  const now = performance.now();
+  if (document.hidden) session.tick(Math.min((now - lastTick) / 1000, 0.1));
+  lastTick = now;
+  if (now - lastBroadcast >= 200) { lastBroadcast = now; broadcast(); }
+};
+
 // 每 200ms 把每個人的血量與冷卻廣播給手機（手機只挑自己那筆）
-setInterval(() => {
+function broadcast(): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const w = session.getWorld();
   const p: Record<string, [number, number, number, Record<string, number>, number]> = {};
@@ -82,7 +124,7 @@ setInterval(() => {
     p[pl.id] = [Math.round(pl.hp), Math.round(pl.maxHp), pl.downed ? 2 : pl.alive ? 1 : 0, cd, pl.kills ?? 0];
   }
   ws.send(JSON.stringify({ t: 'st', p, wave: w.wave, n: w.players.length, over: w.status === 'gameover' }));
-}, 200);
+}
 
 // --- 畫面上的字 ------------------------------------------------------------
 setInterval(() => {
@@ -94,7 +136,7 @@ setInterval(() => {
 
   const w = session.getWorld();
   const n = w.players.length;
-  $('n').textContent = `目前 ${n} 位勇者`;
+  $('n').textContent = `目前 ${session.connectedCount()} 位勇者`;
   $('empty').style.display = n ? 'none' : '';
   if (!n) { $('stat').innerHTML = session.bestLabel() ? `今晚最遠　${session.bestLabel()}` : '尚無勇者'; return; }
   const top = [...w.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0)).slice(0, 5).filter((p) => (p.kills ?? 0) > 0);

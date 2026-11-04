@@ -81,6 +81,23 @@ describe('PartySession（等待模式）', () => {
     expect(w.spawnQueue * w.spawnCadence).toBeLessThanOrEqual(31);
   });
 
+  it('斷線先標離線，90 秒內回來接回同一個角色與擊倒數，超過才移除', () => {
+    const s = new PartySession(() => 0.5);
+    s.join('a', 'x', 'cryo');
+    s.join('b', 'y', 'storm');
+    s.getWorld().players[0].kills = 5;
+    s.away('a');
+    expect(s.connectedCount()).toBe(1);
+    expect(s.playerCount()).toBe(2);
+    for (let i = 0; i < 200; i++) s.tick(0.05); // 10 秒
+    s.join('a', 'x', 'cryo');
+    expect(s.connectedCount()).toBe(2);
+    expect(s.getWorld().players.find((p) => p.id === 'a')!.kills).toBe(5);
+    s.away('b');
+    for (let i = 0; i < 2000; i++) s.tick(0.05); // 100 秒
+    expect(s.playerCount()).toBe(1);
+  });
+
   it('名字過濾控制字元與角括號，最多 8 個字', () => {
     expect(cleanName('<b>一二三四五六七八九</b>')).toBe('b一二三四五六七');
     expect(cleanName('   ')).toBe('勇者');

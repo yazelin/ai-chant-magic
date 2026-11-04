@@ -72,6 +72,10 @@
     #gate { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8,6,5,.86); z-index: 10; cursor: pointer; text-align: center; }
     #gate .a { font-family: 'Noto Serif TC', serif; font-size: 4vh; color: var(--gold-hi); }
     #gate .b { color: var(--dim); margin-top: 1.2vh; font-size: 1.8vh; line-height: 1.8; }
+    #busy { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,6,5,.94); z-index: 20; text-align: center; }
+    #busy .a { font-family: 'Noto Serif TC', serif; font-size: 3.6vh; color: var(--gold-hi); }
+    #busy .b { color: var(--dim); margin: 1.4vh 0 2.4vh; font-size: 1.8vh; line-height: 1.8; }
+    #busy button { font: inherit; font-size: 1.9vh; padding: 1.2vh 2.4vh; border-radius: 10px; border: 1px solid var(--gold); background: transparent; color: var(--gold-hi); cursor: pointer; }
     #toast { position: fixed; left: 50%; top: 17vh; transform: translateX(-50%); font-family: 'Noto Serif TC', serif; font-size: 2.4vh;
       color: var(--gold-hi); text-shadow: 0 2px 12px #000; pointer-events: none; transition: opacity .6s; opacity: 0; }
     #err { position: fixed; left: 1.4vw; top: 2.2vh; font-size: 1.5vh; color: #ffb4a0; text-shadow: 0 1px 6px #000; }
@@ -98,6 +102,14 @@
   <div id="empty"><div class="a">等待勇者集結</div><div class="b">掃右上角的 QR Code 加入</div></div>
   <div id="toast"></div>
   <div id="err"></div>
+
+  <div id="busy">
+    <div>
+      <div class="a"></div>
+      <div class="b">同一個房間只能有一個主畫面。直播請用原本那一頁；<br>確定要改用這一頁，按下面的按鈕，原本那頁會停下來。</div>
+      <button id="takeover">改由這一頁接手</button>
+    </div>
+  </div>
 
   <div id="gate">
     <div>
